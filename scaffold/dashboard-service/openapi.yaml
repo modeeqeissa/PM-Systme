@@ -1,0 +1,82 @@
+openapi: 3.0.3
+info:
+  title: PMP Command Dashboard Service
+  version: "1.0"
+  description: >
+    CQRS read models (docs Section 9.3.7). dashboard-service owns no
+    transactional data: it consumes domain events from case-service and
+    evidence-service and maintains denormalised projections for fast reads. It
+    accepts no writes over HTTP (CLAUDE.md).
+
+    The query endpoint requires a bearer access token (RS256 JWT) from
+    iam-service carrying the `dashboard.view` permission. Missing/invalid token
+    -> 401; token without `dashboard.view` -> 403.
+servers:
+  - url: /api/v1
+security:
+  - bearerAuth: []
+
+paths:
+  /dashboard/kpis:
+    get:
+      tags: [dashboard]
+      summary: Current KPI snapshot (FR-DASH-01, SRS Appendix A)
+      description: >
+        Requires `dashboard.view`. Aggregates the read models for a single
+        station, or force-wide when `station_id` is omitted. `from`/`to` bound
+        the crime-trend months and case day-buckets considered.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { in: query, name: station_id, schema: { type: string, format: uuid } }
+        - { in: query, name: from, schema: { type: string, format: date } }
+        - { in: query, name: to, schema: { type: string, format: date } }
+      responses:
+        "200": { description: KPI snapshot, content: { application/json: { schema: { $ref: "#/components/schemas/KpiSnapshot" } } } }
+        "401": { description: Missing or invalid access token }
+        "403": { description: Caller lacks dashboard.view }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: RS256 access token issued by iam-service (/api/v1/auth/mfa/verify).
+
+  schemas:
+    KpiSnapshot:
+      type: object
+      required: [station_id, as_of, cases, crime_trends, evidence_integrity]
+      properties:
+        station_id: { type: string, format: uuid, nullable: true, description: null = force-wide }
+        as_of: { type: string, format: date-time }
+        cases: { $ref: "#/components/schemas/CaseKpis" }
+        crime_trends:
+          type: array
+          items: { $ref: "#/components/schemas/CrimeTrendBucket" }
+        evidence_integrity: { $ref: "#/components/schemas/EvidenceIntegrityKpis" }
+
+    CaseKpis:
+      type: object
+      required: [opened, closed, arrests_recorded, avg_case_age_days]
+      properties:
+        opened: { type: integer, description: cases opened in range }
+        closed: { type: integer, description: cases closed in range }
+        arrests_recorded: { type: integer }
+        avg_case_age_days: { type: number, nullable: true, description: mean age at close of cases closed in range }
+
+    CrimeTrendBucket:
+      type: object
+      required: [month, incident_type, count]
+      properties:
+        month: { type: string, format: date, description: first day of the month }
+        incident_type: { type: string, nullable: true }
+        count: { type: integer }
+
+    EvidenceIntegrityKpis:
+      type: object
+      required: [evidence_logged, pending_transfer_ack, hash_mismatches]
+      properties:
+        evidence_logged: { type: integer }
+        pending_transfer_ack: { type: integer, description: transfers recorded without a receiving acknowledgement }
+        hash_mismatches: { type: integer }

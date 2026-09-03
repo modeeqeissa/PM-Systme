@@ -1,0 +1,433 @@
+openapi: 3.0.3
+info:
+  title: PMP Identity & Access Management Service
+  version: "1.0"
+  description: >
+    Implements FR-IAM-01..08 (docs Section 4.1) over identity_db (docs Section
+    9.3.1). Username/badge + password + mandatory TOTP second factor, short-lived
+    RS256 JWT access tokens (<=15 min) with rotating refresh tokens, configurable
+    RBAC (roles / permissions), account lockout, and a public JWKS endpoint so
+    other services validate tokens offline. FastAPI must generate a schema that
+    matches this contract - treat mismatches as a bug, not a spec update.
+servers:
+  - url: /api/v1
+
+paths:
+  /auth/login:
+    post:
+      tags: [auth]
+      summary: Step 1 - authenticate with badge number + password (FR-IAM-01)
+      description: >
+        On success returns a short-lived `mfa_token` to be exchanged at
+        /auth/mfa/verify. Wrong credentials increment `failed_login_count`;
+        once it reaches the configured limit the account is locked (423) until
+        an administrator resets it (FR-IAM-05). Suspended/deactivated accounts
+        get 403.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/LoginRequest" }
+      responses:
+        "200": { description: Credentials OK - MFA required, content: { application/json: { schema: { $ref: "#/components/schemas/MfaChallenge" } } } }
+        "401": { description: Invalid badge number or password }
+        "403": { description: Account suspended or deactivated }
+        "423": { description: Account locked after too many failed attempts }
+
+  /auth/mfa/enroll:
+    post:
+      tags: [auth]
+      summary: Enrol a TOTP authenticator (FR-IAM-01)
+      description: >
+        Authorised with the `mfa_token` from /auth/login when the user has no
+        TOTP secret yet, or with a normal access token to re-enrol. Returns the
+        base32 secret and an otpauth:// provisioning URI; the secret is stored
+        encrypted at rest (application-layer envelope encryption).
+      security:
+        - mfaToken: []
+        - bearerAuth: []
+      responses:
+        "200": { description: Secret generated, content: { application/json: { schema: { $ref: "#/components/schemas/MfaEnrollment" } } } }
+        "401": { description: Missing or invalid token }
+        "409": { description: TOTP already enrolled (use an access token to re-enrol) }
+
+  /auth/mfa/verify:
+    post:
+      tags: [auth]
+      summary: Step 2 - verify the TOTP code and issue tokens (FR-IAM-01, FR-IAM-02)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/MfaVerifyRequest" }
+      responses:
+        "200": { description: Tokens issued, content: { application/json: { schema: { $ref: "#/components/schemas/TokenPair" } } } }
+        "400": { description: TOTP not enrolled for this user }
+        "401": { description: Invalid or expired mfa_token, or wrong TOTP code }
+
+  /auth/refresh:
+    post:
+      tags: [auth]
+      summary: Rotate the refresh token, issue a new access token (FR-IAM-02)
+      description: >
+        The presented refresh token's session is revoked and a new session is
+        created (rotating refresh tokens). A token that was already revoked or
+        has expired is rejected with 401.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RefreshRequest" }
+      responses:
+        "200": { description: New token pair, content: { application/json: { schema: { $ref: "#/components/schemas/TokenPair" } } } }
+        "401": { description: Unknown, expired or revoked refresh token }
+
+  /auth/logout:
+    post:
+      tags: [auth]
+      summary: Revoke the current refresh-token session (FR-IAM-02)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RefreshRequest" }
+      responses:
+        "204": { description: Session revoked (idempotent) }
+
+  /auth/jwks:
+    get:
+      tags: [auth]
+      summary: Public JWKS for offline token verification (FR-IAM-08)
+      responses:
+        "200": { description: JSON Web Key Set, content: { application/json: { schema: { $ref: "#/components/schemas/Jwks" } } } }
+
+  /users/me:
+    get:
+      tags: [users]
+      summary: The calling user's profile and effective permissions
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/CurrentUser" } } } }
+        "401": { description: Missing or invalid access token }
+
+  /users:
+    post:
+      tags: [users]
+      summary: Create a user account (FR-IAM-06)
+      description: Requires the `iam.user.write` permission. Every call is audit-logged.
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UserCreate" }
+      responses:
+        "201": { description: Created, content: { application/json: { schema: { $ref: "#/components/schemas/User" } } } }
+        "401": { description: Missing or invalid access token }
+        "403": { description: Caller lacks iam.user.write }
+        "409": { description: Badge number or email already in use }
+
+  /users/{user_id}:
+    get:
+      tags: [users]
+      summary: Retrieve a user account (FR-IAM-06)
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { in: path, name: user_id, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/User" } } } }
+        "401": { description: Missing or invalid access token }
+        "403": { description: Caller lacks iam.user.read }
+        "404": { description: No such user }
+    patch:
+      tags: [users]
+      summary: Deactivate / reassign / rename a user account (FR-IAM-06)
+      description: >
+        Requires `iam.user.write`. Setting status to `suspended` or
+        `deactivated` revokes all of that user's active sessions.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { in: path, name: user_id, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UserUpdate" }
+      responses:
+        "200": { description: Updated, content: { application/json: { schema: { $ref: "#/components/schemas/User" } } } }
+        "401": { description: Missing or invalid access token }
+        "403": { description: Caller lacks iam.user.write }
+        "404": { description: No such user }
+
+  /users/{user_id}/password:
+    post:
+      tags: [users]
+      summary: Change a user's password (FR-IAM-07)
+      description: >
+        A user may change their own password (must supply `current_password`);
+        a caller with `iam.user.write` may reset anyone's without it. The new
+        password is checked against the configured policy (length + complexity).
+        On success every session for that user is revoked (FR-IAM-02).
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { in: path, name: user_id, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PasswordChange" }
+      responses:
+        "204": { description: Password changed, sessions revoked }
+        "400": { description: New password fails the policy }
+        "401": { description: Missing/invalid access token, or wrong current_password }
+        "403": { description: Changing another user's password without iam.user.write }
+        "404": { description: No such user }
+
+  /users/{user_id}/roles:
+    put:
+      tags: [rbac]
+      summary: Replace the set of roles assigned to a user (FR-IAM-03)
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { in: path, name: user_id, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RoleIdList" }
+      responses:
+        "200": { description: Updated, content: { application/json: { schema: { $ref: "#/components/schemas/CurrentUser" } } } }
+        "401": { description: Missing or invalid access token }
+        "403": { description: Caller lacks iam.role.write }
+        "404": { description: User or one of the roles does not exist }
+
+  /roles:
+    get:
+      tags: [rbac]
+      summary: List roles (FR-IAM-03)
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/Role" } } } } }
+        "401": { description: Missing or invalid access token }
+        "403": { description: Caller lacks iam.role.read }
+    post:
+      tags: [rbac]
+      summary: Create a role (FR-IAM-03) - defaults to zero permissions (NFR-SEC-03)
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RoleCreate" }
+      responses:
+        "201": { description: Created, content: { application/json: { schema: { $ref: "#/components/schemas/Role" } } } }
+        "401": { description: Missing or invalid access token }
+        "403": { description: Caller lacks iam.role.write }
+        "409": { description: Role name already exists }
+
+  /roles/{role_id}/permissions:
+    put:
+      tags: [rbac]
+      summary: Replace the permission set granted to a role (FR-IAM-03)
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { in: path, name: role_id, required: true, schema: { type: integer } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PermissionCodeList" }
+      responses:
+        "200": { description: Updated, content: { application/json: { schema: { $ref: "#/components/schemas/Role" } } } }
+        "401": { description: Missing or invalid access token }
+        "403": { description: Caller lacks iam.role.write }
+        "404": { description: Role or one of the permission codes does not exist }
+
+  /permissions:
+    get:
+      tags: [rbac]
+      summary: List all defined permission codes (FR-IAM-03)
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/Permission" } } } } }
+        "401": { description: Missing or invalid access token }
+        "403": { description: Caller lacks iam.role.read }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+    mfaToken:
+      type: http
+      scheme: bearer
+      description: The short-lived mfa_token returned by /auth/login.
+
+  schemas:
+    LoginRequest:
+      type: object
+      required: [badge_number, password]
+      properties:
+        badge_number: { type: string }
+        password: { type: string, format: password }
+
+    MfaChallenge:
+      type: object
+      required: [mfa_token, mfa_enrolled, token_type, expires_in]
+      properties:
+        mfa_token: { type: string, description: Short-lived token to present at /auth/mfa/verify or /auth/mfa/enroll }
+        mfa_enrolled: { type: boolean, description: false -> the user must call /auth/mfa/enroll first }
+        token_type: { type: string, enum: [bearer] }
+        expires_in: { type: integer, description: mfa_token lifetime in seconds }
+
+    MfaEnrollment:
+      type: object
+      required: [secret, otpauth_uri]
+      properties:
+        secret: { type: string, description: base32 TOTP secret }
+        otpauth_uri: { type: string, description: otpauth:// URI for QR provisioning }
+
+    MfaVerifyRequest:
+      type: object
+      required: [mfa_token, code]
+      properties:
+        mfa_token: { type: string }
+        code: { type: string, description: 6-digit TOTP code }
+        device_info: { type: string, nullable: true }
+
+    RefreshRequest:
+      type: object
+      required: [refresh_token]
+      properties:
+        refresh_token: { type: string }
+
+    TokenPair:
+      type: object
+      required: [access_token, refresh_token, token_type, expires_in]
+      properties:
+        access_token: { type: string, description: RS256 JWT }
+        refresh_token: { type: string }
+        token_type: { type: string, enum: [bearer] }
+        expires_in: { type: integer, description: access-token lifetime in seconds (<= 900) }
+
+    Jwks:
+      type: object
+      required: [keys]
+      properties:
+        keys:
+          type: array
+          items:
+            type: object
+            properties:
+              kty: { type: string }
+              use: { type: string }
+              alg: { type: string }
+              kid: { type: string }
+              n: { type: string }
+              e: { type: string }
+
+    UserCreate:
+      type: object
+      required: [badge_number, password, full_name, station_id]
+      properties:
+        badge_number: { type: string, maxLength: 20 }
+        email: { type: string, format: email, nullable: true }
+        password: { type: string, format: password }
+        full_name: { type: string, maxLength: 150 }
+        station_id: { type: string, format: uuid }
+        role_ids:
+          type: array
+          items: { type: integer }
+          description: Optional initial role assignment
+
+    UserUpdate:
+      type: object
+      properties:
+        full_name: { type: string, maxLength: 150 }
+        email: { type: string, format: email, nullable: true }
+        station_id: { type: string, format: uuid }
+        status: { type: string, enum: [active, suspended, deactivated] }
+
+    User:
+      type: object
+      required: [id, badge_number, full_name, station_id, status, failed_login_count, mfa_enrolled, created_at, updated_at]
+      properties:
+        id: { type: string, format: uuid }
+        badge_number: { type: string }
+        email: { type: string, format: email, nullable: true }
+        full_name: { type: string }
+        station_id: { type: string, format: uuid }
+        status: { type: string, enum: [active, suspended, deactivated] }
+        failed_login_count: { type: integer }
+        mfa_enrolled: { type: boolean }
+        roles:
+          type: array
+          items: { $ref: "#/components/schemas/Role" }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    CurrentUser:
+      type: object
+      required: [id, badge_number, full_name, station_id, status, roles, permissions]
+      properties:
+        id: { type: string, format: uuid }
+        badge_number: { type: string }
+        email: { type: string, format: email, nullable: true }
+        full_name: { type: string }
+        station_id: { type: string, format: uuid }
+        status: { type: string, enum: [active, suspended, deactivated] }
+        roles:
+          type: array
+          items: { type: string }
+        permissions:
+          type: array
+          items: { type: string }
+
+    PasswordChange:
+      type: object
+      required: [new_password]
+      properties:
+        current_password: { type: string, format: password, nullable: true }
+        new_password: { type: string, format: password }
+
+    RoleCreate:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string, maxLength: 50 }
+        description: { type: string, nullable: true }
+
+    Role:
+      type: object
+      required: [id, name, permissions]
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        description: { type: string, nullable: true }
+        permissions:
+          type: array
+          items: { type: string }
+
+    Permission:
+      type: object
+      required: [id, code]
+      properties:
+        id: { type: integer }
+        code: { type: string }
+
+    RoleIdList:
+      type: object
+      required: [role_ids]
+      properties:
+        role_ids:
+          type: array
+          items: { type: integer }
+
+    PermissionCodeList:
+      type: object
+      required: [codes]
+      properties:
+        codes:
+          type: array
+          items: { type: string }

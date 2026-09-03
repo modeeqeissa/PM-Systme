@@ -1,0 +1,16 @@
+# macOS / editor junk
+.DS_Store
+**/.DS_Store
+~$*
+
+# original starter archive (not source)
+pmp-claude-code-starter.zip
+
+# python / service artefacts (belt-and-braces; each service also has its own .gitignore)
+**/.venv/
+**/__pycache__/
+*.pyc
+**/.pytest_cache/
+**/.env
+**/*.pem
+**/.evidence-vault-dev/

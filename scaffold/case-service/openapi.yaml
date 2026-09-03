@@ -1,0 +1,190 @@
+openapi: 3.0.3
+info:
+  title: PMP Case Management Service
+  version: "1.0"
+  description: >
+    Implements FR-CASE-01..10 (docs Section 4.2). FastAPI must generate a schema
+    that matches this contract — treat mismatches as a bug, not a spec update,
+    unless the SRS itself is being revised.
+
+    All endpoints require a bearer access token (RS256 JWT) issued by
+    iam-service; its signature is verified against iam-service's JWKS and the
+    required `<resource>.<action>` permission must be present in the token's
+    `permissions` claim (CLAUDE.md rule 4). Missing/invalid token -> 401;
+    valid token without the permission -> 403.
+servers:
+  - url: /api/v1
+security:
+  - bearerAuth: []
+paths:
+  /incidents:
+    post:
+      summary: Create a new incident (FR-CASE-01, FR-CASE-10)
+      description: Requires the `case.write` permission.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - in: header
+          name: Idempotency-Key
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/IncidentCreate" }
+      responses:
+        "201": { description: Created, content: { application/json: { schema: { $ref: "#/components/schemas/Incident" } } } }
+        "200": { description: Idempotent replay - existing record returned }
+        "401": { description: Missing or invalid access token }
+        "403": { description: Caller lacks case.write }
+  /cases:
+    post:
+      summary: Escalate an incident into a formal case (FR-CASE-02)
+      description: >
+        Requires `case.write`. Assigns a unique, sequential case number and opens
+        the case (`status: open`). Publishes a `CaseOpened` domain event.
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CaseCreate" }
+      responses:
+        "201": { description: Case opened, content: { application/json: { schema: { $ref: "#/components/schemas/Case" } } } }
+        "401": { description: Missing or invalid access token }
+        "403": { description: Caller lacks case.write }
+        "404": { description: incident_id does not exist }
+  /cases/{case_id}:
+    get:
+      summary: Retrieve full case detail (FR-CASE-03)
+      description: Requires the `case.read` permission.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - in: path
+          name: case_id
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/Case" } } } }
+        "401": { description: Missing or invalid access token }
+        "403": { description: RBAC scope denied }
+        "404": { description: Not found }
+  /cases/{case_id}/status:
+    patch:
+      summary: Transition case status through the defined lifecycle (FR-CASE-03)
+      security: [{ bearerAuth: [] }]
+      description: >
+        Requires the `case.write` permission. Moves a case along the lifecycle
+        graph below. Any move not listed is rejected with 409 (including a no-op
+        transition to the current status):
+
+          open                  -> investigating | suspended | closed
+          investigating         -> referred_prosecution | suspended | closed
+          referred_prosecution  -> investigating | closed
+          suspended             -> open | investigating | closed
+          closed                -> (terminal, no transitions)
+
+        Transitioning to `closed` stamps `closed_at` (server time) if not already set.
+      parameters:
+        - in: path
+          name: case_id
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status:
+                  type: string
+                  enum: [open, investigating, referred_prosecution, closed, suspended]
+      responses:
+        "200":
+          description: Updated - returns the full case with the new status
+          content: { application/json: { schema: { $ref: "#/components/schemas/Case" } } }
+        "401": { description: Missing or invalid access token }
+        "403": { description: Caller lacks case.write }
+        "404": { description: No case with that id }
+        "409": { description: Invalid status transition }
+  /cases/{case_id}/arrests:
+    post:
+      summary: Record an arrest against a case
+      description: >
+        Requires `case.write`. Publishes an `ArrestRecorded` domain event.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - in: path
+          name: case_id
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ArrestCreate" }
+      responses:
+        "201": { description: Arrest recorded, content: { application/json: { schema: { $ref: "#/components/schemas/Arrest" } } } }
+        "401": { description: Missing or invalid access token }
+        "403": { description: Caller lacks case.write }
+        "404": { description: No case with that id }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: RS256 access token issued by iam-service (/api/v1/auth/mfa/verify).
+  schemas:
+    IncidentCreate:
+      type: object
+      required: [reported_by, incident_type, description, station_id, reported_at]
+      properties:
+        reported_by: { type: string, format: uuid }
+        incident_type: { type: string }
+        description: { type: string }
+        latitude: { type: number, format: float, nullable: true }
+        longitude: { type: number, format: float, nullable: true }
+        station_id: { type: string, format: uuid }
+        reported_at: { type: string, format: date-time }
+    Incident:
+      allOf:
+        - $ref: "#/components/schemas/IncidentCreate"
+        - type: object
+          properties:
+            id: { type: string, format: uuid }
+            created_at: { type: string, format: date-time }
+    Case:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        case_number: { type: string }
+        incident_id: { type: string, format: uuid, nullable: true }
+        status: { type: string, enum: [open, investigating, referred_prosecution, closed, suspended] }
+        lead_officer_id: { type: string, format: uuid }
+        opened_at: { type: string, format: date-time }
+        closed_at: { type: string, format: date-time, nullable: true }
+    CaseCreate:
+      type: object
+      required: [lead_officer_id]
+      properties:
+        incident_id: { type: string, format: uuid, nullable: true }
+        lead_officer_id: { type: string, format: uuid }
+    ArrestCreate:
+      type: object
+      required: [officer_id, suspect_id, arrest_date]
+      properties:
+        officer_id: { type: string, format: uuid }
+        suspect_id: { type: string, format: uuid }
+        arrest_date: { type: string, format: date-time }
+        location: { type: string, nullable: true }
+        legal_basis: { type: string, nullable: true }
+    Arrest:
+      allOf:
+        - $ref: "#/components/schemas/ArrestCreate"
+        - type: object
+          properties:
+            id: { type: string, format: uuid }
+            case_id: { type: string, format: uuid }

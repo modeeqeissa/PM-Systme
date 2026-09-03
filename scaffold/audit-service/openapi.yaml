@@ -1,0 +1,96 @@
+openapi: 3.0.3
+info:
+  title: PMP Audit Log Service
+  version: "1.0"
+  description: >
+    Implements FR-AUD-01..04 (docs Section 4.10) over audit_db (docs Section
+    9.3.10). audit-service does not accept writes over HTTP: entries are created
+    only by its Kafka consumer, from the domain events other services publish via
+    the transactional outbox. Entries are hash-chained (FR-AUD-02) and
+    append-only, enforced at the database (no UPDATE/DELETE grants for the app
+    role + BEFORE UPDATE/DELETE triggers).
+
+    The query endpoints require a bearer access token (RS256 JWT) from
+    iam-service carrying the `audit.read` permission (FR-AUD-03). Missing/invalid
+    token -> 401; token without `audit.read` -> 403.
+servers:
+  - url: /api/v1
+security:
+  - bearerAuth: []
+
+paths:
+  /audit:
+    get:
+      tags: [audit]
+      summary: Query the audit log (FR-AUD-03)
+      description: >
+        Requires `audit.read`. Filter by actor, entity, action and time range.
+        Read-only - there is no way to modify or delete entries through the API.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { in: query, name: actor_id, schema: { type: string, format: uuid } }
+        - { in: query, name: entity_type, schema: { type: string } }
+        - { in: query, name: entity_id, schema: { type: string } }
+        - { in: query, name: action, schema: { type: string, enum: [create, read, update, delete, export] } }
+        - { in: query, name: service_name, schema: { type: string } }
+        - { in: query, name: from, schema: { type: string, format: date-time } }
+        - { in: query, name: to, schema: { type: string, format: date-time } }
+        - { in: query, name: limit, schema: { type: integer, default: 100, maximum: 1000 } }
+        - { in: query, name: offset, schema: { type: integer, default: 0 } }
+      responses:
+        "200":
+          description: Matching audit entries, newest first
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/AuditEntry" }
+        "401": { description: Missing or invalid access token }
+        "403": { description: Caller lacks audit.read }
+
+  /audit/verify:
+    get:
+      tags: [audit]
+      summary: Verify the hash chain integrity (FR-AUD-02)
+      description: >
+        Requires `audit.read`. Walks the chain in insertion order, recomputing
+        each `record_hash` from the stored `prev_hash` and entry fields, and
+        reports the first entry (if any) where the chain is broken.
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200": { description: Integrity report, content: { application/json: { schema: { $ref: "#/components/schemas/ChainVerification" } } } }
+        "401": { description: Missing or invalid access token }
+        "403": { description: Caller lacks audit.read }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: RS256 access token issued by iam-service (/api/v1/auth/mfa/verify).
+
+  schemas:
+    AuditEntry:
+      type: object
+      required: [id, actor_id, actor_role, service_name, entity_type, entity_id, action, timestamp, prev_hash, record_hash]
+      properties:
+        id: { type: integer, format: int64 }
+        actor_id: { type: string, format: uuid }
+        actor_role: { type: string }
+        service_name: { type: string }
+        entity_type: { type: string }
+        entity_id: { type: string }
+        action: { type: string, enum: [create, read, update, delete, export] }
+        timestamp: { type: string, format: date-time }
+        prev_hash: { type: string }
+        record_hash: { type: string }
+        metadata: { type: object, nullable: true }
+
+    ChainVerification:
+      type: object
+      required: [entries_checked, valid, broken_at]
+      properties:
+        entries_checked: { type: integer }
+        valid: { type: boolean }
+        broken_at: { type: integer, format: int64, nullable: true, description: id of the first bad entry, or null }

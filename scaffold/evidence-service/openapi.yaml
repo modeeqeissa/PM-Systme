@@ -1,0 +1,185 @@
+openapi: 3.0.3
+info:
+  title: PMP Evidence & Chain-of-Custody Service
+  version: "1.0"
+  description: >
+    Implements FR-EVID-01..07 (docs Section 4.3) over evidence_db (docs Section
+    9.3.3). Evidence items are logged against a case; digital files are hashed
+    (SHA-256) at upload and stored in an encrypted vault; every custody action is
+    an append-only, officer-attributed entry in custody_events (enforced at the
+    database, not only in code). FastAPI must generate a schema that matches this
+    contract - treat mismatches as a bug, not a spec update.
+
+    All endpoints require a bearer access token (RS256 JWT) issued by
+    iam-service; its signature is verified against iam-service's JWKS and the
+    required `evidence.*` permission must be present in the token's `permissions`
+    claim (CLAUDE.md rule 4). Missing/invalid token -> 401; valid token without
+    the permission -> 403.
+servers:
+  - url: /api/v1
+security:
+  - bearerAuth: []
+
+paths:
+  /evidence:
+    post:
+      tags: [evidence]
+      summary: Log a new evidence item (FR-EVID-01, FR-EVID-02)
+      description: >
+        Requires `evidence.vault.write`. Send `multipart/form-data`; include
+        `file` for digital evidence - it is SHA-256 hashed and stored encrypted,
+        and the hash is returned on the item. A `collected` custody event is
+        recorded automatically (FR-EVID-03).
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema: { $ref: "#/components/schemas/EvidenceItemCreate" }
+      responses:
+        "201": { description: Created, content: { application/json: { schema: { $ref: "#/components/schemas/EvidenceItem" } } } }
+        "401": { description: Missing or invalid access token }
+        "403": { description: Caller lacks evidence.vault.write }
+        "422": { description: Invalid payload }
+
+  /evidence/{evidence_id}:
+    get:
+      tags: [evidence]
+      summary: Retrieve an evidence item (FR-EVID-01, FR-EVID-07)
+      description: Requires `evidence.vault.read`.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { in: path, name: evidence_id, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/EvidenceItem" } } } }
+        "401": { description: Missing or invalid access token }
+        "403": { description: Caller lacks evidence.vault.read }
+        "404": { description: No such evidence item }
+
+  /evidence/{evidence_id}/custody:
+    get:
+      tags: [custody]
+      summary: Chain of custody for an evidence item (FR-EVID-03, FR-EVID-07)
+      description: >
+        Requires `evidence.vault.read`. Returns the custody events in
+        chronological order - this is the append-only chain of custody.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { in: path, name: evidence_id, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/CustodyEvent" } } } } }
+        "401": { description: Missing or invalid access token }
+        "403": { description: Caller lacks evidence.vault.read }
+        "404": { description: No such evidence item }
+    post:
+      tags: [custody]
+      summary: Record a custody event (FR-EVID-03, FR-EVID-04)
+      description: >
+        Requires `evidence.custody.write`. The entry is appended and can never be
+        updated or deleted. A `transferred` or `submitted_court` action requires
+        both `to_officer` and `acknowledgement_signature` (the receiving
+        officer's signature/PIN, stored only as a hash - FR-EVID-04).
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { in: path, name: evidence_id, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CustodyEventCreate" }
+      responses:
+        "201": { description: Recorded, content: { application/json: { schema: { $ref: "#/components/schemas/CustodyEvent" } } } }
+        "400": { description: Acknowledgement required for this action }
+        "401": { description: Missing or invalid access token }
+        "403": { description: Caller lacks evidence.custody.write }
+        "404": { description: No such evidence item }
+
+  /evidence/{evidence_id}/verify:
+    post:
+      tags: [evidence]
+      summary: Verify a stored file against its recorded hash (FR-EVID-06)
+      description: >
+        Requires `evidence.vault.read`. Recomputes the SHA-256 of the stored
+        file and compares it to the hash recorded at upload; `match: false`
+        flags tampering.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { in: path, name: evidence_id, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200": { description: Verification result, content: { application/json: { schema: { $ref: "#/components/schemas/HashVerification" } } } }
+        "401": { description: Missing or invalid access token }
+        "403": { description: Caller lacks evidence.vault.read }
+        "404": { description: No such evidence item }
+        "409": { description: Item has no stored digital file to verify }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: RS256 access token issued by iam-service (/api/v1/auth/mfa/verify).
+
+  schemas:
+    EvidenceItemCreate:
+      type: object
+      required: [case_id, item_type, description, collected_by, collected_at]
+      properties:
+        case_id: { type: string, format: uuid, description: logical FK to case_db.cases.id }
+        item_type: { type: string, maxLength: 50, description: "e.g. physical, digital_file, photograph, weapon" }
+        description: { type: string }
+        collected_by: { type: string, format: uuid, description: collecting officer }
+        collected_at: { type: string, format: date-time }
+        file:
+          type: string
+          format: binary
+          description: digital evidence file; when present it is hashed and stored encrypted
+
+    EvidenceItem:
+      type: object
+      required: [id, case_id, item_type, description, collected_by, collected_at, status]
+      properties:
+        id: { type: string, format: uuid }
+        case_id: { type: string, format: uuid }
+        item_type: { type: string }
+        description: { type: string }
+        collected_by: { type: string, format: uuid }
+        collected_at: { type: string, format: date-time }
+        storage_ref: { type: string, nullable: true, description: vault object key / physical locker reference }
+        sha256_hash: { type: string, nullable: true, description: SHA-256 of the digital file at upload }
+        status: { type: string, enum: [logged, in_analysis, in_court, disposed] }
+
+    CustodyEventCreate:
+      type: object
+      required: [action]
+      properties:
+        action: { type: string, enum: [collected, transferred, analyzed, stored, submitted_court, disposed] }
+        from_officer: { type: string, format: uuid, nullable: true }
+        to_officer: { type: string, format: uuid, nullable: true }
+        acknowledgement_signature:
+          type: string
+          nullable: true
+          description: receiving officer's signature/PIN; stored only as a hash (FR-EVID-04)
+        occurred_at: { type: string, format: date-time, nullable: true }
+
+    CustodyEvent:
+      type: object
+      required: [id, evidence_id, action, occurred_at]
+      properties:
+        id: { type: integer, format: int64, description: sequential, immutable event id }
+        evidence_id: { type: string, format: uuid }
+        action: { type: string, enum: [collected, transferred, analyzed, stored, submitted_court, disposed] }
+        from_officer: { type: string, format: uuid, nullable: true }
+        to_officer: { type: string, format: uuid, nullable: true }
+        acknowledgement: { type: boolean, description: whether a receiving acknowledgement was recorded }
+        occurred_at: { type: string, format: date-time }
+
+    HashVerification:
+      type: object
+      required: [evidence_id, stored_hash, computed_hash, match, verified_at]
+      properties:
+        evidence_id: { type: string, format: uuid }
+        stored_hash: { type: string }
+        computed_hash: { type: string }
+        match: { type: boolean }
+        verified_at: { type: string, format: date-time }

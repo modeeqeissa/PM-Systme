@@ -1,0 +1,9 @@
+.venv/
+__pycache__/
+*.pyc
+.env
+.pytest_cache/
+.evidence-vault-dev/
+tests/.evidence-vault-test/
+.e2e-iam-jwt-private.pem
+tests/.e2e-iam-jwt-private.pem
