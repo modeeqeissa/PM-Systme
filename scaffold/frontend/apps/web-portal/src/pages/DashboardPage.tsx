@@ -192,6 +192,41 @@ export function DashboardPage() {
             )}
           </Card>
 
+          <Card>
+            <h2 className="mb-1 text-sm font-medium uppercase tracking-wide text-slate-500">
+              Evidence integrity
+            </h2>
+            <p className="mb-4 text-xs text-slate-500">
+              mv_evidence_integrity — force-wide (no station key on this projection).
+            </p>
+            <div className="flex gap-10">
+              <div>
+                <div className="text-3xl font-semibold text-slate-900">
+                  {snap.evidence_integrity.evidence_logged}
+                </div>
+                <div className="text-sm text-slate-500">Evidence logged</div>
+              </div>
+              <div>
+                <div className="text-3xl font-semibold text-slate-900">
+                  {snap.evidence_integrity.pending_transfer_ack}
+                </div>
+                <div className="text-sm text-slate-500">Pending transfer ack</div>
+              </div>
+              <div>
+                <div
+                  className={`text-3xl font-semibold ${
+                    snap.evidence_integrity.hash_mismatches > 0
+                      ? "text-rose-600"
+                      : "text-slate-900"
+                  }`}
+                >
+                  {snap.evidence_integrity.hash_mismatches}
+                </div>
+                <div className="text-sm text-slate-500">Hash mismatches</div>
+              </div>
+            </div>
+          </Card>
+
           <p className="text-xs text-slate-400">
             mv_unit_readiness is intentionally not shown — hr-service / training-service
             aren't built yet, so it has no data to project.

@@ -95,6 +95,40 @@ describe("DashboardPage", () => {
     expect(await screen.findByText("(unspecified)")).toBeInTheDocument();
   });
 
+  it("renders the evidence integrity KPIs, highlighting hash mismatches", async () => {
+    kpis.mockResolvedValue(
+      snapshot({
+        evidence_integrity: {
+          evidence_logged: 4,
+          pending_transfer_ack: 1,
+          hash_mismatches: 2,
+        },
+      }),
+    );
+    renderPage();
+
+    const card = (
+      await screen.findByRole("heading", { name: "Evidence integrity" })
+    ).closest("div")!;
+    expect(within(card).getByText("4")).toBeInTheDocument();
+    expect(within(card).getByText("Evidence logged")).toBeInTheDocument();
+    expect(within(card).getByText("1")).toBeInTheDocument();
+    expect(within(card).getByText("Pending transfer ack")).toBeInTheDocument();
+    const mismatchCount = within(card).getByText("2");
+    expect(mismatchCount).toBeInTheDocument();
+    expect(mismatchCount).toHaveClass("text-rose-600");
+  });
+
+  it("shows a zero hash-mismatch count without the warning color", async () => {
+    kpis.mockResolvedValue(snapshot());
+    renderPage();
+    await screen.findByRole("heading", { name: "Evidence integrity" });
+    const label = screen.getByText("Hash mismatches");
+    const mismatchCount = label.previousElementSibling!;
+    expect(mismatchCount).toHaveTextContent("0");
+    expect(mismatchCount).not.toHaveClass("text-rose-600");
+  });
+
   it("explains a 403 (missing dashboard.view)", async () => {
     kpis.mockRejectedValue(new ApiError(403, "RBAC scope denied"));
     renderPage();
