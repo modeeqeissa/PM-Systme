@@ -29,6 +29,12 @@ os.environ["IAM_MFA_ENC_KEY"] = base64.urlsafe_b64encode(
 ).decode()
 os.environ["IAM_ACCESS_TOKEN_TTL"] = "900"
 
+# --- event bus (TD-003) --------------------------------------------------
+# In-app relay stays off; outbox tests drive OutboxRelay.drain_once explicitly.
+os.environ["EVENTS_RELAY_ENABLED"] = "0"
+os.environ.setdefault("EVENTS_KAFKA_BOOTSTRAP", "localhost:29092")
+os.environ["EVENTS_TOPIC_PREFIX"] = f"iam_{uuid.uuid4().hex[:8]}."
+
 import psycopg2  # noqa: E402
 import pytest  # noqa: E402
 import pytest_asyncio  # noqa: E402
@@ -46,6 +52,7 @@ SessionLocal = async_sessionmaker(engine, expire_on_commit=False)
 _db.engine = engine
 _db.SessionLocal = SessionLocal
 
+from app.events import OutboxRelay, topic_for  # noqa: E402
 from app.models import Role, User  # noqa: E402
 from app.security import mfa, passwords, tokens  # noqa: E402
 from app.services.rbac import effective_permissions, role_names  # noqa: E402
@@ -83,7 +90,9 @@ def _database():
 async def _clean_tables():
     async with engine.begin() as conn:
         # keep the seeded roles (id<=6) + permissions; drop test-created data
-        await conn.execute(text("TRUNCATE users, sessions, user_roles CASCADE"))
+        await conn.execute(
+            text("TRUNCATE users, sessions, user_roles, outbox_events CASCADE")
+        )
         await conn.execute(text("DELETE FROM roles WHERE id > 6"))
     yield
 
@@ -93,6 +102,48 @@ async def client():
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as c:
         yield c
+
+
+@pytest_asyncio.fixture
+async def outbox_relay():
+    """A real OutboxRelay wired to the dev Kafka broker; caller drives drain_once()."""
+    relay = OutboxRelay(SessionLocal)
+    await relay.start()
+    try:
+        yield relay
+    finally:
+        await relay.stop()
+
+
+@pytest.fixture
+def read_kafka():
+    """read_kafka(event_type, expected=1, timeout=10) -> list[envelope dict]."""
+    import asyncio
+    import json
+
+    from aiokafka import AIOKafkaConsumer
+
+    async def _read(event_type: str, expected: int = 1, timeout: float = 10.0):
+        consumer = AIOKafkaConsumer(
+            topic_for(event_type),
+            bootstrap_servers=os.environ["EVENTS_KAFKA_BOOTSTRAP"],
+            group_id=f"test-{uuid.uuid4().hex}",
+            auto_offset_reset="earliest",
+            enable_auto_commit=False,
+        )
+        await consumer.start()
+        out: list[dict] = []
+        try:
+            deadline = asyncio.get_event_loop().time() + timeout
+            while len(out) < expected and asyncio.get_event_loop().time() < deadline:
+                batch = await consumer.getmany(timeout_ms=1000)
+                for _tp, msgs in batch.items():
+                    out.extend(json.loads(m.value) for m in msgs)
+        finally:
+            await consumer.stop()
+        return out
+
+    return _read
 
 
 @dataclass

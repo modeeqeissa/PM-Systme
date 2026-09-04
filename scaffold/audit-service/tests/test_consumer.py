@@ -43,8 +43,23 @@ async def test_all_event_types_map_to_expected_entity_and_action(client, emit, c
     await emit("ArrestRecorded", {"arrest_id": str(uuid.uuid4())})
     await emit("EvidenceLogged", {"evidence_id": str(uuid.uuid4())}, service="evidence-service")
     await emit("CustodyEventRecorded", {"custody_event_id": 7}, service="evidence-service")
+    await emit(
+        "EvidenceHashMismatch",
+        {"evidence_id": str(uuid.uuid4()), "stored_hash": "a" * 64, "computed_hash": "b" * 64},
+        service="evidence-service",
+    )
 
-    assert await consumer.process_available() == 5
+    # iam-service admin / lockout events (TD-003)
+    await emit("UserCreated", {"user_id": str(uuid.uuid4())}, service="iam-service")
+    await emit("UserDeactivated", {"user_id": str(uuid.uuid4())}, service="iam-service")
+    await emit("UserRoleReassigned", {"user_id": str(uuid.uuid4())}, service="iam-service")
+    await emit(
+        "AccountLockedOut",
+        {"user_id": str(uuid.uuid4()), "failed_login_count": 5},
+        service="iam-service", actor_role="system",
+    )
+
+    assert await consumer.process_available() == 10
     rows = await _audit_rows()
     seen = {(r.entity_type, r.action) for r in rows}
     assert seen == {
@@ -53,10 +68,20 @@ async def test_all_event_types_map_to_expected_entity_and_action(client, emit, c
         ("arrest", "create"),
         ("evidence_item", "create"),
         ("custody_event", "create"),
+        ("evidence_item", "read"),   # hash-mismatch detection
+        ("user", "create"),          # UserCreated
+        ("user", "delete"),          # UserDeactivated (soft-delete/status change)
+        ("user", "update"),          # UserRoleReassigned + AccountLockedOut
     }
     # custody event id was an int in the payload -> stored as text entity_id
     custody = next(r for r in rows if r.entity_type == "custody_event")
     assert custody.entity_id == "7"
+    lockout = next(
+        r for r in rows
+        if r.metadata_.get("event_type") == "AccountLockedOut"
+    )
+    assert lockout.entity_type == "user" and lockout.action == "update"
+    assert lockout.actor_role == "system"
 
 
 async def test_redelivery_is_idempotent(client, emit, consumer):

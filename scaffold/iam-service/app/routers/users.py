@@ -11,7 +11,6 @@ from app.schemas import User as UserOut
 from app.schemas import UserCreate, UserUpdate
 from app.services import users as svc
 from app.services.rbac import effective_permissions, get_user
-from app.services.users import load_roles
 
 router = APIRouter(prefix="/users", tags=["users"])
 
@@ -25,9 +24,9 @@ async def read_me(user: User = Depends(get_current_user)):
 async def create_user(
     payload: UserCreate,
     session: AsyncSession = Depends(get_session),
-    _: User = Depends(require_permission("iam.user.write")),
+    admin: User = Depends(require_permission("iam.user.write")),
 ):
-    return UserOut.from_model(await svc.create_user(session, payload))
+    return UserOut.from_model(await svc.create_user(session, payload, actor=admin))
 
 
 @router.get("/{user_id}", response_model=UserOut)
@@ -47,9 +46,11 @@ async def patch_user(
     user_id: uuid.UUID,
     payload: UserUpdate,
     session: AsyncSession = Depends(get_session),
-    _: User = Depends(require_permission("iam.user.write")),
+    admin: User = Depends(require_permission("iam.user.write")),
 ):
-    return UserOut.from_model(await svc.update_user(session, user_id, payload))
+    return UserOut.from_model(
+        await svc.update_user(session, user_id, payload, actor=admin)
+    )
 
 
 @router.post("/{user_id}/password", status_code=status.HTTP_204_NO_CONTENT)
@@ -75,11 +76,8 @@ async def set_user_roles(
     user_id: uuid.UUID,
     payload: RoleIdList,
     session: AsyncSession = Depends(get_session),
-    _: User = Depends(require_permission("iam.role.write")),
+    admin: User = Depends(require_permission("iam.role.write")),
 ):
-    user = await get_user(session, user_id)
-    if user is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "No such user")
-    user.roles = await load_roles(session, payload.role_ids)
-    await session.flush()
-    return CurrentUser.from_model(await get_user(session, user_id))
+    return CurrentUser.from_model(
+        await svc.reassign_roles(session, user_id, payload.role_ids, actor=admin)
+    )

@@ -1,8 +1,8 @@
 """Topics audit-service consumes (must match the producers' base names)."""
 from app.config import topic_prefix
 
-# base topic -> nothing; we just need the set. Kept aligned with
-# case-service/app/events/topics.py and evidence-service/app/events/topics.py.
+# base topic -> nothing; we just need the set. Kept aligned with the producers'
+# app/events/topics.py (case-service, evidence-service, iam-service).
 _BASE_TOPICS = (
     "incident.reported",
     "case.opened",
@@ -10,6 +10,12 @@ _BASE_TOPICS = (
     "case.arrest_recorded",
     "evidence.logged",
     "evidence.custody_recorded",
+    "evidence.hash_mismatch",
+    # iam-service admin / lockout events (TD-003, FR-IAM-05/06)
+    "user.created",
+    "user.deactivated",
+    "user.role_reassigned",
+    "account.locked_out",
 )
 
 

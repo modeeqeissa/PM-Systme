@@ -67,10 +67,10 @@ class MvEvidenceIntegrity(Base):
     """Evidence integrity signals per evidence item.
 
     SRS §9.3.7 keys these per station, but neither evidence_items (§9.3.3) nor the
-    EvidenceLogged / CustodyEventRecorded events carry a station, so this is
-    keyed per evidence_id. `hash_mismatch_count` has no feeding event yet
-    (hash verification is a read, not a write) - it stays 0 until evidence-service
-    emits an EvidenceHashMismatch event.
+    EvidenceLogged / CustodyEventRecorded / EvidenceHashMismatch events carry a
+    station, so this is keyed per evidence_id. Feeds: EvidenceLogged ->
+    evidence_logged; CustodyEventRecorded (transferred, no ack) ->
+    pending_transfer_ack_count; EvidenceHashMismatch -> hash_mismatch_count.
     """
 
     __tablename__ = "mv_evidence_integrity"

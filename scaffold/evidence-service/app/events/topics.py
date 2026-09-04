@@ -4,6 +4,7 @@ from app.events.config import topic_prefix
 _TOPICS = {
     "EvidenceLogged": "evidence.logged",
     "CustodyEventRecorded": "evidence.custody_recorded",
+    "EvidenceHashMismatch": "evidence.hash_mismatch",
 }
 
 ALL_TOPICS = tuple(_TOPICS.values())

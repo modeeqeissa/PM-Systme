@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models import Role, User
 from app.schemas import UserCreate, UserUpdate
 from app.security import passwords
+from app.services import audit_events
 from app.services import auth as auth_service
 from app.services.rbac import get_user
 
@@ -27,7 +28,9 @@ async def load_roles(session: AsyncSession, role_ids: list[int]) -> list[Role]:
     return list(rows)
 
 
-async def create_user(session: AsyncSession, payload: UserCreate) -> User:
+async def create_user(
+    session: AsyncSession, payload: UserCreate, *, actor: User
+) -> User:
     errors = passwords.policy_errors(payload.password)
     if errors:
         raise HTTPException(
@@ -50,16 +53,19 @@ async def create_user(session: AsyncSession, payload: UserCreate) -> User:
         raise HTTPException(
             status.HTTP_409_CONFLICT, "Badge number or email already in use"
         )
-    return await get_user(session, user.id)
+    created = await get_user(session, user.id)
+    audit_events.user_created(session, actor=actor, user=created)  # FR-IAM-06
+    return created
 
 
 async def update_user(
-    session: AsyncSession, user_id: uuid.UUID, payload: UserUpdate
+    session: AsyncSession, user_id: uuid.UUID, payload: UserUpdate, *, actor: User
 ) -> User:
     user = await get_user(session, user_id)
     if user is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "No such user")
 
+    previous_status = user.status
     data = payload.model_dump(exclude_unset=True)
     for field in ("full_name", "email", "station_id", "status"):
         if field in data:
@@ -74,7 +80,37 @@ async def update_user(
     if data.get("status") in ("suspended", "deactivated"):
         await auth_service.revoke_all_sessions(session, user.id)
 
+    # FR-IAM-06: emit only on the transition INTO 'deactivated'.
+    if user.status == "deactivated" and previous_status != "deactivated":
+        audit_events.user_deactivated(
+            session, actor=actor, user=user, previous_status=previous_status
+        )
+
     return await get_user(session, user.id)
+
+
+async def reassign_roles(
+    session: AsyncSession, user_id: uuid.UUID, role_ids: list[int], *, actor: User
+) -> User:
+    user = await get_user(session, user_id)
+    if user is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "No such user")
+
+    previous_roles = sorted(r.name for r in user.roles)
+    user.roles = await load_roles(session, role_ids)
+    await session.flush()
+    reloaded = await get_user(session, user_id)
+    new_roles = sorted(r.name for r in reloaded.roles)
+
+    if set(previous_roles) != set(new_roles):  # FR-IAM-06
+        audit_events.user_role_reassigned(
+            session,
+            actor=actor,
+            user=reloaded,
+            previous_roles=previous_roles,
+            new_roles=new_roles,
+        )
+    return reloaded
 
 
 async def change_password(

@@ -64,6 +64,38 @@ async def test_custody_event_recorded_enqueued(client, make_item, auth_full):
     assert rows[0].body["actor_id"] is not None
 
 
+async def test_hash_mismatch_enqueues_event_but_a_match_does_not(client, auth_full):
+    content = b"authentic " + uuid.uuid4().bytes
+    ev = (
+        await client.post(
+            "/api/v1/evidence",
+            data=_form(),
+            files={"file": ("f.bin", content, "application/octet-stream")},
+            headers=auth_full,
+        )
+    ).json()
+
+    # a clean verify -> no event
+    r = await client.post(f"/api/v1/evidence/{ev['id']}/verify", headers=auth_full)
+    assert r.status_code == 200 and r.json()["match"] is True
+    assert await _rows("EvidenceHashMismatch") == []
+
+    # tamper with the vault blob, verify again -> mismatch + one event
+    from app.services import vault
+
+    with open(f"{vault.config.vault_dir()}/{ev['storage_ref']}", "wb") as fh:
+        fh.write(vault._fernet().encrypt(b"tampered"))
+    r = await client.post(f"/api/v1/evidence/{ev['id']}/verify", headers=auth_full)
+    assert r.status_code == 200 and r.json()["match"] is False
+
+    rows = await _rows("EvidenceHashMismatch")
+    assert len(rows) == 1
+    assert rows[0].topic.endswith("evidence.hash_mismatch")
+    assert rows[0].body["payload"]["evidence_id"] == ev["id"]
+    assert rows[0].body["payload"]["stored_hash"] != rows[0].body["payload"]["computed_hash"]
+    assert rows[0].body["actor_id"] is not None
+
+
 async def test_rejected_custody_write_leaves_no_outbox_row(client, make_item, auth_full):
     item = await make_item()
     # transferred without acknowledgement -> 400, whole transaction rolls back

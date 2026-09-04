@@ -99,7 +99,7 @@ async def test_arrest_recorded_increments_when_case_known(client, emit, consumer
     assert sum(r.arrests_recorded for r in rows) == 1
 
 
-async def test_evidence_logged_and_unacked_transfer(client, emit, consumer):
+async def test_evidence_logged_transfer_and_hash_mismatch(client, emit, consumer):
     ev_id = str(uuid.uuid4())
     await emit("EvidenceLogged", {"evidence_id": ev_id, "case_id": str(uuid.uuid4())},
                service="evidence-service")
@@ -109,12 +109,17 @@ async def test_evidence_logged_and_unacked_transfer(client, emit, consumer):
          "acknowledgement": False},
         service="evidence-service",
     )
-    assert await consumer.process_available() == 2
+    await emit(
+        "EvidenceHashMismatch",
+        {"evidence_id": ev_id, "stored_hash": "a" * 64, "computed_hash": "b" * 64},
+        service="evidence-service",
+    )
+    assert await consumer.process_available() == 3
     rows = await _one(MvEvidenceIntegrity)
     assert len(rows) == 1
     assert rows[0].evidence_logged == 1
     assert rows[0].pending_transfer_ack_count == 1
-    assert rows[0].hash_mismatch_count == 0
+    assert rows[0].hash_mismatch_count == 1
 
 
 async def test_redelivery_does_not_double_count(client, emit, consumer):

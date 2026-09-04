@@ -1,0 +1,27 @@
+openapi: 3.0.3
+info:
+  title: PMP Notification Service
+  version: "0.1-stub"
+  description: >
+    Phase 1 service — SCHEMA ONLY for now. The notification_db schema (docs Section
+    9.3.8) is migrated and verifiable, but no domain endpoints are
+    implemented yet (FR section 4.8). Only GET /health is live; routers are
+    mounted in app/main.py once the Phase 1 build begins.
+servers:
+  - url: /api/v1
+paths:
+  /health:
+    get:
+      tags: [ops]
+      summary: Liveness probe
+      responses:
+        "200":
+          description: Service is up
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status, service]
+                properties:
+                  status: { type: string, enum: [ok] }
+                  service: { type: string }

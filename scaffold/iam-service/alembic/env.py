@@ -5,6 +5,7 @@ from alembic import context
 from sqlalchemy import engine_from_config, pool
 
 from app.config import sync_database_url
+from app.events import models as _outbox_models  # noqa: F401 - register on metadata
 from app.models import Base
 
 config = context.config

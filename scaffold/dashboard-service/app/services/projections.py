@@ -116,3 +116,8 @@ async def apply_event(session: AsyncSession, envelope: dict) -> None:
                 uuid.UUID(payload["evidence_id"]),
                 pending_transfer_ack_count=1,
             )
+
+    elif event_type == "EvidenceHashMismatch":
+        await _bump_evidence_integrity(
+            session, uuid.UUID(payload["evidence_id"]), hash_mismatch_count=1
+        )

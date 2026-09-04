@@ -93,6 +93,7 @@ _BASE_TOPIC = {
     "ArrestRecorded": "case.arrest_recorded",
     "EvidenceLogged": "evidence.logged",
     "CustodyEventRecorded": "evidence.custody_recorded",
+    "EvidenceHashMismatch": "evidence.hash_mismatch",
 }
 
 

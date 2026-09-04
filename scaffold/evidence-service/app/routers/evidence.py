@@ -129,9 +129,14 @@ async def get_evidence_item(
 async def verify_evidence_hash(
     evidence_id: uuid.UUID,
     session: AsyncSession = Depends(get_session),
-    _: dict = Depends(require_permission("evidence.vault.read")),
+    claims: dict = Depends(require_permission("evidence.vault.read")),
 ) -> HashVerification:
-    """Recompute the stored file's SHA-256 and compare to the upload hash (FR-EVID-06)."""
+    """Recompute the stored file's SHA-256 and compare to the upload hash (FR-EVID-06).
+
+    A mismatch enqueues an ``EvidenceHashMismatch`` domain event (transactional
+    outbox) so audit-service records the tamper detection and dashboard-service's
+    ``mv_evidence_integrity.hash_mismatch_count`` reflects it.
+    """
     item = await session.get(EvidenceItem, evidence_id)
     if item is None:
         raise HTTPException(status_code=404, detail="No such evidence item")
@@ -141,10 +146,31 @@ async def verify_evidence_hash(
         raise HTTPException(status_code=409, detail="Stored file is missing from the vault")
 
     computed = vault.sha256_hex(vault.load(item.storage_ref))
+    verified_at = dt.datetime.now(dt.timezone.utc)
+    match = computed == item.sha256_hash
+
+    if not match:
+        actor_id, actor_role = _actor(claims)
+        enqueue(
+            session,
+            event_type="EvidenceHashMismatch",
+            aggregate_type="evidence_item",
+            aggregate_id=item.id,
+            actor_id=actor_id,
+            actor_role=actor_role,
+            payload={
+                "evidence_id": str(item.id),
+                "case_id": str(item.case_id),
+                "stored_hash": item.sha256_hash,
+                "computed_hash": computed,
+                "verified_at": verified_at.isoformat(),
+            },
+        )
+
     return HashVerification(
         evidence_id=item.id,
         stored_hash=item.sha256_hash,
         computed_hash=computed,
-        match=(computed == item.sha256_hash),
-        verified_at=dt.datetime.now(dt.timezone.utc),
+        match=match,
+        verified_at=verified_at,
     )

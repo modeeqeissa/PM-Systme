@@ -9,6 +9,7 @@ _BASE_TOPICS = (
     "case.arrest_recorded",
     "evidence.logged",
     "evidence.custody_recorded",
+    "evidence.hash_mismatch",
 )
 
 

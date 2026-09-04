@@ -15,6 +15,7 @@ from app import config
 from app.models import Session, User
 from app.schemas import MfaChallenge, MfaEnrollment, TokenPair
 from app.security import mfa, passwords, tokens
+from app.services import audit_events
 from app.services.rbac import effective_permissions, get_user, get_user_by_badge, role_names
 
 
@@ -60,11 +61,18 @@ async def login(
 
     if not passwords.verify_password(password, user.password_hash):
         user.failed_login_count += 1
-        # Commit the counter now: the request ends in an error, and get_session
-        # would otherwise roll the increment back, so lockout would never trip.
+        # This branch is unreachable once the account is already locked (the
+        # check above short-circuits), so `>= MAX` here is the lockout TRANSITION
+        # and fires exactly once per lockout (FR-IAM-05).
+        locked_now = user.failed_login_count >= config.MAX_FAILED_LOGINS
+        if locked_now:
+            audit_events.account_locked_out(
+                session, user=user, failed_login_count=user.failed_login_count
+            )
+        # Commit the counter (and, on lockout, the outbox row) now: the request
+        # ends in an error, and get_session would otherwise roll them back.
         await session.commit()
-        if user.failed_login_count >= config.MAX_FAILED_LOGINS:
-            # FR-IAM-05: also notify ICT/security (audit/notification wiring TODO).
+        if locked_now:
             raise HTTPException(
                 status.HTTP_423_LOCKED, "Account locked after too many failed attempts"
             )

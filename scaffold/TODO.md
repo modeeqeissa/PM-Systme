@@ -51,43 +51,52 @@ independent Audit Log entry SRS §5.8 requires.
 
 ---
 
-## TD-003 — iam-service does not emit audit events for admin actions
+## TD-003 — iam-service admin / lockout audit events — ✅ RESOLVED (2026-09-04)
 
-**Status:** open
-**Severity:** should-fix before pilot (FR-IAM-06 says admin actions are
-audit-logged; FR-AUD-01)
-**Violates:** CLAUDE.md rule 3 (IAM data), FR-IAM-06, FR-AUD-01
+**Was:** iam-service administrative writes (FR-IAM-06) and account lockout
+(FR-IAM-05) published nothing, so audit-service had no record of them
+(CLAUDE.md rule 3, FR-AUD-01).
 
-### What's missing
-iam-service administrative writes are not published as domain events, so
-audit-service has no record of them:
-- `POST /api/v1/users` (create), `PATCH /api/v1/users/{id}` (deactivate /
-  reassign / rename), `PUT /api/v1/users/{id}/roles`,
-  `POST /api/v1/users/{id}/password`, role/permission changes.
+**Resolution:** the transactional-outbox module now runs in iam-service too
+(`app/events/`, migration `0003_outbox.py`, relay spawned in `main.py` lifespan):
+- `POST /users` → `UserCreated` (`user.created`)
+- `PATCH /users/{id}` transitioning **into** `deactivated` → `UserDeactivated`
+  (`user.deactivated`) — not emitted for `suspended` or a no-op re-deactivate
+- `PUT /users/{id}/roles` when the role set actually changes → `UserRoleReassigned`
+  (`user.role_reassigned`), payload carries `previous_roles` / `new_roles`
+- account lockout (FR-IAM-05) → `AccountLockedOut` (`account.locked_out`),
+  enqueued in the same transaction as the `failed_login_count` bump, at the
+  lockout **transition** only — the already-locked check short-circuits earlier
+  attempts, so it fires **exactly once per lockout** (`actor_role: "system"`,
+  no admin actor).
+- **audit-service** consumes all four (added to `_BASE_TOPICS`, one consumer):
+  `UserCreated` → `user`/`create`, `UserDeactivated` → `user`/`delete`
+  (soft-delete/status change per SRS §9.3.10), `UserRoleReassigned` &
+  `AccountLockedOut` → `user`/`update`.
+- Tests: `iam-service/tests/test_outbox.py` (domain change + event, deactivate
+  emits once only on the transition, roles emit only on change, lockout emits
+  exactly once and not per failed attempt, relay → Kafka),
+  `audit-service/tests/test_consumer.py` (mapping of all four).
+- No `TODO(TD-003)` code markers existed; none to remove.
 
-FR-IAM-05 ("notify ICT/security on lockout") also needs the event bus +
-notification-service.
-
-### Definition of done
-- [ ] `identity_db.outbox_events` + relay (reuse the `app/events/` module from
-      case-service / evidence-service).
-- [ ] Emit `UserCreated`, `UserStatusChanged`, `UserRolesChanged`,
-      `UserPasswordChanged` (names TBC against a future SRS §3.4 revision — the
-      current SRS only lists `OfficerTransferred` for the IAM/HR boundary).
-- [ ] audit-service maps them to `entity_type = user`, appropriate action.
-- [ ] Account-lockout emits an event notification-service can consume (deferred
-      with notification-service itself).
-- [ ] Integration test mirroring `test_outbox.py`.
+### Still deferred with notification-service
+- FR-IAM-05's *notification* half ("notify ICT/security"): notification-service
+  will consume `account.locked_out` once it is built.
+- iam-service `POST /users/{id}/password` and role/permission-definition changes
+  don't emit yet — add when Phase 1 revisits iam.
 
 ---
 
 ## Build order
-Phase 0 pilot: **iam-service ✅ → case-service ✅ → evidence-service ✅ →
-Kafka + transactional outbox ✅ → audit-service ✅ → dashboard-service read
-models ✅**. All five pilot services build, migrate, test, and run locally; the
-full event pipeline (write → outbox → Kafka → audit-service hash chain +
-dashboard-service projections) is verified end-to-end.
+Phase 0 pilot: **iam ✅ → case ✅ → evidence ✅ → Kafka + transactional outbox
+✅ → audit-service ✅ → dashboard-service read models ✅**. Full event pipeline
+(write → outbox → Kafka → audit hash chain + dashboard projections) verified
+end-to-end, including `evidence.hash_mismatch` (verify-with-mismatch → audit
+`read` entry + `mv_evidence_integrity.hash_mismatch_count`).
 
-**Next:** close **TD-003** (iam-service admin actions emit no events), then
-notification-service (FR-IAM-05 lockout alerts, FR-NOTIF), then the remaining
-services (hr, training, community, integration-gateway).
+Phase 1 **stubs scaffolded** (health-check only, schema migrated + verified,
+no logic/RBAC/events): community (8004), training (8005), hr (8006),
+notification (8008), integration-gateway (8009). See `SERVICES.md`.
+
+**Next:** fill in the Phase 1 services (start with notification-service — it can
+consume `account.locked_out` for the FR-IAM-05 alert half, plus FR-NOTIF).

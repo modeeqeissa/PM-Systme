@@ -101,6 +101,11 @@ _BASE_TOPIC = {
     "ArrestRecorded": "case.arrest_recorded",
     "EvidenceLogged": "evidence.logged",
     "CustodyEventRecorded": "evidence.custody_recorded",
+    "EvidenceHashMismatch": "evidence.hash_mismatch",
+    "UserCreated": "user.created",
+    "UserDeactivated": "user.deactivated",
+    "UserRoleReassigned": "user.role_reassigned",
+    "AccountLockedOut": "account.locked_out",
     "SomethingUnmapped": "case.opened",
 }
 
