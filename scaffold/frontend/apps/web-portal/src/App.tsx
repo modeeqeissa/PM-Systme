@@ -3,6 +3,7 @@ import { LoginPage } from "./pages/LoginPage";
 import { CasesPage } from "./pages/CasesPage";
 import { IncidentPage } from "./pages/IncidentPage";
 import { DashboardPage } from "./pages/DashboardPage";
+import { CaseDetailPage } from "./pages/CaseDetailPage";
 import { RequireAuth } from "./routes/RequireAuth";
 
 export function App() {
@@ -14,6 +15,14 @@ export function App() {
         element={
           <RequireAuth>
             <CasesPage />
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/cases/:caseId"
+        element={
+          <RequireAuth>
+            <CaseDetailPage />
           </RequireAuth>
         }
       />

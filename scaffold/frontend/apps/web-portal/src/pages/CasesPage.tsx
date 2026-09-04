@@ -111,7 +111,14 @@ export function CasesPage() {
             <tbody>
               {query.data.map((c) => (
                 <tr key={c.id} className="border-b border-slate-100 last:border-0">
-                  <td className="px-6 py-3 font-medium text-slate-900">{c.case_number}</td>
+                  <td className="px-6 py-3 font-medium">
+                    <Link
+                      to={`/cases/${c.id}`}
+                      className="text-slate-900 underline decoration-slate-300 hover:decoration-slate-900"
+                    >
+                      {c.case_number}
+                    </Link>
+                  </td>
                   <td className="px-6 py-3">
                     <span
                       className={`rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_STYLE[c.status]}`}

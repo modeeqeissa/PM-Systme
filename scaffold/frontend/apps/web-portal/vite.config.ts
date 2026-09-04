@@ -9,6 +9,7 @@ import react from "@vitejs/plugin-react";
 const IAM = process.env.PMP_IAM_URL ?? "http://localhost:8001";
 const CASE = process.env.PMP_CASE_URL ?? "http://localhost:8002";
 const DASH = process.env.PMP_DASHBOARD_URL ?? "http://localhost:8007";
+const EVIDENCE = process.env.PMP_EVIDENCE_URL ?? "http://localhost:8003";
 // 5173 (Vite's default) is often taken; override with PMP_PORT if 5180 clashes too.
 const PORT = Number(process.env.PMP_PORT ?? 5180);
 
@@ -27,6 +28,7 @@ export default defineConfig({
       "/api/iam": { target: IAM, changeOrigin: true, rewrite: (p) => p.replace(/^\/api\/iam/, "") },
       "/api/case": { target: CASE, changeOrigin: true, rewrite: (p) => p.replace(/^\/api\/case/, "") },
       "/api/dash": { target: DASH, changeOrigin: true, rewrite: (p) => p.replace(/^\/api\/dash/, "") },
+      "/api/evidence": { target: EVIDENCE, changeOrigin: true, rewrite: (p) => p.replace(/^\/api\/evidence/, "") },
     },
   },
   test: {

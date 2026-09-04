@@ -1,9 +1,11 @@
 /**
- * Thin fetch wrappers for the two services this slice talks to.
+ * Thin fetch wrappers for the services this slice talks to.
  *
  * Paths are proxied same-origin by Vite (see vite.config.ts):
- *   /api/iam/*  -> iam-service   (:8001)
- *   /api/case/* -> case-service  (:8002)
+ *   /api/iam/*      -> iam-service       (:8001)
+ *   /api/case/*     -> case-service      (:8002)
+ *   /api/dash/*     -> dashboard-service (:8007)
+ *   /api/evidence/* -> evidence-service  (:8003)
  */
 import { clearToken, getToken } from "./auth";
 
@@ -32,7 +34,11 @@ async function requestRaw<T>(
 ): Promise<{ status: number; data: T }> {
   const { auth = false, headers, ...rest } = init;
   const h = new Headers(headers);
-  if (!h.has("Content-Type") && rest.body) h.set("Content-Type", "application/json");
+  // Leave FormData alone — the browser sets the multipart boundary itself; only
+  // JSON bodies need an explicit Content-Type.
+  if (!h.has("Content-Type") && rest.body && !(rest.body instanceof FormData)) {
+    h.set("Content-Type", "application/json");
+  }
   if (auth) {
     const token = getToken();
     if (token) h.set("Authorization", `Bearer ${token}`);
@@ -179,11 +185,77 @@ export const cases = {
     return request<Case[]>("/api/case", `/api/v1/cases${qs ? `?${qs}` : ""}`, { auth: true });
   },
 
+  get: (id: string) => request<Case>("/api/case", `/api/v1/cases/${id}`, { auth: true }),
+
   /** POST /cases — escalate an incident into a formal case (FR-CASE-02). */
   create: (body: { incident_id?: string | null; lead_officer_id: string }) =>
     request<Case>("/api/case", "/api/v1/cases", {
       method: "POST",
       body: JSON.stringify(body),
+      auth: true,
+    }),
+};
+
+// --- evidence-service ----------------------------------------------------
+export interface EvidenceItem {
+  id: string;
+  case_id: string;
+  item_type: string;
+  description: string;
+  collected_by: string;
+  collected_at: string;
+  storage_ref: string | null;
+  sha256_hash: string | null;
+  status: "logged" | "in_analysis" | "in_court" | "disposed";
+}
+
+export type CustodyAction =
+  | "collected"
+  | "transferred"
+  | "analyzed"
+  | "stored"
+  | "submitted_court"
+  | "disposed";
+
+export interface CustodyEvent {
+  id: number;
+  evidence_id: string;
+  action: CustodyAction;
+  from_officer: string | null;
+  to_officer: string | null;
+  acknowledgement: boolean;
+  occurred_at: string;
+}
+
+export interface HashVerification {
+  evidence_id: string;
+  stored_hash: string;
+  computed_hash: string;
+  match: boolean;
+  verified_at: string;
+}
+
+export const evidence = {
+  /** POST /evidence (multipart/form-data) — FR-EVID-01/02. `file` is optional
+   * (physical items have none); when present it's SHA-256 hashed server-side. */
+  create: (form: FormData) =>
+    request<EvidenceItem>("/api/evidence", "/api/v1/evidence", {
+      method: "POST",
+      body: form,
+      auth: true,
+    }),
+
+  get: (id: string) =>
+    request<EvidenceItem>("/api/evidence", `/api/v1/evidence/${id}`, { auth: true }),
+
+  /** GET /evidence/{id}/custody — the append-only chain, chronological (FR-EVID-03/07). */
+  custody: (id: string) =>
+    request<CustodyEvent[]>("/api/evidence", `/api/v1/evidence/${id}/custody`, { auth: true }),
+
+  /** POST /evidence/{id}/verify — recompute + compare the SHA-256 (FR-EVID-06). */
+  verify: (id: string) =>
+    request<HashVerification>("/api/evidence", `/api/v1/evidence/${id}/verify`, {
+      method: "POST",
       auth: true,
     }),
 };
