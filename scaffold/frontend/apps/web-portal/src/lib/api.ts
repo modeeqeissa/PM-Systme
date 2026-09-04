@@ -206,6 +206,18 @@ export interface Statement extends StatementCreate {
   recorded_at: string;
 }
 
+export interface CourtProceedingCreate {
+  hearing_date: string; // ISO 8601
+  court_name?: string | null;
+  verdict?: string | null;
+  notes?: string | null;
+}
+
+export interface CourtProceeding extends CourtProceedingCreate {
+  id: string;
+  case_id: string;
+}
+
 export const cases = {
   list: (params: { status?: string } = {}) => {
     const qs = new URLSearchParams(params as Record<string, string>).toString();
@@ -250,6 +262,28 @@ export const cases = {
       body: JSON.stringify(body),
       auth: true,
     }),
+
+  /** GET /cases/{id}/court-proceedings — hearings recorded against a case,
+   * newest first. */
+  courtProceedings: (caseId: string) =>
+    request<CourtProceeding[]>(
+      "/api/case",
+      `/api/v1/cases/${caseId}/court-proceedings`,
+      { auth: true },
+    ),
+
+  /** POST /cases/{id}/court-proceedings — record a court proceeding
+   * (FR-CASE-06). Publishes `CourtProceedingRecorded` to the audit trail. */
+  recordCourtProceeding: (caseId: string, body: CourtProceedingCreate) =>
+    request<CourtProceeding>(
+      "/api/case",
+      `/api/v1/cases/${caseId}/court-proceedings`,
+      {
+        method: "POST",
+        body: JSON.stringify(body),
+        auth: true,
+      },
+    ),
 };
 
 // --- evidence-service ----------------------------------------------------

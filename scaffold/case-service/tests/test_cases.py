@@ -342,6 +342,78 @@ async def test_list_statements_requires_read(client, make_case, auth_none):
     assert r.status_code == 403
 
 
+# --- POST/GET /cases/{id}/court-proceedings (FR-CASE-06) -------------------
+async def test_record_court_proceeding(client, make_case, auth_rw):
+    case = await make_case(status="referred_prosecution")
+    r = await client.post(
+        f"/api/v1/cases/{case.id}/court-proceedings",
+        json={
+            "hearing_date": "2026-10-01T09:00:00+00:00",
+            "court_name": "Central Magistrates Court",
+            "notes": "First hearing, plea entered.",
+        },
+        headers=auth_rw,
+    )
+    assert r.status_code == 201, r.text
+    body = r.json()
+    assert body["case_id"] == str(case.id)
+    assert body["court_name"] == "Central Magistrates Court"
+    assert body["verdict"] is None
+    uuid.UUID(body["id"])
+
+
+async def test_record_court_proceeding_unknown_case_404(client, auth_rw):
+    r = await client.post(
+        f"/api/v1/cases/{uuid.uuid4()}/court-proceedings",
+        json={"hearing_date": "2026-10-01T09:00:00+00:00"},
+        headers=auth_rw,
+    )
+    assert r.status_code == 404
+
+
+async def test_record_court_proceeding_requires_write(client, make_case, auth_ro):
+    case = await make_case()
+    r = await client.post(
+        f"/api/v1/cases/{case.id}/court-proceedings",
+        json={"hearing_date": "2026-10-01T09:00:00+00:00"},
+        headers=auth_ro,
+    )
+    assert r.status_code == 403
+
+
+async def test_list_court_proceedings(client, make_case, auth_rw):
+    case = await make_case(status="referred_prosecution")
+    r = await client.post(
+        f"/api/v1/cases/{case.id}/court-proceedings",
+        json={
+            "hearing_date": "2026-10-01T09:00:00+00:00",
+            "court_name": "Central Magistrates Court",
+            "verdict": "guilty",
+        },
+        headers=auth_rw,
+    )
+    assert r.status_code == 201, r.text
+
+    r = await client.get(f"/api/v1/cases/{case.id}/court-proceedings", headers=auth_rw)
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert len(body) == 1
+    assert body[0]["case_id"] == str(case.id)
+    assert body[0]["court_name"] == "Central Magistrates Court"
+    assert body[0]["verdict"] == "guilty"
+
+
+async def test_list_court_proceedings_unknown_case_404(client, auth_rw):
+    r = await client.get(f"/api/v1/cases/{uuid.uuid4()}/court-proceedings", headers=auth_rw)
+    assert r.status_code == 404
+
+
+async def test_list_court_proceedings_requires_read(client, make_case, auth_none):
+    case = await make_case()
+    r = await client.get(f"/api/v1/cases/{case.id}/court-proceedings", headers=auth_none)
+    assert r.status_code == 403
+
+
 # --- GET /cases (list, FR-CASE-03 + FR-IAM-04 scope) -----------------------
 def _sub(token: str) -> str:
     import jwt

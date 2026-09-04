@@ -8,6 +8,7 @@ import {
   ApiError,
   type Arrest,
   type Case,
+  type CourtProceeding,
   type CustodyEvent,
   type EvidenceItem,
   type Statement,
@@ -23,6 +24,8 @@ const getArrests = vi.fn();
 const recordArrest = vi.fn();
 const getStatements = vi.fn();
 const recordStatement = vi.fn();
+const getCourtProceedings = vi.fn();
+const recordCourtProceeding = vi.fn();
 
 vi.mock("../lib/api", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../lib/api")>();
@@ -35,6 +38,8 @@ vi.mock("../lib/api", async (importOriginal) => {
       recordArrest: (...a: unknown[]) => recordArrest(...a),
       statements: (...a: unknown[]) => getStatements(...a),
       recordStatement: (...a: unknown[]) => recordStatement(...a),
+      courtProceedings: (...a: unknown[]) => getCourtProceedings(...a),
+      recordCourtProceeding: (...a: unknown[]) => recordCourtProceeding(...a),
     },
     evidence: {
       create: (...a: unknown[]) => createEvidence(...a),
@@ -115,6 +120,18 @@ function statement(over: Partial<Statement> = {}): Statement {
   };
 }
 
+function courtProceeding(over: Partial<CourtProceeding> = {}): CourtProceeding {
+  return {
+    id: "pppppppp-pppp-4ppp-8ppp-pppppppppppp",
+    case_id: CASE_ID,
+    hearing_date: "2026-10-01T09:00:00Z",
+    court_name: "Central Magistrates Court",
+    verdict: "Guilty",
+    notes: "First hearing, plea entered.",
+    ...over,
+  };
+}
+
 function renderPage() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
@@ -139,11 +156,14 @@ beforeEach(() => {
   recordArrest.mockReset();
   getStatements.mockReset();
   recordStatement.mockReset();
+  getCourtProceedings.mockReset();
+  recordCourtProceeding.mockReset();
   setToken(fakeJwt({ sub: SUB, badge_number: "OFF-9" }));
   getCase.mockResolvedValue(theCase());
   getCustody.mockResolvedValue([custodyEvent()]);
   getArrests.mockResolvedValue([]);
   getStatements.mockResolvedValue([]);
+  getCourtProceedings.mockResolvedValue([]);
 });
 
 async function addEvidence(user: ReturnType<typeof userEvent.setup>, withFile = true) {
@@ -445,6 +465,127 @@ describe("CaseDetailPage", () => {
       renderPage();
       expect(
         await screen.findByText(/permission to view statements/i),
+      ).toBeInTheDocument();
+    });
+  });
+
+  describe("record court proceeding", () => {
+    async function fillAndSubmit(user: ReturnType<typeof userEvent.setup>) {
+      await user.type(screen.getByLabelText("Court name"), "Central Magistrates Court");
+      await user.type(screen.getByLabelText("Verdict"), "Guilty");
+      await user.type(screen.getByLabelText("Notes"), "First hearing, plea entered.");
+      await user.click(
+        screen.getByRole("button", { name: "Record court proceeding" }),
+      );
+    }
+
+    it("lists court proceedings already recorded against the case", async () => {
+      getCourtProceedings.mockResolvedValue([courtProceeding()]);
+      renderPage();
+      // Anchor on the (unique) court name rather than "Guilty" alone, in case a
+      // verdict value ever collides with other on-screen text (see the
+      // dedicated collision regression test below).
+      const item = (await screen.findByText("Central Magistrates Court")).closest("li")!;
+      expect(item).toHaveTextContent("Guilty");
+      expect(item).toHaveTextContent("First hearing, plea entered.");
+      expect(getCourtProceedings).toHaveBeenCalledWith(CASE_ID);
+    });
+
+    it("shows an empty-state message with no court proceedings", async () => {
+      renderPage();
+      expect(
+        await screen.findByText(/no court proceedings recorded yet/i),
+      ).toBeInTheDocument();
+    });
+
+    it("omits verdict and notes when unset", async () => {
+      getCourtProceedings.mockResolvedValue([
+        courtProceeding({ verdict: null, notes: null }),
+      ]);
+      renderPage();
+      const item = (await screen.findByText("Central Magistrates Court")).closest("li")!;
+      expect(item).not.toHaveTextContent("Verdict:");
+      expect(item).not.toHaveTextContent("Guilty");
+    });
+
+    it("a verdict colliding with the case status badge stays scoped to its own list item", async () => {
+      // theCase() defaults to status: "open", which renders as an "Open" badge
+      // in the header — the exact same string this proceeding uses as its
+      // verdict. A naive screen.getByText("Open") would be ambiguous.
+      getCourtProceedings.mockResolvedValue([
+        courtProceeding({
+          hearing_date: "2026-10-02T09:00:00Z",
+          court_name: "Traffic Court",
+          verdict: "Open",
+          notes: null,
+        }),
+      ]);
+      renderPage();
+
+      // Wait for both the header and the proceedings list to have resolved
+      // before counting "Open" occurrences — they load via independent
+      // queries, so an earlier findAllByText could catch just one of them.
+      await screen.findByText("Traffic Court");
+      const matches = screen.getAllByText("Open");
+      expect(matches.length).toBeGreaterThan(1); // the status badge + the verdict
+
+      const item = screen.getByText("Traffic Court").closest("li")!;
+      expect(within(item).getByText("Open")).toBeInTheDocument();
+    });
+
+    it("POSTs the form fields and adds the result to the list", async () => {
+      const user = userEvent.setup();
+      recordCourtProceeding.mockResolvedValue(courtProceeding());
+      renderPage();
+      await screen.findByText("CASE-2026-000010");
+
+      await fillAndSubmit(user);
+
+      expect(await screen.findByText(/court proceeding recorded/i)).toBeInTheDocument();
+      expect(recordCourtProceeding).toHaveBeenCalledTimes(1);
+      const [postedCaseId, body] = recordCourtProceeding.mock.calls[0];
+      expect(postedCaseId).toBe(CASE_ID);
+      expect(body.court_name).toBe("Central Magistrates Court");
+      expect(body.verdict).toBe("Guilty");
+      expect(body.notes).toBe("First hearing, plea entered.");
+      expect(typeof body.hearing_date).toBe("string");
+
+      expect(
+        await screen.findAllByText("Central Magistrates Court"),
+      ).toHaveLength(1);
+    });
+
+    it("surfaces a 403 with a clear permission message", async () => {
+      const user = userEvent.setup();
+      recordCourtProceeding.mockRejectedValue(new ApiError(403, "RBAC scope denied"));
+      renderPage();
+      await screen.findByText("CASE-2026-000010");
+      await fillAndSubmit(user);
+      expect(await screen.findByRole("alert")).toHaveTextContent(
+        /can't record a court proceeding/i,
+      );
+      expect(screen.getByText(/case\.write/)).toBeInTheDocument();
+    });
+
+    it("surfaces 422 field errors", async () => {
+      const user = userEvent.setup();
+      recordCourtProceeding.mockRejectedValue(
+        new ApiError(422, "Unprocessable Entity", {
+          detail: [{ loc: ["body", "court_name"], msg: "field too long", type: "value_error" }],
+        }),
+      );
+      renderPage();
+      await screen.findByText("CASE-2026-000010");
+      await fillAndSubmit(user);
+      expect(await screen.findByText("field too long")).toBeInTheDocument();
+    });
+
+    it("surfaces a 403 fetching the court proceedings list", async () => {
+      getCourtProceedings.mockReset();
+      getCourtProceedings.mockRejectedValue(new ApiError(403, "RBAC scope denied"));
+      renderPage();
+      expect(
+        await screen.findByText(/permission to view court proceedings/i),
       ).toBeInTheDocument();
     });
   });

@@ -206,6 +206,45 @@ paths:
         "401": { description: Missing or invalid access token }
         "403": { description: Caller lacks case.write }
         "404": { description: No case with that id }
+  /cases/{case_id}/court-proceedings:
+    get:
+      summary: List court proceedings recorded against a case (FR-CASE-06)
+      description: Requires the `case.read` permission.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - in: path
+          name: case_id
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Court proceedings, newest first
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/CourtProceeding" } }
+        "401": { description: Missing or invalid access token }
+        "403": { description: Caller lacks case.read }
+        "404": { description: No case with that id }
+    post:
+      summary: Record a court proceeding against a case (FR-CASE-06)
+      description: >
+        Requires `case.write`. Publishes a `CourtProceedingRecorded` domain event.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - in: path
+          name: case_id
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CourtProceedingCreate" }
+      responses:
+        "201": { description: Court proceeding recorded, content: { application/json: { schema: { $ref: "#/components/schemas/CourtProceeding" } } } }
+        "401": { description: Missing or invalid access token }
+        "403": { description: Caller lacks case.write }
+        "404": { description: No case with that id }
 
 components:
   securitySchemes:
@@ -280,3 +319,18 @@ components:
             id: { type: string, format: uuid }
             case_id: { type: string, format: uuid }
             recorded_at: { type: string, format: date-time }
+    CourtProceedingCreate:
+      type: object
+      required: [hearing_date]
+      properties:
+        hearing_date: { type: string, format: date-time }
+        court_name: { type: string, nullable: true }
+        verdict: { type: string, nullable: true }
+        notes: { type: string, nullable: true }
+    CourtProceeding:
+      allOf:
+        - $ref: "#/components/schemas/CourtProceedingCreate"
+        - type: object
+          properties:
+            id: { type: string, format: uuid }
+            case_id: { type: string, format: uuid }

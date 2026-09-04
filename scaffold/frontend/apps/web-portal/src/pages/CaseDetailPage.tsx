@@ -9,6 +9,7 @@ import {
   evidence as evidenceApi,
   validationErrors,
   type Arrest,
+  type CourtProceeding,
   type CustodyEvent,
   type EvidenceItem,
   type HashVerification,
@@ -112,6 +113,8 @@ export function CaseDetailPage() {
           <ArrestsSection caseId={query.data.id} />
 
           <StatementsSection caseId={query.data.id} />
+
+          <CourtProceedingsSection caseId={query.data.id} />
 
           <AddEvidenceForm
             caseId={query.data.id}
@@ -472,6 +475,194 @@ function StatementsSection({ caseId }: { caseId: string }) {
                 </span>
               </div>
               <div className="text-slate-600">{s.statement_text}</div>
+            </li>
+          ))}
+        </ul>
+      )}
+    </Card>
+  );
+}
+
+// --- Record court proceeding ----------------------------------------------
+function CourtProceedingsSection({ caseId }: { caseId: string }) {
+  const navigate = useNavigate();
+  const claims = currentClaims();
+  const queryClient = useQueryClient();
+
+  const proceedingsQuery = useQuery({
+    queryKey: ["court-proceedings", caseId],
+    queryFn: () => casesApi.courtProceedings(caseId),
+    retry: (n, err) => !(err instanceof ApiError) && n < 2,
+  });
+
+  const [hearingDate, setHearingDate] = useState(() => toLocalInputValue(new Date()));
+  const [courtName, setCourtName] = useState("");
+  const [verdict, setVerdict] = useState("");
+  const [notes, setNotes] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [problem, setProblem] = useState<Problem | null>(null);
+  const [justAdded, setJustAdded] = useState<CourtProceeding | null>(null);
+
+  const fieldErr = problem?.kind === "validation" ? problem.fields : {};
+
+  if (
+    proceedingsQuery.error instanceof ApiError &&
+    proceedingsQuery.error.status === 401
+  ) {
+    navigate("/login", { replace: true });
+    return null;
+  }
+
+  async function submit(e: FormEvent) {
+    e.preventDefault();
+    if (!claims) return;
+    setProblem(null);
+    setJustAdded(null);
+    setBusy(true);
+    try {
+      const proceeding = await casesApi.recordCourtProceeding(caseId, {
+        hearing_date: localInputToIso(hearingDate),
+        court_name: courtName.trim() || null,
+        verdict: verdict.trim() || null,
+        notes: notes.trim() || null,
+      });
+      setJustAdded(proceeding);
+      queryClient.setQueryData<CourtProceeding[]>(
+        ["court-proceedings", caseId],
+        (prev) => [proceeding, ...(prev ?? [])],
+      );
+      setHearingDate(toLocalInputValue(new Date()));
+      setCourtName("");
+      setVerdict("");
+      setNotes("");
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 401) {
+        navigate("/login", { replace: true });
+        return;
+      }
+      setProblem(classify(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Card className="mb-6">
+      <h2 className="text-lg font-semibold text-slate-900">Record court proceeding</h2>
+      <p className="mb-4 text-sm text-slate-500">
+        FR-CASE-06 — records a hearing against this case.
+      </p>
+
+      {problem?.kind === "forbidden" && (
+        <div className="mb-4">
+          <Alert variant="error">
+            Your role can't record a court proceeding. This needs the{" "}
+            <code>case.write</code> permission.
+          </Alert>
+        </div>
+      )}
+      {problem?.kind === "network" && (
+        <div className="mb-4">
+          <Alert variant="error">Couldn't reach case-service. Try again.</Alert>
+        </div>
+      )}
+      {problem?.kind === "other" && (
+        <div className="mb-4">
+          <Alert variant="error">{problem.message}</Alert>
+        </div>
+      )}
+      {justAdded && (
+        <div className="mb-4">
+          <Alert variant="info">
+            Court proceeding recorded — id <code>{justAdded.id}</code>.
+          </Alert>
+        </div>
+      )}
+
+      <form onSubmit={submit} className="flex flex-col gap-4">
+        <div className="flex flex-col gap-1">
+          <label htmlFor="hearing-date" className="text-sm font-medium text-slate-700">
+            Hearing date
+          </label>
+          <input
+            id="hearing-date"
+            type="datetime-local"
+            value={hearingDate}
+            onChange={(e) => setHearingDate(e.target.value)}
+            required
+            className="rounded-md border border-slate-300 px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+          />
+        </div>
+        <TextInput
+          label="Court name"
+          value={courtName}
+          onChange={(e) => setCourtName(e.target.value)}
+          error={fieldErr.court_name}
+          placeholder="optional"
+        />
+        <TextInput
+          label="Verdict"
+          value={verdict}
+          onChange={(e) => setVerdict(e.target.value)}
+          error={fieldErr.verdict}
+          placeholder="optional — once decided"
+        />
+        <div className="flex flex-col gap-1">
+          <label htmlFor="proceeding-notes" className="text-sm font-medium text-slate-700">
+            Notes
+          </label>
+          <textarea
+            id="proceeding-notes"
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            rows={3}
+            placeholder="optional"
+            className={
+              "rounded-md border px-3 py-2 text-sm text-slate-900 shadow-sm " +
+              "focus:outline-none focus:ring-2 focus:ring-slate-400 " +
+              (fieldErr.notes ? "border-red-400" : "border-slate-300")
+            }
+          />
+          {fieldErr.notes && <p className="text-xs text-red-600">{fieldErr.notes}</p>}
+        </div>
+        <div>
+          <Button type="submit" loading={busy}>
+            Record court proceeding
+          </Button>
+        </div>
+      </form>
+
+      <h3 className="mb-2 mt-6 text-xs font-medium uppercase tracking-wide text-slate-500">
+        Court proceedings
+      </h3>
+      {proceedingsQuery.isLoading && <Spinner label="Loading court proceedings…" />}
+      {proceedingsQuery.error instanceof ApiError && proceedingsQuery.error.status === 403 && (
+        <Alert variant="error">
+          Needs the <code>case.read</code> permission to view court proceedings.
+        </Alert>
+      )}
+      {proceedingsQuery.data && proceedingsQuery.data.length === 0 && (
+        <p className="text-sm text-slate-500">No court proceedings recorded yet.</p>
+      )}
+      {proceedingsQuery.data && proceedingsQuery.data.length > 0 && (
+        <ul className="flex flex-col gap-3">
+          {proceedingsQuery.data.map((p) => (
+            <li key={p.id} className="border-b border-slate-100 pb-2 text-sm last:border-0">
+              <div className="text-slate-900">
+                {new Date(p.hearing_date).toLocaleString()}
+                {p.court_name && (
+                  <>
+                    {" · "}
+                    <span className="font-medium">{p.court_name}</span>
+                  </>
+                )}
+              </div>
+              {p.verdict && (
+                <div className="text-slate-600">
+                  Verdict: <span className="font-medium">{p.verdict}</span>
+                </div>
+              )}
+              {p.notes && <div className="text-slate-500">{p.notes}</div>}
             </li>
           ))}
         </ul>

@@ -1,4 +1,5 @@
-"""Case lifecycle, arrests + statements — FR-CASE-02, FR-CASE-03, FR-CASE-05.
+"""Case lifecycle, arrests, statements + court proceedings — FR-CASE-02,
+FR-CASE-03, FR-CASE-05, FR-CASE-06.
 
 Every mutating handler enqueues a domain event in the same DB transaction
 (transactional outbox, SRS §3.4). audit-service consumes those events and writes
@@ -13,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.deps import get_session, require_permission
 from app.events import enqueue
-from app.models import Arrest, Case, Incident, Statement
+from app.models import Arrest, Case, CourtProceeding, Incident, Statement
 from app.schemas import (
     ArrestCreate,
     ArrestOut,
@@ -21,6 +22,8 @@ from app.schemas import (
     CaseOut,
     CaseStatus,
     CaseStatusUpdate,
+    CourtProceedingCreate,
+    CourtProceedingOut,
     StatementCreate,
     StatementOut,
 )
@@ -354,3 +357,80 @@ async def record_statement(
         },
     )
     return StatementOut.model_validate(statement)
+
+
+@router.get(
+    "/{case_id}/court-proceedings",
+    response_model=list[CourtProceedingOut],
+    responses={
+        401: {"description": "Missing or invalid access token"},
+        403: {"description": "Caller lacks case.read"},
+        404: {"description": "No case with that id"},
+    },
+)
+async def list_court_proceedings(
+    case_id: uuid.UUID,
+    session: AsyncSession = Depends(get_session),
+    _: dict = Depends(require_permission("case.read")),
+) -> list[CourtProceedingOut]:
+    case = await session.get(Case, case_id)
+    if case is None:
+        raise HTTPException(status_code=404, detail="No case with that id")
+
+    q = (
+        select(CourtProceeding)
+        .where(CourtProceeding.case_id == case_id)
+        .order_by(CourtProceeding.hearing_date.desc())
+    )
+    rows = (await session.scalars(q)).all()
+    return [CourtProceedingOut.model_validate(p) for p in rows]
+
+
+@router.post(
+    "/{case_id}/court-proceedings",
+    response_model=CourtProceedingOut,
+    status_code=201,
+    responses={
+        401: {"description": "Missing or invalid access token"},
+        403: {"description": "Caller lacks case.write"},
+        404: {"description": "No case with that id"},
+    },
+)
+async def record_court_proceeding(
+    case_id: uuid.UUID,
+    payload: CourtProceedingCreate,
+    session: AsyncSession = Depends(get_session),
+    claims: dict = Depends(require_permission("case.write")),
+) -> CourtProceedingOut:
+    case = await session.get(Case, case_id)
+    if case is None:
+        raise HTTPException(status_code=404, detail="No case with that id")
+
+    proceeding = CourtProceeding(
+        case_id=case_id,
+        hearing_date=payload.hearing_date,
+        court_name=payload.court_name,
+        verdict=payload.verdict,
+        notes=payload.notes,
+    )
+    session.add(proceeding)
+    await session.flush()
+    await session.refresh(proceeding)
+
+    actor_id, actor_role = _actor(claims)
+    enqueue(
+        session,
+        event_type="CourtProceedingRecorded",
+        aggregate_type="court_proceeding",
+        aggregate_id=proceeding.id,
+        actor_id=actor_id,
+        actor_role=actor_role,
+        payload={
+            "court_proceeding_id": str(proceeding.id),
+            "case_id": str(case_id),
+            "hearing_date": proceeding.hearing_date.isoformat(),
+            "court_name": proceeding.court_name,
+            "verdict": proceeding.verdict,
+        },
+    )
+    return CourtProceedingOut.model_validate(proceeding)

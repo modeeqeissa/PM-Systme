@@ -114,6 +114,26 @@ async def test_statement_recorded_enqueued(client, make_case, auth_rw):
     assert rows[0].body["payload"]["party_type"] == "witness"
 
 
+async def test_court_proceeding_recorded_enqueued(client, make_case, auth_rw):
+    case = await make_case(status="referred_prosecution")
+    r = await client.post(
+        f"/api/v1/cases/{case.id}/court-proceedings",
+        json={
+            "hearing_date": "2026-10-01T09:00:00+00:00",
+            "court_name": "Central Magistrates Court",
+            "verdict": "guilty",
+        },
+        headers=auth_rw,
+    )
+    assert r.status_code == 201
+
+    rows = await _outbox_rows("CourtProceedingRecorded")
+    assert len(rows) == 1
+    assert rows[0].aggregate_id == r.json()["id"]
+    assert rows[0].topic.endswith("case.court_proceeding_recorded")
+    assert rows[0].body["payload"]["verdict"] == "guilty"
+
+
 async def test_relay_publishes_to_kafka_and_marks_sent(
     client, auth_rw, outbox_relay, read_kafka
 ):

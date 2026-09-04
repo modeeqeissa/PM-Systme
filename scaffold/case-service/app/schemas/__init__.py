@@ -5,6 +5,8 @@ from app.schemas.case import (
     CaseOut,
     CaseStatus,
     CaseStatusUpdate,
+    CourtProceedingCreate,
+    CourtProceedingOut,
     PartyType,
     StatementCreate,
     StatementOut,
@@ -23,4 +25,6 @@ __all__ = [
     "PartyType",
     "StatementCreate",
     "StatementOut",
+    "CourtProceedingCreate",
+    "CourtProceedingOut",
 ]

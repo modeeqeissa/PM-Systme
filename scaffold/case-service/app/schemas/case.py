@@ -85,3 +85,23 @@ class StatementOut(BaseModel):
     party_type: PartyType
     statement_text: str
     recorded_at: dt.datetime
+
+
+class CourtProceedingCreate(BaseModel):
+    """Request body for POST /cases/{case_id}/court-proceedings."""
+
+    hearing_date: dt.datetime
+    court_name: str | None = None
+    verdict: str | None = None
+    notes: str | None = None
+
+
+class CourtProceedingOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    case_id: uuid.UUID
+    hearing_date: dt.datetime
+    court_name: str | None = None
+    verdict: str | None = None
+    notes: str | None = None
