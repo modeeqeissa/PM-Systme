@@ -8,6 +8,7 @@ EVENT_MAP: dict[str, tuple[str, str, str]] = {
     "CaseOpened": ("case", "create", "case_id"),
     "CaseStatusChanged": ("case", "update", "case_id"),
     "ArrestRecorded": ("arrest", "create", "arrest_id"),
+    "StatementRecorded": ("statement", "create", "statement_id"),
     "EvidenceLogged": ("evidence_item", "create", "evidence_id"),
     "CustodyEventRecorded": ("custody_event", "create", "custody_event_id"),
     # a verification read that found tampering

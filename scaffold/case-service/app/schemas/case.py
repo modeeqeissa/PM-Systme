@@ -60,3 +60,28 @@ class ArrestOut(BaseModel):
     arrest_date: dt.datetime
     location: str | None = None
     legal_basis: str | None = None
+
+
+class PartyType(str, enum.Enum):
+    witness = "witness"
+    suspect = "suspect"
+    victim = "victim"
+
+
+class StatementCreate(BaseModel):
+    """Request body for POST /cases/{case_id}/statements."""
+
+    recorded_by: uuid.UUID
+    party_type: PartyType
+    statement_text: str
+
+
+class StatementOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    case_id: uuid.UUID
+    recorded_by: uuid.UUID
+    party_type: PartyType
+    statement_text: str
+    recorded_at: dt.datetime

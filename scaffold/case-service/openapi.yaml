@@ -167,6 +167,45 @@ paths:
         "401": { description: Missing or invalid access token }
         "403": { description: Caller lacks case.write }
         "404": { description: No case with that id }
+  /cases/{case_id}/statements:
+    get:
+      summary: List statements recorded against a case (FR-CASE-05)
+      description: Requires the `case.read` permission.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - in: path
+          name: case_id
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Statements, newest first
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/Statement" } }
+        "401": { description: Missing or invalid access token }
+        "403": { description: Caller lacks case.read }
+        "404": { description: No case with that id }
+    post:
+      summary: Record a witness/suspect/victim statement against a case (FR-CASE-05)
+      description: >
+        Requires `case.write`. Publishes a `StatementRecorded` domain event.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - in: path
+          name: case_id
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/StatementCreate" }
+      responses:
+        "201": { description: Statement recorded, content: { application/json: { schema: { $ref: "#/components/schemas/Statement" } } } }
+        "401": { description: Missing or invalid access token }
+        "403": { description: Caller lacks case.write }
+        "404": { description: No case with that id }
 
 components:
   securitySchemes:
@@ -226,3 +265,18 @@ components:
           properties:
             id: { type: string, format: uuid }
             case_id: { type: string, format: uuid }
+    StatementCreate:
+      type: object
+      required: [recorded_by, party_type, statement_text]
+      properties:
+        recorded_by: { type: string, format: uuid }
+        party_type: { type: string, enum: [witness, suspect, victim] }
+        statement_text: { type: string }
+    Statement:
+      allOf:
+        - $ref: "#/components/schemas/StatementCreate"
+        - type: object
+          properties:
+            id: { type: string, format: uuid }
+            case_id: { type: string, format: uuid }
+            recorded_at: { type: string, format: date-time }

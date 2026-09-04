@@ -192,6 +192,20 @@ export interface Arrest extends ArrestCreate {
   case_id: string;
 }
 
+export type PartyType = "witness" | "suspect" | "victim";
+
+export interface StatementCreate {
+  recorded_by: string;
+  party_type: PartyType;
+  statement_text: string;
+}
+
+export interface Statement extends StatementCreate {
+  id: string;
+  case_id: string;
+  recorded_at: string;
+}
+
 export const cases = {
   list: (params: { status?: string } = {}) => {
     const qs = new URLSearchParams(params as Record<string, string>).toString();
@@ -217,6 +231,21 @@ export const cases = {
    * `cases.arrests_recorded` KPI. */
   recordArrest: (caseId: string, body: ArrestCreate) =>
     request<Arrest>("/api/case", `/api/v1/cases/${caseId}/arrests`, {
+      method: "POST",
+      body: JSON.stringify(body),
+      auth: true,
+    }),
+
+  /** GET /cases/{id}/statements — witness/suspect/victim statements, newest first. */
+  statements: (caseId: string) =>
+    request<Statement[]>("/api/case", `/api/v1/cases/${caseId}/statements`, {
+      auth: true,
+    }),
+
+  /** POST /cases/{id}/statements — record a statement (FR-CASE-05). Publishes
+   * `StatementRecorded` to the audit trail. */
+  recordStatement: (caseId: string, body: StatementCreate) =>
+    request<Statement>("/api/case", `/api/v1/cases/${caseId}/statements`, {
       method: "POST",
       body: JSON.stringify(body),
       auth: true,

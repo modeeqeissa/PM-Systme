@@ -94,6 +94,26 @@ async def test_status_change_and_arrest_enqueue_events(client, make_case, auth_r
     assert scs[0].body["actor_id"] is not None
 
 
+async def test_statement_recorded_enqueued(client, make_case, auth_rw):
+    case = await make_case(status="open")
+    r = await client.post(
+        f"/api/v1/cases/{case.id}/statements",
+        json={
+            "recorded_by": str(uuid.uuid4()),
+            "party_type": "witness",
+            "statement_text": "I saw everything from across the street.",
+        },
+        headers=auth_rw,
+    )
+    assert r.status_code == 201
+
+    rows = await _outbox_rows("StatementRecorded")
+    assert len(rows) == 1
+    assert rows[0].aggregate_id == r.json()["id"]
+    assert rows[0].topic.endswith("case.statement_recorded")
+    assert rows[0].body["payload"]["party_type"] == "witness"
+
+
 async def test_relay_publishes_to_kafka_and_marks_sent(
     client, auth_rw, outbox_relay, read_kafka
 ):

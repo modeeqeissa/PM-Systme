@@ -41,6 +41,7 @@ async def test_all_event_types_map_to_expected_entity_and_action(client, emit, c
     await emit("CaseOpened", {"case_id": str(uuid.uuid4())})
     await emit("CaseStatusChanged", {"case_id": str(uuid.uuid4()), "to_status": "closed"})
     await emit("ArrestRecorded", {"arrest_id": str(uuid.uuid4())})
+    await emit("StatementRecorded", {"statement_id": str(uuid.uuid4())})
     await emit("EvidenceLogged", {"evidence_id": str(uuid.uuid4())}, service="evidence-service")
     await emit("CustodyEventRecorded", {"custody_event_id": 7}, service="evidence-service")
     await emit(
@@ -59,13 +60,14 @@ async def test_all_event_types_map_to_expected_entity_and_action(client, emit, c
         service="iam-service", actor_role="system",
     )
 
-    assert await consumer.process_available() == 10
+    assert await consumer.process_available() == 11
     rows = await _audit_rows()
     seen = {(r.entity_type, r.action) for r in rows}
     assert seen == {
         ("case", "create"),
         ("case", "update"),
         ("arrest", "create"),
+        ("statement", "create"),
         ("evidence_item", "create"),
         ("custody_event", "create"),
         ("evidence_item", "read"),   # hash-mismatch detection

@@ -1,4 +1,4 @@
-"""Case lifecycle + arrests — FR-CASE-02, FR-CASE-03.
+"""Case lifecycle, arrests + statements — FR-CASE-02, FR-CASE-03, FR-CASE-05.
 
 Every mutating handler enqueues a domain event in the same DB transaction
 (transactional outbox, SRS §3.4). audit-service consumes those events and writes
@@ -13,7 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.deps import get_session, require_permission
 from app.events import enqueue
-from app.models import Arrest, Case, Incident
+from app.models import Arrest, Case, Incident, Statement
 from app.schemas import (
     ArrestCreate,
     ArrestOut,
@@ -21,6 +21,8 @@ from app.schemas import (
     CaseOut,
     CaseStatus,
     CaseStatusUpdate,
+    StatementCreate,
+    StatementOut,
 )
 from app.services.case_status import can_transition
 
@@ -277,3 +279,78 @@ async def record_arrest(
         },
     )
     return ArrestOut.model_validate(arrest)
+
+
+@router.get(
+    "/{case_id}/statements",
+    response_model=list[StatementOut],
+    responses={
+        401: {"description": "Missing or invalid access token"},
+        403: {"description": "Caller lacks case.read"},
+        404: {"description": "No case with that id"},
+    },
+)
+async def list_statements(
+    case_id: uuid.UUID,
+    session: AsyncSession = Depends(get_session),
+    _: dict = Depends(require_permission("case.read")),
+) -> list[StatementOut]:
+    case = await session.get(Case, case_id)
+    if case is None:
+        raise HTTPException(status_code=404, detail="No case with that id")
+
+    q = (
+        select(Statement)
+        .where(Statement.case_id == case_id)
+        .order_by(Statement.recorded_at.desc())
+    )
+    rows = (await session.scalars(q)).all()
+    return [StatementOut.model_validate(s) for s in rows]
+
+
+@router.post(
+    "/{case_id}/statements",
+    response_model=StatementOut,
+    status_code=201,
+    responses={
+        401: {"description": "Missing or invalid access token"},
+        403: {"description": "Caller lacks case.write"},
+        404: {"description": "No case with that id"},
+    },
+)
+async def record_statement(
+    case_id: uuid.UUID,
+    payload: StatementCreate,
+    session: AsyncSession = Depends(get_session),
+    claims: dict = Depends(require_permission("case.write")),
+) -> StatementOut:
+    case = await session.get(Case, case_id)
+    if case is None:
+        raise HTTPException(status_code=404, detail="No case with that id")
+
+    statement = Statement(
+        case_id=case_id,
+        recorded_by=payload.recorded_by,
+        party_type=payload.party_type.value,
+        statement_text=payload.statement_text,
+    )
+    session.add(statement)
+    await session.flush()
+    await session.refresh(statement)
+
+    actor_id, actor_role = _actor(claims)
+    enqueue(
+        session,
+        event_type="StatementRecorded",
+        aggregate_type="statement",
+        aggregate_id=statement.id,
+        actor_id=actor_id,
+        actor_role=actor_role,
+        payload={
+            "statement_id": str(statement.id),
+            "case_id": str(case_id),
+            "recorded_by": str(statement.recorded_by),
+            "party_type": statement.party_type,
+        },
+    )
+    return StatementOut.model_validate(statement)

@@ -259,6 +259,89 @@ async def test_list_arrests_requires_read(client, make_case, auth_none):
     assert r.status_code == 403
 
 
+# --- POST/GET /cases/{id}/statements (FR-CASE-05) --------------------------
+async def test_record_statement(client, make_case, auth_rw):
+    case = await make_case(status="investigating")
+    recorded_by = str(uuid.uuid4())
+    r = await client.post(
+        f"/api/v1/cases/{case.id}/statements",
+        json={
+            "recorded_by": recorded_by,
+            "party_type": "witness",
+            "statement_text": "I saw the suspect leave through the back door.",
+        },
+        headers=auth_rw,
+    )
+    assert r.status_code == 201, r.text
+    body = r.json()
+    assert body["case_id"] == str(case.id)
+    assert body["recorded_by"] == recorded_by
+    assert body["party_type"] == "witness"
+    uuid.UUID(body["id"])
+
+
+async def test_record_statement_unknown_case_404(client, auth_rw):
+    r = await client.post(
+        f"/api/v1/cases/{uuid.uuid4()}/statements",
+        json={
+            "recorded_by": str(uuid.uuid4()),
+            "party_type": "victim",
+            "statement_text": "It happened around midnight.",
+        },
+        headers=auth_rw,
+    )
+    assert r.status_code == 404
+
+
+async def test_record_statement_requires_write(client, make_case, auth_ro):
+    case = await make_case()
+    r = await client.post(
+        f"/api/v1/cases/{case.id}/statements",
+        json={
+            "recorded_by": str(uuid.uuid4()),
+            "party_type": "suspect",
+            "statement_text": "I wasn't there.",
+        },
+        headers=auth_ro,
+    )
+    assert r.status_code == 403
+
+
+async def test_list_statements(client, make_case, auth_rw):
+    case = await make_case(status="investigating")
+    recorded_by = str(uuid.uuid4())
+    r = await client.post(
+        f"/api/v1/cases/{case.id}/statements",
+        json={
+            "recorded_by": recorded_by,
+            "party_type": "victim",
+            "statement_text": "My wallet was taken from my bag.",
+        },
+        headers=auth_rw,
+    )
+    assert r.status_code == 201, r.text
+
+    r = await client.get(f"/api/v1/cases/{case.id}/statements", headers=auth_rw)
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert len(body) == 1
+    assert body[0]["case_id"] == str(case.id)
+    assert body[0]["recorded_by"] == recorded_by
+    assert body[0]["party_type"] == "victim"
+    assert body[0]["statement_text"] == "My wallet was taken from my bag."
+
+
+async def test_list_statements_unknown_case_404(client, auth_rw):
+    r = await client.get(f"/api/v1/cases/{uuid.uuid4()}/statements", headers=auth_rw)
+    assert r.status_code == 404
+
+
+async def test_list_statements_requires_read(client, make_case, auth_none):
+    case = await make_case()
+    r = await client.get(f"/api/v1/cases/{case.id}/statements", headers=auth_none)
+    assert r.status_code == 403
+
+
 # --- GET /cases (list, FR-CASE-03 + FR-IAM-04 scope) -----------------------
 def _sub(token: str) -> str:
     import jwt

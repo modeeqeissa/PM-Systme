@@ -10,6 +10,7 @@ import {
   type Case,
   type CustodyEvent,
   type EvidenceItem,
+  type Statement,
 } from "../lib/api";
 import { setToken } from "../lib/auth";
 import { fakeJwt } from "../test/jwt";
@@ -20,6 +21,8 @@ const getCustody = vi.fn();
 const verify = vi.fn();
 const getArrests = vi.fn();
 const recordArrest = vi.fn();
+const getStatements = vi.fn();
+const recordStatement = vi.fn();
 
 vi.mock("../lib/api", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../lib/api")>();
@@ -30,6 +33,8 @@ vi.mock("../lib/api", async (importOriginal) => {
       get: (...a: unknown[]) => getCase(...a),
       arrests: (...a: unknown[]) => getArrests(...a),
       recordArrest: (...a: unknown[]) => recordArrest(...a),
+      statements: (...a: unknown[]) => getStatements(...a),
+      recordStatement: (...a: unknown[]) => recordStatement(...a),
     },
     evidence: {
       create: (...a: unknown[]) => createEvidence(...a),
@@ -98,6 +103,18 @@ function arrest(over: Partial<Arrest> = {}): Arrest {
   };
 }
 
+function statement(over: Partial<Statement> = {}): Statement {
+  return {
+    id: "ssssssss-ssss-4sss-8sss-ssssssssssss",
+    case_id: CASE_ID,
+    recorded_by: SUB,
+    party_type: "witness",
+    statement_text: "I saw the suspect leave through the back door.",
+    recorded_at: "2026-09-05T10:05:00Z",
+    ...over,
+  };
+}
+
 function renderPage() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
@@ -120,10 +137,13 @@ beforeEach(() => {
   verify.mockReset();
   getArrests.mockReset();
   recordArrest.mockReset();
+  getStatements.mockReset();
+  recordStatement.mockReset();
   setToken(fakeJwt({ sub: SUB, badge_number: "OFF-9" }));
   getCase.mockResolvedValue(theCase());
   getCustody.mockResolvedValue([custodyEvent()]);
   getArrests.mockResolvedValue([]);
+  getStatements.mockResolvedValue([]);
 });
 
 async function addEvidence(user: ReturnType<typeof userEvent.setup>, withFile = true) {
@@ -342,6 +362,89 @@ describe("CaseDetailPage", () => {
       renderPage();
       expect(
         await screen.findByText(/permission to view arrests/i),
+      ).toBeInTheDocument();
+    });
+  });
+
+  describe("record statement", () => {
+    async function fillAndSubmit(user: ReturnType<typeof userEvent.setup>) {
+      await user.selectOptions(screen.getByLabelText("Party type"), "victim");
+      await user.type(
+        screen.getByLabelText("Statement"),
+        "My wallet was taken from my bag.",
+      );
+      await user.click(screen.getByRole("button", { name: "Record statement" }));
+    }
+
+    it("lists statements already recorded against the case", async () => {
+      getStatements.mockResolvedValue([statement()]);
+      renderPage();
+      // "Witness" alone would also match the party-type <option>, so anchor on
+      // the (unique) statement text and assert its list item's full content.
+      const text = await screen.findByText(
+        "I saw the suspect leave through the back door.",
+      );
+      expect(text.closest("li")).toHaveTextContent("Witness");
+      expect(getStatements).toHaveBeenCalledWith(CASE_ID);
+    });
+
+    it("shows an empty-state message with no statements", async () => {
+      renderPage();
+      expect(await screen.findByText(/no statements recorded yet/i)).toBeInTheDocument();
+    });
+
+    it("POSTs recorded_by from the token plus the form fields, and adds the result to the list", async () => {
+      const user = userEvent.setup();
+      recordStatement.mockResolvedValue(
+        statement({ party_type: "victim", statement_text: "My wallet was taken from my bag." }),
+      );
+      renderPage();
+      await screen.findByText("CASE-2026-000010");
+
+      await fillAndSubmit(user);
+
+      expect(await screen.findByText(/statement recorded/i)).toBeInTheDocument();
+      expect(recordStatement).toHaveBeenCalledTimes(1);
+      const [postedCaseId, body] = recordStatement.mock.calls[0];
+      expect(postedCaseId).toBe(CASE_ID);
+      expect(body.recorded_by).toBe(SUB);
+      expect(body.party_type).toBe("victim");
+      expect(body.statement_text).toBe("My wallet was taken from my bag.");
+
+      expect(await screen.findAllByText("My wallet was taken from my bag.")).toHaveLength(1);
+    });
+
+    it("surfaces a 403 with a clear permission message", async () => {
+      const user = userEvent.setup();
+      recordStatement.mockRejectedValue(new ApiError(403, "RBAC scope denied"));
+      renderPage();
+      await screen.findByText("CASE-2026-000010");
+      await fillAndSubmit(user);
+      expect(await screen.findByRole("alert")).toHaveTextContent(
+        /can't record a statement/i,
+      );
+      expect(screen.getByText(/case\.write/)).toBeInTheDocument();
+    });
+
+    it("surfaces 422 field errors", async () => {
+      const user = userEvent.setup();
+      recordStatement.mockRejectedValue(
+        new ApiError(422, "Unprocessable Entity", {
+          detail: [{ loc: ["body", "statement_text"], msg: "field required", type: "missing" }],
+        }),
+      );
+      renderPage();
+      await screen.findByText("CASE-2026-000010");
+      await fillAndSubmit(user);
+      expect(await screen.findByText("field required")).toBeInTheDocument();
+    });
+
+    it("surfaces a 403 fetching the statement list", async () => {
+      getStatements.mockReset();
+      getStatements.mockRejectedValue(new ApiError(403, "RBAC scope denied"));
+      renderPage();
+      expect(
+        await screen.findByText(/permission to view statements/i),
       ).toBeInTheDocument();
     });
   });

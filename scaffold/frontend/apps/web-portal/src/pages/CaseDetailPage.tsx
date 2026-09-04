@@ -12,6 +12,8 @@ import {
   type CustodyEvent,
   type EvidenceItem,
   type HashVerification,
+  type PartyType,
+  type Statement,
 } from "../lib/api";
 import { currentClaims } from "../lib/auth";
 import { localInputToIso, toLocalInputValue } from "../lib/datetime";
@@ -22,6 +24,12 @@ const STATUS_LABEL: Record<string, string> = {
   referred_prosecution: "Referred — prosecution",
   closed: "Closed",
   suspended: "Suspended",
+};
+
+const PARTY_TYPE_LABEL: Record<PartyType, string> = {
+  witness: "Witness",
+  suspect: "Suspect",
+  victim: "Victim",
 };
 
 type Problem =
@@ -102,6 +110,8 @@ export function CaseDetailPage() {
           </Card>
 
           <ArrestsSection caseId={query.data.id} />
+
+          <StatementsSection caseId={query.data.id} />
 
           <AddEvidenceForm
             caseId={query.data.id}
@@ -297,6 +307,171 @@ function ArrestsSection({ caseId }: { caseId: string }) {
                 {a.location && ` · ${a.location}`}
               </div>
               {a.legal_basis && <div className="text-slate-600">{a.legal_basis}</div>}
+            </li>
+          ))}
+        </ul>
+      )}
+    </Card>
+  );
+}
+
+// --- Record statement -----------------------------------------------------
+function StatementsSection({ caseId }: { caseId: string }) {
+  const navigate = useNavigate();
+  const claims = currentClaims();
+  const queryClient = useQueryClient();
+
+  const statementsQuery = useQuery({
+    queryKey: ["statements", caseId],
+    queryFn: () => casesApi.statements(caseId),
+    retry: (n, err) => !(err instanceof ApiError) && n < 2,
+  });
+
+  const [partyType, setPartyType] = useState<PartyType>("witness");
+  const [statementText, setStatementText] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [problem, setProblem] = useState<Problem | null>(null);
+  const [justAdded, setJustAdded] = useState<Statement | null>(null);
+
+  const fieldErr = problem?.kind === "validation" ? problem.fields : {};
+
+  if (statementsQuery.error instanceof ApiError && statementsQuery.error.status === 401) {
+    navigate("/login", { replace: true });
+    return null;
+  }
+
+  async function submit(e: FormEvent) {
+    e.preventDefault();
+    if (!claims) return;
+    setProblem(null);
+    setJustAdded(null);
+    setBusy(true);
+    try {
+      const statement = await casesApi.recordStatement(caseId, {
+        recorded_by: claims.sub,
+        party_type: partyType,
+        statement_text: statementText.trim(),
+      });
+      setJustAdded(statement);
+      queryClient.setQueryData<Statement[]>(["statements", caseId], (prev) => [
+        statement,
+        ...(prev ?? []),
+      ]);
+      setPartyType("witness");
+      setStatementText("");
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 401) {
+        navigate("/login", { replace: true });
+        return;
+      }
+      setProblem(classify(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Card className="mb-6">
+      <h2 className="text-lg font-semibold text-slate-900">Record statement</h2>
+      <p className="mb-4 text-sm text-slate-500">
+        FR-CASE-05 — records a witness, suspect, or victim statement against this case.
+      </p>
+
+      {problem?.kind === "forbidden" && (
+        <div className="mb-4">
+          <Alert variant="error">
+            Your role can't record a statement. This needs the{" "}
+            <code>case.write</code> permission.
+          </Alert>
+        </div>
+      )}
+      {problem?.kind === "network" && (
+        <div className="mb-4">
+          <Alert variant="error">Couldn't reach case-service. Try again.</Alert>
+        </div>
+      )}
+      {problem?.kind === "other" && (
+        <div className="mb-4">
+          <Alert variant="error">{problem.message}</Alert>
+        </div>
+      )}
+      {justAdded && (
+        <div className="mb-4">
+          <Alert variant="info">
+            Statement recorded — id <code>{justAdded.id}</code>.
+          </Alert>
+        </div>
+      )}
+
+      <form onSubmit={submit} className="flex flex-col gap-4">
+        <div className="flex flex-col gap-1">
+          <label htmlFor="statement-party-type" className="text-sm font-medium text-slate-700">
+            Party type
+          </label>
+          <select
+            id="statement-party-type"
+            value={partyType}
+            onChange={(e) => setPartyType(e.target.value as PartyType)}
+            className="rounded-md border border-slate-300 px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+          >
+            <option value="witness">Witness</option>
+            <option value="suspect">Suspect</option>
+            <option value="victim">Victim</option>
+          </select>
+        </div>
+        <div className="flex flex-col gap-1">
+          <label htmlFor="statement-text" className="text-sm font-medium text-slate-700">
+            Statement
+          </label>
+          <textarea
+            id="statement-text"
+            value={statementText}
+            onChange={(e) => setStatementText(e.target.value)}
+            rows={4}
+            required
+            className={
+              "rounded-md border px-3 py-2 text-sm text-slate-900 shadow-sm " +
+              "focus:outline-none focus:ring-2 focus:ring-slate-400 " +
+              (fieldErr.statement_text ? "border-red-400" : "border-slate-300")
+            }
+          />
+          {fieldErr.statement_text && (
+            <p className="text-xs text-red-600">{fieldErr.statement_text}</p>
+          )}
+        </div>
+        <div>
+          <Button type="submit" loading={busy}>
+            Record statement
+          </Button>
+        </div>
+      </form>
+
+      <h3 className="mb-2 mt-6 text-xs font-medium uppercase tracking-wide text-slate-500">
+        Statements
+      </h3>
+      {statementsQuery.isLoading && <Spinner label="Loading statements…" />}
+      {statementsQuery.error instanceof ApiError && statementsQuery.error.status === 403 && (
+        <Alert variant="error">
+          Needs the <code>case.read</code> permission to view statements.
+        </Alert>
+      )}
+      {statementsQuery.data && statementsQuery.data.length === 0 && (
+        <p className="text-sm text-slate-500">No statements recorded yet.</p>
+      )}
+      {statementsQuery.data && statementsQuery.data.length > 0 && (
+        <ul className="flex flex-col gap-3">
+          {statementsQuery.data.map((s) => (
+            <li key={s.id} className="border-b border-slate-100 pb-2 text-sm last:border-0">
+              <div className="text-slate-900">
+                {PARTY_TYPE_LABEL[s.party_type]}{" "}
+                <span className="text-slate-500">
+                  — recorded by{" "}
+                  <span className="font-mono text-xs">{s.recorded_by}</span>
+                  {" · "}
+                  {new Date(s.recorded_at).toLocaleString()}
+                </span>
+              </div>
+              <div className="text-slate-600">{s.statement_text}</div>
             </li>
           ))}
         </ul>

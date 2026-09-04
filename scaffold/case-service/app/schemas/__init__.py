@@ -5,6 +5,9 @@ from app.schemas.case import (
     CaseOut,
     CaseStatus,
     CaseStatusUpdate,
+    PartyType,
+    StatementCreate,
+    StatementOut,
 )
 from app.schemas.incident import IncidentCreate, IncidentOut
 
@@ -17,4 +20,7 @@ __all__ = [
     "CaseStatusUpdate",
     "ArrestCreate",
     "ArrestOut",
+    "PartyType",
+    "StatementCreate",
+    "StatementOut",
 ]
