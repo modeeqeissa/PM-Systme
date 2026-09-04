@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { Alert, Button, Card, Spinner } from "@pmp/ui";
 import { ApiError, cases as casesApi, type Case } from "../lib/api";
@@ -59,9 +59,20 @@ export function CasesPage() {
             </p>
           )}
         </div>
-        <Button variant="secondary" onClick={signOut}>
-          Sign out
-        </Button>
+        <div className="flex items-center gap-3">
+          <Link to="/dashboard" className="text-sm text-slate-500 underline">
+            Dashboard
+          </Link>
+          <Link
+            to="/incidents/new"
+            className="inline-flex items-center justify-center rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-slate-700"
+          >
+            File incident
+          </Link>
+          <Button variant="secondary" onClick={signOut}>
+            Sign out
+          </Button>
+        </div>
       </div>
 
       <Card className="p-0">
