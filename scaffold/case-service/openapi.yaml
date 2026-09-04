@@ -129,6 +129,24 @@ paths:
         "404": { description: No case with that id }
         "409": { description: Invalid status transition }
   /cases/{case_id}/arrests:
+    get:
+      summary: List arrests recorded against a case (FR-CASE-04)
+      description: Requires the `case.read` permission.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - in: path
+          name: case_id
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Arrests, newest first
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/Arrest" } }
+        "401": { description: Missing or invalid access token }
+        "403": { description: Caller lacks case.read }
+        "404": { description: No case with that id }
     post:
       summary: Record an arrest against a case
       description: >

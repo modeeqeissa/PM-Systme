@@ -4,7 +4,13 @@ import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { CaseDetailPage } from "../pages/CaseDetailPage";
-import { ApiError, type Case, type CustodyEvent, type EvidenceItem } from "../lib/api";
+import {
+  ApiError,
+  type Arrest,
+  type Case,
+  type CustodyEvent,
+  type EvidenceItem,
+} from "../lib/api";
 import { setToken } from "../lib/auth";
 import { fakeJwt } from "../test/jwt";
 
@@ -12,12 +18,19 @@ const getCase = vi.fn();
 const createEvidence = vi.fn();
 const getCustody = vi.fn();
 const verify = vi.fn();
+const getArrests = vi.fn();
+const recordArrest = vi.fn();
 
 vi.mock("../lib/api", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../lib/api")>();
   return {
     ...actual,
-    cases: { ...actual.cases, get: (...a: unknown[]) => getCase(...a) },
+    cases: {
+      ...actual.cases,
+      get: (...a: unknown[]) => getCase(...a),
+      arrests: (...a: unknown[]) => getArrests(...a),
+      recordArrest: (...a: unknown[]) => recordArrest(...a),
+    },
     evidence: {
       create: (...a: unknown[]) => createEvidence(...a),
       custody: (...a: unknown[]) => getCustody(...a),
@@ -29,6 +42,7 @@ vi.mock("../lib/api", async (importOriginal) => {
 const SUB = "11111111-1111-4111-8111-111111111111";
 const CASE_ID = "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
 const EV_ID = "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee";
+const SUSPECT_ID = "99999999-9999-4999-8999-999999999999";
 
 function theCase(over: Partial<Case> = {}): Case {
   return {
@@ -71,6 +85,19 @@ function custodyEvent(over: Partial<CustodyEvent> = {}): CustodyEvent {
   };
 }
 
+function arrest(over: Partial<Arrest> = {}): Arrest {
+  return {
+    id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+    case_id: CASE_ID,
+    officer_id: SUB,
+    suspect_id: SUSPECT_ID,
+    arrest_date: "2026-09-05T10:00:00Z",
+    location: "Central Market",
+    legal_basis: "caught in the act",
+    ...over,
+  };
+}
+
 function renderPage() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
@@ -91,9 +118,12 @@ beforeEach(() => {
   createEvidence.mockReset();
   getCustody.mockReset();
   verify.mockReset();
+  getArrests.mockReset();
+  recordArrest.mockReset();
   setToken(fakeJwt({ sub: SUB, badge_number: "OFF-9" }));
   getCase.mockResolvedValue(theCase());
   getCustody.mockResolvedValue([custodyEvent()]);
+  getArrests.mockResolvedValue([]);
 });
 
 async function addEvidence(user: ReturnType<typeof userEvent.setup>, withFile = true) {
@@ -238,6 +268,81 @@ describe("CaseDetailPage", () => {
       await addEvidence(user);
 
       expect(await screen.findByText(/permission to view custody/i)).toBeInTheDocument();
+    });
+  });
+
+  describe("record arrest", () => {
+    async function fillAndSubmit(user: ReturnType<typeof userEvent.setup>) {
+      await user.type(screen.getByLabelText("Suspect id"), SUSPECT_ID);
+      await user.type(screen.getByLabelText("Location"), "Central Market");
+      await user.type(screen.getByLabelText("Legal basis"), "caught in the act");
+      await user.click(screen.getByRole("button", { name: "Record arrest" }));
+    }
+
+    it("lists arrests already recorded against the case", async () => {
+      getArrests.mockResolvedValue([arrest()]);
+      renderPage();
+      expect(await screen.findByText(SUSPECT_ID)).toBeInTheDocument();
+      expect(screen.getByText("caught in the act")).toBeInTheDocument();
+      expect(getArrests).toHaveBeenCalledWith(CASE_ID);
+    });
+
+    it("shows an empty-state message with no arrests", async () => {
+      renderPage();
+      expect(await screen.findByText(/no arrests recorded yet/i)).toBeInTheDocument();
+    });
+
+    it("POSTs officer_id from the token plus the form fields, and adds the result to the list", async () => {
+      const user = userEvent.setup();
+      recordArrest.mockResolvedValue(arrest());
+      renderPage();
+      await screen.findByText("CASE-2026-000010");
+
+      await fillAndSubmit(user);
+
+      expect(await screen.findByText(/arrest recorded/i)).toBeInTheDocument();
+      expect(recordArrest).toHaveBeenCalledTimes(1);
+      const [postedCaseId, body] = recordArrest.mock.calls[0];
+      expect(postedCaseId).toBe(CASE_ID);
+      expect(body.officer_id).toBe(SUB);
+      expect(body.suspect_id).toBe(SUSPECT_ID);
+      expect(body.location).toBe("Central Market");
+      expect(body.legal_basis).toBe("caught in the act");
+      expect(typeof body.arrest_date).toBe("string");
+
+      expect(await screen.findAllByText(SUSPECT_ID)).toHaveLength(1);
+    });
+
+    it("surfaces a 403 with a clear permission message", async () => {
+      const user = userEvent.setup();
+      recordArrest.mockRejectedValue(new ApiError(403, "RBAC scope denied"));
+      renderPage();
+      await screen.findByText("CASE-2026-000010");
+      await fillAndSubmit(user);
+      expect(await screen.findByRole("alert")).toHaveTextContent(/can't record an arrest/i);
+      expect(screen.getByText(/case\.write/)).toBeInTheDocument();
+    });
+
+    it("surfaces 422 field errors", async () => {
+      const user = userEvent.setup();
+      recordArrest.mockRejectedValue(
+        new ApiError(422, "Unprocessable Entity", {
+          detail: [{ loc: ["body", "suspect_id"], msg: "invalid uuid", type: "value_error" }],
+        }),
+      );
+      renderPage();
+      await screen.findByText("CASE-2026-000010");
+      await fillAndSubmit(user);
+      expect(await screen.findByText("invalid uuid")).toBeInTheDocument();
+    });
+
+    it("surfaces a 403 fetching the arrest list", async () => {
+      getArrests.mockReset();
+      getArrests.mockRejectedValue(new ApiError(403, "RBAC scope denied"));
+      renderPage();
+      expect(
+        await screen.findByText(/permission to view arrests/i),
+      ).toBeInTheDocument();
     });
   });
 

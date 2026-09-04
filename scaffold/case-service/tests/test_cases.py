@@ -222,6 +222,43 @@ async def test_record_arrest_requires_write(client, make_case, auth_ro):
     assert r.status_code == 403
 
 
+# --- GET /cases/{id}/arrests ------------------------------------------------
+async def test_list_arrests(client, make_case, auth_rw):
+    case = await make_case(status="investigating")
+    suspect_id = str(uuid.uuid4())
+    r = await client.post(
+        f"/api/v1/cases/{case.id}/arrests",
+        json={
+            "officer_id": str(uuid.uuid4()),
+            "suspect_id": suspect_id,
+            "arrest_date": "2026-09-03T12:00:00+00:00",
+            "location": "Central Market",
+            "legal_basis": "caught in the act",
+        },
+        headers=auth_rw,
+    )
+    assert r.status_code == 201, r.text
+
+    r = await client.get(f"/api/v1/cases/{case.id}/arrests", headers=auth_rw)
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert len(body) == 1
+    assert body[0]["case_id"] == str(case.id)
+    assert body[0]["suspect_id"] == suspect_id
+    assert body[0]["location"] == "Central Market"
+
+
+async def test_list_arrests_unknown_case_404(client, auth_rw):
+    r = await client.get(f"/api/v1/cases/{uuid.uuid4()}/arrests", headers=auth_rw)
+    assert r.status_code == 404
+
+
+async def test_list_arrests_requires_read(client, make_case, auth_none):
+    case = await make_case()
+    r = await client.get(f"/api/v1/cases/{case.id}/arrests", headers=auth_none)
+    assert r.status_code == 403
+
+
 # --- GET /cases (list, FR-CASE-03 + FR-IAM-04 scope) -----------------------
 def _sub(token: str) -> str:
     import jwt

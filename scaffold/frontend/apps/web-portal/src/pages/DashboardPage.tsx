@@ -161,6 +161,18 @@ export function DashboardPage() {
                 </div>
                 <div className="text-sm text-slate-500">Closed</div>
               </div>
+              <div>
+                <div className="text-3xl font-semibold text-slate-900">
+                  {snap.cases.arrests_recorded}
+                </div>
+                <div className="text-sm text-slate-500">Arrests recorded</div>
+              </div>
+              <div>
+                <div className="text-3xl font-semibold text-slate-900">
+                  {snap.cases.avg_case_age_days ?? "—"}
+                </div>
+                <div className="text-sm text-slate-500">Avg case age (days)</div>
+              </div>
             </div>
           </Card>
 

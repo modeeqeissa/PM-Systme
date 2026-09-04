@@ -1,13 +1,14 @@
 import { useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Alert, Button, Card, Spinner, TextInput } from "@pmp/ui";
 import {
   ApiError,
   cases as casesApi,
   evidence as evidenceApi,
   validationErrors,
+  type Arrest,
   type CustodyEvent,
   type EvidenceItem,
   type HashVerification,
@@ -100,6 +101,8 @@ export function CaseDetailPage() {
             </div>
           </Card>
 
+          <ArrestsSection caseId={query.data.id} />
+
           <AddEvidenceForm
             caseId={query.data.id}
             onCreated={(item) => setItems((prev) => [item, ...prev])}
@@ -115,6 +118,190 @@ export function CaseDetailPage() {
         </>
       )}
     </div>
+  );
+}
+
+// --- Record arrest -------------------------------------------------------
+function ArrestsSection({ caseId }: { caseId: string }) {
+  const navigate = useNavigate();
+  const claims = currentClaims();
+  const queryClient = useQueryClient();
+
+  const arrestsQuery = useQuery({
+    queryKey: ["arrests", caseId],
+    queryFn: () => casesApi.arrests(caseId),
+    retry: (n, err) => !(err instanceof ApiError) && n < 2,
+  });
+
+  const [suspectId, setSuspectId] = useState("");
+  const [arrestDate, setArrestDate] = useState(() => toLocalInputValue(new Date()));
+  const [location, setLocation] = useState("");
+  const [legalBasis, setLegalBasis] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [problem, setProblem] = useState<Problem | null>(null);
+  const [justAdded, setJustAdded] = useState<Arrest | null>(null);
+
+  const fieldErr = problem?.kind === "validation" ? problem.fields : {};
+
+  if (arrestsQuery.error instanceof ApiError && arrestsQuery.error.status === 401) {
+    navigate("/login", { replace: true });
+    return null;
+  }
+
+  async function submit(e: FormEvent) {
+    e.preventDefault();
+    if (!claims) return;
+    setProblem(null);
+    setJustAdded(null);
+    setBusy(true);
+    try {
+      const arrest = await casesApi.recordArrest(caseId, {
+        officer_id: claims.sub,
+        suspect_id: suspectId.trim(),
+        arrest_date: localInputToIso(arrestDate),
+        location: location.trim() || null,
+        legal_basis: legalBasis.trim() || null,
+      });
+      setJustAdded(arrest);
+      queryClient.setQueryData<Arrest[]>(["arrests", caseId], (prev) => [
+        arrest,
+        ...(prev ?? []),
+      ]);
+      setSuspectId("");
+      setArrestDate(toLocalInputValue(new Date()));
+      setLocation("");
+      setLegalBasis("");
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 401) {
+        navigate("/login", { replace: true });
+        return;
+      }
+      setProblem(classify(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Card className="mb-6">
+      <h2 className="text-lg font-semibold text-slate-900">Record arrest</h2>
+      <p className="mb-4 text-sm text-slate-500">
+        FR-CASE-04 — records an arrest against this case; publishes an{" "}
+        <code>ArrestRecorded</code> event that feeds the dashboard's{" "}
+        <code>arrests_recorded</code> KPI.
+      </p>
+
+      {problem?.kind === "forbidden" && (
+        <div className="mb-4">
+          <Alert variant="error">
+            Your role can't record an arrest. This needs the{" "}
+            <code>case.write</code> permission.
+          </Alert>
+        </div>
+      )}
+      {problem?.kind === "network" && (
+        <div className="mb-4">
+          <Alert variant="error">Couldn't reach case-service. Try again.</Alert>
+        </div>
+      )}
+      {problem?.kind === "other" && (
+        <div className="mb-4">
+          <Alert variant="error">{problem.message}</Alert>
+        </div>
+      )}
+      {justAdded && (
+        <div className="mb-4">
+          <Alert variant="info">
+            Arrest recorded — id <code>{justAdded.id}</code>.
+          </Alert>
+        </div>
+      )}
+
+      <form onSubmit={submit} className="flex flex-col gap-4">
+        <TextInput
+          label="Suspect id"
+          value={suspectId}
+          onChange={(e) => setSuspectId(e.target.value)}
+          error={fieldErr.suspect_id}
+          placeholder="uuid"
+          required
+        />
+        <div className="flex flex-col gap-1">
+          <label htmlFor="arrest-date" className="text-sm font-medium text-slate-700">
+            Arrest date
+          </label>
+          <input
+            id="arrest-date"
+            type="datetime-local"
+            value={arrestDate}
+            onChange={(e) => setArrestDate(e.target.value)}
+            required
+            className="rounded-md border border-slate-300 px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+          />
+        </div>
+        <TextInput
+          label="Location"
+          value={location}
+          onChange={(e) => setLocation(e.target.value)}
+          error={fieldErr.location}
+          placeholder="optional"
+        />
+        <div className="flex flex-col gap-1">
+          <label htmlFor="legal-basis" className="text-sm font-medium text-slate-700">
+            Legal basis
+          </label>
+          <textarea
+            id="legal-basis"
+            value={legalBasis}
+            onChange={(e) => setLegalBasis(e.target.value)}
+            rows={2}
+            placeholder="optional"
+            className={
+              "rounded-md border px-3 py-2 text-sm text-slate-900 shadow-sm " +
+              "focus:outline-none focus:ring-2 focus:ring-slate-400 " +
+              (fieldErr.legal_basis ? "border-red-400" : "border-slate-300")
+            }
+          />
+          {fieldErr.legal_basis && (
+            <p className="text-xs text-red-600">{fieldErr.legal_basis}</p>
+          )}
+        </div>
+        <div>
+          <Button type="submit" loading={busy}>
+            Record arrest
+          </Button>
+        </div>
+      </form>
+
+      <h3 className="mb-2 mt-6 text-xs font-medium uppercase tracking-wide text-slate-500">
+        Arrests
+      </h3>
+      {arrestsQuery.isLoading && <Spinner label="Loading arrests…" />}
+      {arrestsQuery.error instanceof ApiError && arrestsQuery.error.status === 403 && (
+        <Alert variant="error">
+          Needs the <code>case.read</code> permission to view arrests.
+        </Alert>
+      )}
+      {arrestsQuery.data && arrestsQuery.data.length === 0 && (
+        <p className="text-sm text-slate-500">No arrests recorded yet.</p>
+      )}
+      {arrestsQuery.data && arrestsQuery.data.length > 0 && (
+        <ul className="flex flex-col gap-3">
+          {arrestsQuery.data.map((a) => (
+            <li key={a.id} className="border-b border-slate-100 pb-2 text-sm last:border-0">
+              <div className="text-slate-900">
+                Suspect <span className="font-mono text-xs">{a.suspect_id}</span>
+              </div>
+              <div className="text-slate-500">
+                {new Date(a.arrest_date).toLocaleString()}
+                {a.location && ` · ${a.location}`}
+              </div>
+              {a.legal_basis && <div className="text-slate-600">{a.legal_basis}</div>}
+            </li>
+          ))}
+        </ul>
+      )}
+    </Card>
   );
 }
 

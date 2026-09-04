@@ -109,6 +109,7 @@ _PROTECTED = [
     ("/cases", "post"),
     ("/cases/{case_id}", "get"),
     ("/cases/{case_id}/status", "patch"),
+    ("/cases/{case_id}/arrests", "get"),
     ("/cases/{case_id}/arrests", "post"),
 ]
 

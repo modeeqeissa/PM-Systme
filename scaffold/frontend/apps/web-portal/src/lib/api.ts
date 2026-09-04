@@ -179,6 +179,19 @@ export const incidents = {
   },
 };
 
+export interface ArrestCreate {
+  officer_id: string;
+  suspect_id: string;
+  arrest_date: string; // ISO 8601
+  location?: string | null;
+  legal_basis?: string | null;
+}
+
+export interface Arrest extends ArrestCreate {
+  id: string;
+  case_id: string;
+}
+
 export const cases = {
   list: (params: { status?: string } = {}) => {
     const qs = new URLSearchParams(params as Record<string, string>).toString();
@@ -190,6 +203,20 @@ export const cases = {
   /** POST /cases — escalate an incident into a formal case (FR-CASE-02). */
   create: (body: { incident_id?: string | null; lead_officer_id: string }) =>
     request<Case>("/api/case", "/api/v1/cases", {
+      method: "POST",
+      body: JSON.stringify(body),
+      auth: true,
+    }),
+
+  /** GET /cases/{id}/arrests — arrests recorded against a case, newest first. */
+  arrests: (caseId: string) =>
+    request<Arrest[]>("/api/case", `/api/v1/cases/${caseId}/arrests`, { auth: true }),
+
+  /** POST /cases/{id}/arrests — record an arrest (FR-CASE-04). Publishes
+   * `ArrestRecorded`, which flows through the outbox into dashboard-service's
+   * `cases.arrests_recorded` KPI. */
+  recordArrest: (caseId: string, body: ArrestCreate) =>
+    request<Arrest>("/api/case", `/api/v1/cases/${caseId}/arrests`, {
       method: "POST",
       body: JSON.stringify(body),
       auth: true,

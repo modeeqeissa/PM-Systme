@@ -66,9 +66,9 @@ describe("DashboardPage", () => {
 
     const casesCard = (await screen.findByRole("heading", { name: "Cases" })).closest("div")!;
     expect(within(casesCard).getByText("Open")).toBeInTheDocument();
-    expect(within(casesCard).getByText("1")).toBeInTheDocument();
+    expect(within(casesCard).getByText("Open").previousElementSibling).toHaveTextContent("1");
     expect(within(casesCard).getByText("Closed")).toBeInTheDocument();
-    expect(within(casesCard).getByText("0")).toBeInTheDocument();
+    expect(within(casesCard).getByText("Closed").previousElementSibling).toHaveTextContent("0");
 
     const trendCard = screen.getByRole("heading", { name: "Crime trend by type" }).closest("div")!;
     const rows = within(trendCard).getAllByRole("listitem");
@@ -77,6 +77,30 @@ describe("DashboardPage", () => {
     expect(rows[0]).toHaveTextContent("3");
     expect(rows[1]).toHaveTextContent("burglary");
     expect(rows[1]).toHaveTextContent("1");
+  });
+
+  it("renders arrests_recorded and avg_case_age_days in the Cases card", async () => {
+    kpis.mockResolvedValue(
+      snapshot({ cases: { opened: 2, closed: 1, arrests_recorded: 3, avg_case_age_days: 4.5 } }),
+    );
+    renderPage();
+
+    const casesCard = (await screen.findByRole("heading", { name: "Cases" })).closest("div")!;
+    expect(within(casesCard).getByText("Arrests recorded")).toBeInTheDocument();
+    expect(within(casesCard).getByText("3")).toBeInTheDocument();
+    expect(within(casesCard).getByText("Avg case age (days)")).toBeInTheDocument();
+    expect(within(casesCard).getByText("4.5")).toBeInTheDocument();
+  });
+
+  it("shows a placeholder for a null avg_case_age_days (no closed cases yet)", async () => {
+    kpis.mockResolvedValue(
+      snapshot({ cases: { opened: 1, closed: 0, arrests_recorded: 0, avg_case_age_days: null } }),
+    );
+    renderPage();
+
+    const casesCard = (await screen.findByRole("heading", { name: "Cases" })).closest("div")!;
+    expect(within(casesCard).getByText("Avg case age (days)")).toBeInTheDocument();
+    expect(within(casesCard).getByText("—")).toBeInTheDocument();
   });
 
   it("shows an empty crime-trend message when there are no buckets this month", async () => {

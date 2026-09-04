@@ -201,6 +201,33 @@ async def update_case_status(
     return CaseOut.model_validate(case)
 
 
+@router.get(
+    "/{case_id}/arrests",
+    response_model=list[ArrestOut],
+    responses={
+        401: {"description": "Missing or invalid access token"},
+        403: {"description": "Caller lacks case.read"},
+        404: {"description": "No case with that id"},
+    },
+)
+async def list_arrests(
+    case_id: uuid.UUID,
+    session: AsyncSession = Depends(get_session),
+    _: dict = Depends(require_permission("case.read")),
+) -> list[ArrestOut]:
+    case = await session.get(Case, case_id)
+    if case is None:
+        raise HTTPException(status_code=404, detail="No case with that id")
+
+    q = (
+        select(Arrest)
+        .where(Arrest.case_id == case_id)
+        .order_by(Arrest.arrest_date.desc())
+    )
+    rows = (await session.scalars(q)).all()
+    return [ArrestOut.model_validate(a) for a in rows]
+
+
 @router.post(
     "/{case_id}/arrests",
     response_model=ArrestOut,
