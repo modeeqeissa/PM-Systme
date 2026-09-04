@@ -38,6 +38,26 @@ paths:
         "401": { description: Missing or invalid access token }
         "403": { description: Caller lacks case.write }
   /cases:
+    get:
+      summary: List cases visible to the caller (FR-CASE-03, FR-IAM-04)
+      description: >
+        Requires `case.read`. Returns cases where the caller is the
+        `lead_officer_id`; a caller holding `case.approve` (supervisory) sees all
+        cases. Cases carry no station column, so station-level scoping per
+        FR-IAM-04 is approximated by lead-officer ownership for now.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { in: query, name: status, schema: { type: string, enum: [open, investigating, referred_prosecution, closed, suspended] } }
+        - { in: query, name: limit, schema: { type: integer, default: 50, minimum: 1, maximum: 200 } }
+        - { in: query, name: offset, schema: { type: integer, default: 0, minimum: 0 } }
+      responses:
+        "200":
+          description: Cases, newest first
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/Case" } }
+        "401": { description: Missing or invalid access token }
+        "403": { description: Caller lacks case.read }
     post:
       summary: Escalate an incident into a formal case (FR-CASE-02)
       description: >

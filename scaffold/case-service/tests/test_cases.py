@@ -220,3 +220,61 @@ async def test_record_arrest_requires_write(client, make_case, auth_ro):
         headers=auth_ro,
     )
     assert r.status_code == 403
+
+
+# --- GET /cases (list, FR-CASE-03 + FR-IAM-04 scope) -----------------------
+def _sub(token: str) -> str:
+    import jwt
+
+    return jwt.decode(token, options={"verify_signature": False})["sub"]
+
+
+async def test_list_requires_case_read(client, auth_none):
+    r = await client.get("/api/v1/cases", headers=auth_none)
+    assert r.status_code == 403
+
+
+async def test_list_unauthenticated_401(client):
+    assert (await client.get("/api/v1/cases")).status_code == 401
+
+
+async def test_list_scopes_to_lead_officer_without_wide_permission(
+    client, make_case, auth_rw, token_rw
+):
+    mine = await make_case(status="open", lead_officer_id=uuid.UUID(_sub(token_rw)))
+    await make_case(status="open")  # someone else's
+    await make_case(status="open")
+
+    r = await client.get("/api/v1/cases", headers=auth_rw)
+    assert r.status_code == 200
+    ids = [c["id"] for c in r.json()]
+    assert ids == [str(mine.id)]  # Patrol Officer sees only the case they lead
+
+
+async def test_list_wide_scope_sees_all(client, make_case, auth_ro):
+    for _ in range(3):
+        await make_case(status="open")
+    r = await client.get("/api/v1/cases", headers=auth_ro)
+    assert r.status_code == 200
+    assert len(r.json()) == 3  # Station Commander (case.approve) sees every case
+
+
+async def test_list_status_filter_and_shape(client, make_case, auth_ro):
+    await make_case(status="open")
+    closed = await make_case(status="closed")
+    r = await client.get("/api/v1/cases?status=closed", headers=auth_ro)
+    assert [c["id"] for c in r.json()] == [str(closed.id)]
+    row = r.json()[0]
+    assert set(row) == {
+        "id", "case_number", "incident_id", "status",
+        "lead_officer_id", "opened_at", "closed_at",
+    }
+
+
+async def test_list_pagination(client, make_case, auth_ro):
+    for _ in range(5):
+        await make_case(status="open")
+    page = await client.get("/api/v1/cases?limit=2&offset=0", headers=auth_ro)
+    assert len(page.json()) == 2
+    rest = await client.get("/api/v1/cases?limit=2&offset=4", headers=auth_ro)
+    assert len(rest.json()) == 1

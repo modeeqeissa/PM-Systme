@@ -103,13 +103,14 @@ def test_post_incidents_declares_idempotency_key_header():
     assert header["required"] is True
 
 
-_PROTECTED = {
-    "/incidents": "post",
-    "/cases": "post",
-    "/cases/{case_id}": "get",
-    "/cases/{case_id}/status": "patch",
-    "/cases/{case_id}/arrests": "post",
-}
+_PROTECTED = [
+    ("/incidents", "post"),
+    ("/cases", "get"),
+    ("/cases", "post"),
+    ("/cases/{case_id}", "get"),
+    ("/cases/{case_id}/status", "patch"),
+    ("/cases/{case_id}/arrests", "post"),
+]
 
 
 def test_every_endpoint_requires_bearer_auth_and_documents_401():
@@ -122,7 +123,7 @@ def test_every_endpoint_requires_bearer_auth_and_documents_401():
     gen_schemes = generated["components"].get("securitySchemes", {})
     assert any(s.get("scheme") == "bearer" for s in gen_schemes.values())
 
-    for path, method in _PROTECTED.items():
+    for path, method in _PROTECTED:
         c_op = contract["paths"][path][method]
         assert c_op.get("security"), f"{method} {path} missing security in contract"
         assert "401" in c_op["responses"], f"{method} {path} missing 401 in contract"

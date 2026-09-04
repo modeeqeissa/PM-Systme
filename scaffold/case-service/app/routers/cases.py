@@ -7,15 +7,27 @@ the independent, hash-chained audit-log entry (CLAUDE.md rule 3 / FR-AUD-01).
 import datetime as dt
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.deps import get_session, require_permission
 from app.events import enqueue
 from app.models import Arrest, Case, Incident
-from app.schemas import ArrestCreate, ArrestOut, CaseCreate, CaseOut, CaseStatusUpdate
+from app.schemas import (
+    ArrestCreate,
+    ArrestOut,
+    CaseCreate,
+    CaseOut,
+    CaseStatus,
+    CaseStatusUpdate,
+)
 from app.services.case_status import can_transition
+
+# Callers holding this permission see every case; everyone else sees only cases
+# they lead (FR-IAM-04 data scoping, using lead_officer_id since cases carry no
+# station column — see openapi.yaml).
+_WIDE_SCOPE_PERMISSION = "case.approve"
 
 router = APIRouter(prefix="/cases", tags=["cases"])
 
@@ -81,6 +93,40 @@ async def open_case(
         },
     )
     return CaseOut.model_validate(case)
+
+
+@router.get(
+    "",
+    response_model=list[CaseOut],
+    responses={
+        401: {"description": "Missing or invalid access token"},
+        403: {"description": "Caller lacks case.read"},
+    },
+)
+async def list_cases(
+    status_: CaseStatus | None = Query(default=None, alias="status"),
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+    session: AsyncSession = Depends(get_session),
+    claims: dict = Depends(require_permission("case.read")),
+) -> list[CaseOut]:
+    """List cases visible to the caller (FR-CASE-03).
+
+    Scope: cases where the caller is `lead_officer_id`, unless the caller holds
+    `case.approve` (supervisory) in which case all cases are returned.
+    """
+    q = select(Case).order_by(Case.opened_at.desc()).limit(limit).offset(offset)
+
+    if _WIDE_SCOPE_PERMISSION not in (claims.get("permissions") or []):
+        try:
+            q = q.where(Case.lead_officer_id == uuid.UUID(claims["sub"]))
+        except (KeyError, ValueError):
+            return []
+    if status_ is not None:
+        q = q.where(Case.status == status_.value)
+
+    rows = (await session.scalars(q)).all()
+    return [CaseOut.model_validate(c) for c in rows]
 
 
 @router.get(
