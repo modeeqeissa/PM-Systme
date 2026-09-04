@@ -1,7 +1,7 @@
 import datetime as dt
 import uuid
 
-from sqlalchemy import CheckConstraint, Date, ForeignKey, Numeric, String, func
+from sqlalchemy import CheckConstraint, Date, DateTime, ForeignKey, Numeric, String, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -12,6 +12,14 @@ def _pk() -> Mapped[uuid.UUID]:
     return mapped_column(
         UUID(as_uuid=True), primary_key=True, server_default=func.gen_random_uuid()
     )
+
+
+def _created_at() -> Mapped[dt.datetime]:
+    """Service-local ordering/audit metadata (migration 0003) — NOT a docs
+    Section 9.3.6 column. These tables have no domain timestamp of their own
+    (unlike assignments.start_date), and "history"/"newest first" listing
+    needs one; a gen_random_uuid() PK isn't chronologically sortable."""
+    return mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
 
 
 class Unit(Base):
@@ -82,6 +90,7 @@ class Transfer(Base):
     status: Mapped[str] = mapped_column(
         String(20), nullable=False, server_default="pending"
     )
+    created_at: Mapped[dt.datetime] = _created_at()
 
 
 class Promotion(Base):
@@ -93,6 +102,7 @@ class Promotion(Base):
     )
     previous_rank: Mapped[str] = mapped_column(String(50), nullable=False)
     new_rank: Mapped[str] = mapped_column(String(50), nullable=False)
+    created_at: Mapped[dt.datetime] = _created_at()
 
 
 class LeaveRequest(Base):
@@ -112,6 +122,7 @@ class LeaveRequest(Base):
     status: Mapped[str] = mapped_column(
         String(20), nullable=False, server_default="pending"
     )
+    created_at: Mapped[dt.datetime] = _created_at()
 
 
 class DisciplineRecord(Base):
@@ -125,6 +136,7 @@ class DisciplineRecord(Base):
     confidentiality_level: Mapped[str] = mapped_column(
         String(20), nullable=False, server_default="restricted"
     )
+    created_at: Mapped[dt.datetime] = _created_at()
 
 
 class PerformanceReview(Base):
@@ -139,3 +151,4 @@ class PerformanceReview(Base):
     )
     period: Mapped[str] = mapped_column(String(20), nullable=False)
     score: Mapped[float] = mapped_column(Numeric(4, 2), nullable=False)
+    created_at: Mapped[dt.datetime] = _created_at()

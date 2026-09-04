@@ -3,6 +3,9 @@
 **/.DS_Store
 ~$*
 
+# Claude Code local session state (not project source)
+/.claude/
+
 # original starter archive (not source)
 pmp-claude-code-starter.zip
 

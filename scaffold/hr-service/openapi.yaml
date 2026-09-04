@@ -1,27 +1,658 @@
 openapi: 3.0.3
 info:
   title: PMP Human Resources Service
-  version: "0.1-stub"
+  version: "1.0"
   description: >
-    Phase 1 service — SCHEMA ONLY for now. The hr_db schema (docs Section
-    9.3.6) is migrated and verifiable, but no domain endpoints are
-    implemented yet (FR section 4.6). Only GET /health is live; routers are
-    mounted in app/main.py once the Phase 1 build begins.
+    Implements FR-HR-01..07 (docs Section 4.6). FastAPI must generate a schema
+    that matches this contract — treat mismatches as a bug, not a spec update,
+    unless the SRS itself is being revised.
+
+    All endpoints require a bearer access token (RS256 JWT) issued by
+    iam-service; its signature is verified against iam-service's JWKS and the
+    required `<resource>.<action>` permission must be present in the token's
+    `permissions` claim (CLAUDE.md rule 4). Missing/invalid token -> 401;
+    valid token without the permission -> 403.
+
+    discipline_records are additionally restricted: only hr.discipline.read /
+    hr.discipline.write unlock those routes (docs Section 2.3 — HR/command
+    only). FR-HR-08 (roster/headcount reports) is not implemented — it reads
+    to derive reports rather than defining new domain state, and is deferred.
 servers:
   - url: /api/v1
+security:
+  - bearerAuth: []
 paths:
-  /health:
+  /units:
+    post:
+      summary: Create an organisational unit
+      description: Requires `hr.unit.write`. Publishes a `UnitCreated` domain event.
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UnitCreate" }
+      responses:
+        "201": { description: Created, content: { application/json: { schema: { $ref: "#/components/schemas/Unit" } } } }
+        "401": { description: Missing or invalid access token }
+        "403": { description: Caller lacks hr.unit.write }
     get:
-      tags: [ops]
-      summary: Liveness probe
+      summary: List organisational units
+      description: Requires `hr.unit.read`.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { in: query, name: station_id, schema: { type: string, format: uuid } }
       responses:
         "200":
-          description: Service is up
+          description: Units
           content:
             application/json:
-              schema:
-                type: object
-                required: [status, service]
-                properties:
-                  status: { type: string, enum: [ok] }
-                  service: { type: string }
+              schema: { type: array, items: { $ref: "#/components/schemas/Unit" } }
+        "401": { description: Missing or invalid access token }
+        "403": { description: Caller lacks hr.unit.read }
+
+  /officers:
+    post:
+      summary: Create an officer master profile (FR-HR-01)
+      description: >
+        Requires `hr.officer.write`. Also opens the officer's first
+        assignment (FR-HR-02) at `unit_id`. Publishes an `OfficerCreated`
+        domain event.
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/OfficerCreate" }
+      responses:
+        "201": { description: Created, content: { application/json: { schema: { $ref: "#/components/schemas/Officer" } } } }
+        "401": { description: Missing or invalid access token }
+        "403": { description: Caller lacks hr.officer.write }
+        "404": { description: unit_id does not exist }
+        "409": { description: user_id or badge_number already in use }
+    get:
+      summary: List officers (FR-HR-01)
+      description: Requires `hr.officer.read`.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { in: query, name: unit_id, schema: { type: string, format: uuid } }
+        - { in: query, name: status, schema: { type: string, enum: [active, on_leave, suspended, retired] } }
+        - { in: query, name: limit, schema: { type: integer, default: 50, minimum: 1, maximum: 200 } }
+        - { in: query, name: offset, schema: { type: integer, default: 0, minimum: 0 } }
+      responses:
+        "200":
+          description: Officers, ordered by badge number
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/Officer" } }
+        "401": { description: Missing or invalid access token }
+        "403": { description: Caller lacks hr.officer.read }
+
+  /officers/{officer_id}:
+    get:
+      summary: Retrieve one officer's profile (FR-HR-01)
+      description: Requires `hr.officer.read`.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { in: path, name: officer_id, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/Officer" } } } }
+        "401": { description: Missing or invalid access token }
+        "403": { description: Caller lacks hr.officer.read }
+        "404": { description: No officer with that id }
+    patch:
+      summary: Correct badge_number/hire_date/status (FR-HR-01)
+      description: >
+        Requires `hr.officer.write`. `rank` and `unit_id` are NOT editable
+        here — they're owned by the audited promotion (FR-HR-04) and
+        transfer-approval (FR-HR-03) workflows. Publishes an `OfficerUpdated`
+        domain event.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { in: path, name: officer_id, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/OfficerUpdate" }
+      responses:
+        "200": { description: Updated, content: { application/json: { schema: { $ref: "#/components/schemas/Officer" } } } }
+        "401": { description: Missing or invalid access token }
+        "403": { description: Caller lacks hr.officer.write }
+        "404": { description: No officer with that id }
+        "409": { description: badge_number already in use }
+
+  /officers/{officer_id}/assignments:
+    post:
+      summary: Record a unit assignment (FR-HR-02)
+      description: >
+        Requires `hr.assignment.write`. Closes the officer's currently open
+        assignment (if any) and updates their current unit. Publishes an
+        `AssignmentRecorded` domain event.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { in: path, name: officer_id, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AssignmentCreate" }
+      responses:
+        "201": { description: Recorded, content: { application/json: { schema: { $ref: "#/components/schemas/Assignment" } } } }
+        "401": { description: Missing or invalid access token }
+        "403": { description: Caller lacks hr.assignment.write }
+        "404": { description: No officer with that id, or unit_id does not exist }
+    get:
+      summary: Assignment history for one officer (FR-HR-02)
+      description: Requires `hr.assignment.read`.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { in: path, name: officer_id, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: Assignments, newest first
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/Assignment" } }
+        "401": { description: Missing or invalid access token }
+        "403": { description: Caller lacks hr.assignment.read }
+        "404": { description: No officer with that id }
+
+  /officers/{officer_id}/transfers:
+    post:
+      summary: Request a transfer (FR-HR-03)
+      description: >
+        Requires `hr.transfer.write`. Opens a `pending` transfer request;
+        `from_unit_id` is the officer's current unit. Publishes a
+        `TransferRequested` domain event.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { in: path, name: officer_id, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TransferCreate" }
+      responses:
+        "201": { description: Requested, content: { application/json: { schema: { $ref: "#/components/schemas/Transfer" } } } }
+        "401": { description: Missing or invalid access token }
+        "403": { description: Caller lacks hr.transfer.write }
+        "404": { description: No officer with that id, or to_unit_id does not exist }
+    get:
+      summary: Transfer history for one officer (FR-HR-03)
+      description: Requires `hr.transfer.read`.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { in: path, name: officer_id, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: Transfers, newest first
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/Transfer" } }
+        "401": { description: Missing or invalid access token }
+        "403": { description: Caller lacks hr.transfer.read }
+        "404": { description: No officer with that id }
+
+  /transfers:
+    get:
+      summary: Approver queue — every transfer request (FR-HR-03)
+      description: Requires `hr.transfer.read`.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { in: query, name: status, schema: { type: string, enum: [pending, approved, rejected] } }
+      responses:
+        "200":
+          description: Transfers, newest first
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/Transfer" } }
+        "401": { description: Missing or invalid access token }
+        "403": { description: Caller lacks hr.transfer.read }
+
+  /transfers/{transfer_id}:
+    patch:
+      summary: Approve or reject a pending transfer (FR-HR-03)
+      description: >
+        Requires `hr.transfer.approve`. On approval, updates the officer's
+        current unit and closes/opens the corresponding assignment record
+        (same effect as POST .../assignments). Publishes a
+        `TransferStatusChanged` domain event.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { in: path, name: transfer_id, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TransferStatusUpdate" }
+      responses:
+        "200": { description: Updated, content: { application/json: { schema: { $ref: "#/components/schemas/Transfer" } } } }
+        "401": { description: Missing or invalid access token }
+        "403": { description: Caller lacks hr.transfer.approve }
+        "404": { description: No transfer with that id }
+        "409": { description: Transfer is not pending }
+
+  /officers/{officer_id}/promotions:
+    post:
+      summary: Record a promotion (FR-HR-04)
+      description: >
+        Requires `hr.promotion.write`. No approval workflow — `previous_rank`
+        is the officer's current rank at the time of recording; the officer's
+        rank is updated immediately. Publishes a `PromotionRecorded` domain
+        event.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { in: path, name: officer_id, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PromotionCreate" }
+      responses:
+        "201": { description: Recorded, content: { application/json: { schema: { $ref: "#/components/schemas/Promotion" } } } }
+        "401": { description: Missing or invalid access token }
+        "403": { description: Caller lacks hr.promotion.write }
+        "404": { description: No officer with that id }
+    get:
+      summary: Promotion history for one officer (FR-HR-04)
+      description: Requires `hr.promotion.read`.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { in: path, name: officer_id, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: Promotions, newest first
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/Promotion" } }
+        "401": { description: Missing or invalid access token }
+        "403": { description: Caller lacks hr.promotion.read }
+        "404": { description: No officer with that id }
+
+  /officers/{officer_id}/leave-requests:
+    post:
+      summary: Request leave (FR-HR-05)
+      description: >
+        Requires `hr.leave.write`. Opens a `pending` leave request. Publishes
+        a `LeaveRequested` domain event.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { in: path, name: officer_id, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/LeaveRequestCreate" }
+      responses:
+        "201": { description: Requested, content: { application/json: { schema: { $ref: "#/components/schemas/LeaveRequest" } } } }
+        "401": { description: Missing or invalid access token }
+        "403": { description: Caller lacks hr.leave.write }
+        "404": { description: No officer with that id }
+    get:
+      summary: Leave-request history for one officer (FR-HR-05)
+      description: Requires `hr.leave.read`.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { in: path, name: officer_id, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: Leave requests, newest first
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/LeaveRequest" } }
+        "401": { description: Missing or invalid access token }
+        "403": { description: Caller lacks hr.leave.read }
+        "404": { description: No officer with that id }
+
+  /leave-requests:
+    get:
+      summary: Approver queue — every leave request (FR-HR-05)
+      description: Requires `hr.leave.read`.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { in: query, name: status, schema: { type: string, enum: [pending, approved, rejected] } }
+      responses:
+        "200":
+          description: Leave requests, newest first
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/LeaveRequest" } }
+        "401": { description: Missing or invalid access token }
+        "403": { description: Caller lacks hr.leave.read }
+
+  /leave-requests/{leave_request_id}:
+    patch:
+      summary: Approve or reject a pending leave request (FR-HR-05)
+      description: >
+        Requires `hr.leave.approve`. Routed to the requester's supervisor per
+        FR-HR-05 — enforced here as the `hr.leave.approve` permission, held by
+        Station Commander and HR Officer. Publishes a `LeaveStatusChanged`
+        domain event.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { in: path, name: leave_request_id, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/LeaveStatusUpdate" }
+      responses:
+        "200": { description: Updated, content: { application/json: { schema: { $ref: "#/components/schemas/LeaveRequest" } } } }
+        "401": { description: Missing or invalid access token }
+        "403": { description: Caller lacks hr.leave.approve }
+        "404": { description: No leave request with that id }
+        "409": { description: Leave request is not pending }
+
+  /officers/{officer_id}/discipline-records:
+    post:
+      summary: Record a discipline case (FR-HR-06)
+      description: >
+        Requires `hr.discipline.write`. Publishes a `DisciplineRecordCreated`
+        domain event.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { in: path, name: officer_id, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/DisciplineRecordCreate" }
+      responses:
+        "201": { description: Recorded, content: { application/json: { schema: { $ref: "#/components/schemas/DisciplineRecord" } } } }
+        "401": { description: Missing or invalid access token }
+        "403": { description: Caller lacks hr.discipline.write }
+        "404": { description: No officer with that id }
+    get:
+      summary: Discipline-record history for one officer (FR-HR-06)
+      description: >
+        Requires `hr.discipline.read` — HR/command only (docs Section 2.3).
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { in: path, name: officer_id, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: Discipline records, newest first
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/DisciplineRecord" } }
+        "401": { description: Missing or invalid access token }
+        "403": { description: Caller lacks hr.discipline.read }
+        "404": { description: No officer with that id }
+
+  /discipline-records/{discipline_record_id}:
+    get:
+      summary: Retrieve one discipline record (FR-HR-06)
+      description: >
+        Requires `hr.discipline.read` — HR/command only (docs Section 2.3).
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { in: path, name: discipline_record_id, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/DisciplineRecord" } } } }
+        "401": { description: Missing or invalid access token }
+        "403": { description: Caller lacks hr.discipline.read }
+        "404": { description: No discipline record with that id }
+    patch:
+      summary: Update a discipline record (FR-HR-06)
+      description: >
+        Requires `hr.discipline.write`. Publishes a `DisciplineRecordUpdated`
+        domain event.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { in: path, name: discipline_record_id, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/DisciplineRecordUpdate" }
+      responses:
+        "200": { description: Updated, content: { application/json: { schema: { $ref: "#/components/schemas/DisciplineRecord" } } } }
+        "401": { description: Missing or invalid access token }
+        "403": { description: Caller lacks hr.discipline.write }
+        "404": { description: No discipline record with that id }
+    delete:
+      summary: Delete a discipline record (FR-HR-06)
+      description: >
+        Requires `hr.discipline.write`. Publishes a `DisciplineRecordDeleted`
+        domain event.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { in: path, name: discipline_record_id, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "204": { description: Deleted }
+        "401": { description: Missing or invalid access token }
+        "403": { description: Caller lacks hr.discipline.write }
+        "404": { description: No discipline record with that id }
+
+  /officers/{officer_id}/performance-reviews:
+    post:
+      summary: Record a performance review (FR-HR-07)
+      description: >
+        Requires `hr.performance.write`. Publishes a
+        `PerformanceReviewRecorded` domain event.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { in: path, name: officer_id, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PerformanceReviewCreate" }
+      responses:
+        "201": { description: Recorded, content: { application/json: { schema: { $ref: "#/components/schemas/PerformanceReview" } } } }
+        "401": { description: Missing or invalid access token }
+        "403": { description: Caller lacks hr.performance.write }
+        "404": { description: No officer with that id, or reviewer_id does not exist }
+    get:
+      summary: Performance-review history for one officer (FR-HR-07)
+      description: Requires `hr.performance.read`.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { in: path, name: officer_id, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: Performance reviews, newest first
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/PerformanceReview" } }
+        "401": { description: Missing or invalid access token }
+        "403": { description: Caller lacks hr.performance.read }
+        "404": { description: No officer with that id }
+
+  /performance-reviews/{performance_review_id}:
+    get:
+      summary: Retrieve one performance review (FR-HR-07)
+      description: Requires `hr.performance.read`.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { in: path, name: performance_review_id, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/PerformanceReview" } } } }
+        "401": { description: Missing or invalid access token }
+        "403": { description: Caller lacks hr.performance.read }
+        "404": { description: No performance review with that id }
+    patch:
+      summary: Update a performance review (FR-HR-07)
+      description: >
+        Requires `hr.performance.write`. Publishes a
+        `PerformanceReviewUpdated` domain event.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { in: path, name: performance_review_id, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PerformanceReviewUpdate" }
+      responses:
+        "200": { description: Updated, content: { application/json: { schema: { $ref: "#/components/schemas/PerformanceReview" } } } }
+        "401": { description: Missing or invalid access token }
+        "403": { description: Caller lacks hr.performance.write }
+        "404": { description: No performance review with that id }
+    delete:
+      summary: Delete a performance review (FR-HR-07)
+      description: >
+        Requires `hr.performance.write`. Publishes a
+        `PerformanceReviewDeleted` domain event.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { in: path, name: performance_review_id, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "204": { description: Deleted }
+        "401": { description: Missing or invalid access token }
+        "403": { description: Caller lacks hr.performance.write }
+        "404": { description: No performance review with that id }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: RS256 access token issued by iam-service (/api/v1/auth/mfa/verify).
+  schemas:
+    UnitCreate:
+      type: object
+      required: [name, station_id]
+      properties:
+        name: { type: string }
+        station_id: { type: string, format: uuid }
+    Unit:
+      allOf:
+        - $ref: "#/components/schemas/UnitCreate"
+        - type: object
+          properties:
+            id: { type: string, format: uuid }
+
+    OfficerCreate:
+      type: object
+      required: [user_id, badge_number, rank, unit_id, hire_date]
+      properties:
+        user_id: { type: string, format: uuid }
+        badge_number: { type: string }
+        rank: { type: string }
+        unit_id: { type: string, format: uuid }
+        hire_date: { type: string, format: date }
+        status: { type: string, enum: [active, on_leave, suspended, retired], default: active }
+    Officer:
+      allOf:
+        - $ref: "#/components/schemas/OfficerCreate"
+        - type: object
+          properties:
+            id: { type: string, format: uuid }
+    OfficerUpdate:
+      type: object
+      properties:
+        badge_number: { type: string, nullable: true }
+        hire_date: { type: string, format: date, nullable: true }
+        status: { type: string, enum: [active, on_leave, suspended, retired], nullable: true }
+
+    AssignmentCreate:
+      type: object
+      required: [unit_id, start_date]
+      properties:
+        unit_id: { type: string, format: uuid }
+        start_date: { type: string, format: date }
+    Assignment:
+      allOf:
+        - $ref: "#/components/schemas/AssignmentCreate"
+        - type: object
+          properties:
+            id: { type: string, format: uuid }
+            officer_id: { type: string, format: uuid }
+            end_date: { type: string, format: date, nullable: true }
+
+    TransferCreate:
+      type: object
+      required: [to_unit_id]
+      properties:
+        to_unit_id: { type: string, format: uuid }
+    Transfer:
+      allOf:
+        - $ref: "#/components/schemas/TransferCreate"
+        - type: object
+          properties:
+            id: { type: string, format: uuid }
+            officer_id: { type: string, format: uuid }
+            from_unit_id: { type: string, format: uuid, nullable: true }
+            status: { type: string, enum: [pending, approved, rejected] }
+            created_at: { type: string, format: date-time }
+    TransferStatusUpdate:
+      type: object
+      required: [status]
+      properties:
+        status: { type: string, enum: [approved, rejected] }
+
+    PromotionCreate:
+      type: object
+      required: [new_rank]
+      properties:
+        new_rank: { type: string }
+    Promotion:
+      allOf:
+        - $ref: "#/components/schemas/PromotionCreate"
+        - type: object
+          properties:
+            id: { type: string, format: uuid }
+            officer_id: { type: string, format: uuid }
+            previous_rank: { type: string }
+            created_at: { type: string, format: date-time }
+
+    LeaveRequestCreate:
+      type: object
+      required: [leave_type]
+      properties:
+        leave_type: { type: string }
+    LeaveRequest:
+      allOf:
+        - $ref: "#/components/schemas/LeaveRequestCreate"
+        - type: object
+          properties:
+            id: { type: string, format: uuid }
+            officer_id: { type: string, format: uuid }
+            status: { type: string, enum: [pending, approved, rejected] }
+            created_at: { type: string, format: date-time }
+    LeaveStatusUpdate:
+      type: object
+      required: [status]
+      properties:
+        status: { type: string, enum: [approved, rejected] }
+
+    DisciplineRecordCreate:
+      type: object
+      properties:
+        confidentiality_level: { type: string, default: restricted }
+    DisciplineRecord:
+      allOf:
+        - $ref: "#/components/schemas/DisciplineRecordCreate"
+        - type: object
+          properties:
+            id: { type: string, format: uuid }
+            officer_id: { type: string, format: uuid }
+            created_at: { type: string, format: date-time }
+    DisciplineRecordUpdate:
+      type: object
+      properties:
+        confidentiality_level: { type: string, nullable: true }
+
+    PerformanceReviewCreate:
+      type: object
+      required: [reviewer_id, period, score]
+      properties:
+        reviewer_id: { type: string, format: uuid }
+        period: { type: string }
+        score: { type: number, format: float, minimum: 0, maximum: 99.99 }
+    PerformanceReview:
+      allOf:
+        - $ref: "#/components/schemas/PerformanceReviewCreate"
+        - type: object
+          properties:
+            id: { type: string, format: uuid }
+            officer_id: { type: string, format: uuid }
+            created_at: { type: string, format: date-time }
+    PerformanceReviewUpdate:
+      type: object
+      properties:
+        period: { type: string, nullable: true }
+        score: { type: number, format: float, minimum: 0, maximum: 99.99, nullable: true }

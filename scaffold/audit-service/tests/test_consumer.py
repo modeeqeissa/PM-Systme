@@ -61,7 +61,42 @@ async def test_all_event_types_map_to_expected_entity_and_action(client, emit, c
         service="iam-service", actor_role="system",
     )
 
-    assert await consumer.process_available() == 12
+    # hr-service (FR-HR-01..07)
+    await emit("OfficerCreated", {"officer_id": str(uuid.uuid4())}, service="hr-service")
+    await emit("OfficerUpdated", {"officer_id": str(uuid.uuid4())}, service="hr-service")
+    await emit("UnitCreated", {"unit_id": str(uuid.uuid4())}, service="hr-service")
+    await emit("AssignmentRecorded", {"assignment_id": str(uuid.uuid4())}, service="hr-service")
+    await emit("TransferRequested", {"transfer_id": str(uuid.uuid4())}, service="hr-service")
+    await emit("TransferStatusChanged", {"transfer_id": str(uuid.uuid4())}, service="hr-service")
+    await emit("PromotionRecorded", {"promotion_id": str(uuid.uuid4())}, service="hr-service")
+    await emit("LeaveRequested", {"leave_request_id": str(uuid.uuid4())}, service="hr-service")
+    await emit("LeaveStatusChanged", {"leave_request_id": str(uuid.uuid4())}, service="hr-service")
+    await emit(
+        "DisciplineRecordCreated", {"discipline_record_id": str(uuid.uuid4())}, service="hr-service"
+    )
+    await emit(
+        "DisciplineRecordUpdated", {"discipline_record_id": str(uuid.uuid4())}, service="hr-service"
+    )
+    await emit(
+        "DisciplineRecordDeleted", {"discipline_record_id": str(uuid.uuid4())}, service="hr-service"
+    )
+    await emit(
+        "PerformanceReviewRecorded",
+        {"performance_review_id": str(uuid.uuid4())},
+        service="hr-service",
+    )
+    await emit(
+        "PerformanceReviewUpdated",
+        {"performance_review_id": str(uuid.uuid4())},
+        service="hr-service",
+    )
+    await emit(
+        "PerformanceReviewDeleted",
+        {"performance_review_id": str(uuid.uuid4())},
+        service="hr-service",
+    )
+
+    assert await consumer.process_available() == 27
     rows = await _audit_rows()
     seen = {(r.entity_type, r.action) for r in rows}
     assert seen == {
@@ -76,6 +111,21 @@ async def test_all_event_types_map_to_expected_entity_and_action(client, emit, c
         ("user", "create"),          # UserCreated
         ("user", "delete"),          # UserDeactivated (soft-delete/status change)
         ("user", "update"),          # UserRoleReassigned + AccountLockedOut
+        ("officer", "create"),
+        ("officer", "update"),
+        ("unit", "create"),
+        ("assignment", "create"),
+        ("transfer", "create"),
+        ("transfer", "update"),
+        ("promotion", "create"),
+        ("leave_request", "create"),
+        ("leave_request", "update"),
+        ("discipline_record", "create"),
+        ("discipline_record", "update"),
+        ("discipline_record", "delete"),
+        ("performance_review", "create"),
+        ("performance_review", "update"),
+        ("performance_review", "delete"),
     }
     # custody event id was an int in the payload -> stored as text entity_id
     custody = next(r for r in rows if r.entity_type == "custody_event")

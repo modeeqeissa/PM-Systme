@@ -20,6 +20,22 @@ EVENT_MAP: dict[str, tuple[str, str, str]] = {
     "UserDeactivated": ("user", "delete", "user_id"),
     "UserRoleReassigned": ("user", "update", "user_id"),
     "AccountLockedOut": ("user", "update", "user_id"),
+    # hr-service (FR-HR-01..07)
+    "OfficerCreated": ("officer", "create", "officer_id"),
+    "OfficerUpdated": ("officer", "update", "officer_id"),
+    "UnitCreated": ("unit", "create", "unit_id"),
+    "AssignmentRecorded": ("assignment", "create", "assignment_id"),
+    "TransferRequested": ("transfer", "create", "transfer_id"),
+    "TransferStatusChanged": ("transfer", "update", "transfer_id"),
+    "PromotionRecorded": ("promotion", "create", "promotion_id"),
+    "LeaveRequested": ("leave_request", "create", "leave_request_id"),
+    "LeaveStatusChanged": ("leave_request", "update", "leave_request_id"),
+    "DisciplineRecordCreated": ("discipline_record", "create", "discipline_record_id"),
+    "DisciplineRecordUpdated": ("discipline_record", "update", "discipline_record_id"),
+    "DisciplineRecordDeleted": ("discipline_record", "delete", "discipline_record_id"),
+    "PerformanceReviewRecorded": ("performance_review", "create", "performance_review_id"),
+    "PerformanceReviewUpdated": ("performance_review", "update", "performance_review_id"),
+    "PerformanceReviewDeleted": ("performance_review", "delete", "performance_review_id"),
 }
 
 

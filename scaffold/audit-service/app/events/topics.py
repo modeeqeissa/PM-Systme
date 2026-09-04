@@ -18,6 +18,22 @@ _BASE_TOPICS = (
     "user.deactivated",
     "user.role_reassigned",
     "account.locked_out",
+    # hr-service (FR-HR-01..07)
+    "hr.officer_created",
+    "hr.officer_updated",
+    "hr.unit_created",
+    "hr.assignment_recorded",
+    "hr.transfer_requested",
+    "hr.transfer_status_changed",
+    "hr.promotion_recorded",
+    "hr.leave_requested",
+    "hr.leave_status_changed",
+    "hr.discipline_record_created",
+    "hr.discipline_record_updated",
+    "hr.discipline_record_deleted",
+    "hr.performance_review_recorded",
+    "hr.performance_review_updated",
+    "hr.performance_review_deleted",
 )
 
 
