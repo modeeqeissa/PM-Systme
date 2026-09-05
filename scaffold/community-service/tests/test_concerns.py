@@ -3,7 +3,7 @@ import uuid
 
 async def test_log_concern_independent_of_meeting(client, auth_comm):
     r = await client.post(
-        "/api/v1/concerns", json={"category": "traffic"}, headers=auth_comm
+        "/api/v1/concerns", json={"description": "Reported at meeting.", "category": "traffic"}, headers=auth_comm
     )
     assert r.status_code == 201, r.text
     body = r.json()
@@ -16,7 +16,7 @@ async def test_log_concern_linked_to_meeting(client, auth_comm, make_meeting):
     meeting = await make_meeting()
     r = await client.post(
         "/api/v1/concerns",
-        json={"meeting_id": str(meeting.id), "category": "corruption"},
+        json={"meeting_id": str(meeting.id), "category": "corruption", "description": "Bribery allegation."},
         headers=auth_comm,
     )
     assert r.status_code == 201, r.text
@@ -26,7 +26,7 @@ async def test_log_concern_linked_to_meeting(client, auth_comm, make_meeting):
 async def test_log_concern_unknown_meeting_404(client, auth_comm):
     r = await client.post(
         "/api/v1/concerns",
-        json={"meeting_id": str(uuid.uuid4()), "category": "safety"},
+        json={"meeting_id": str(uuid.uuid4()), "category": "safety", "description": "x"},
         headers=auth_comm,
     )
     assert r.status_code == 404
@@ -34,9 +34,34 @@ async def test_log_concern_unknown_meeting_404(client, auth_comm):
 
 async def test_log_concern_requires_community_write(client, auth_none):
     r = await client.post(
-        "/api/v1/concerns", json={"category": "safety"}, headers=auth_none
+        "/api/v1/concerns", json={"description": "Reported at meeting.", "category": "safety"}, headers=auth_none
     )
     assert r.status_code == 403
+
+
+async def test_log_concern_requires_description_422(client, auth_comm):
+    r = await client.post(
+        "/api/v1/concerns", json={"category": "safety"}, headers=auth_comm
+    )
+    assert r.status_code == 422
+
+    r = await client.post(
+        "/api/v1/concerns", json={"category": "safety", "description": ""}, headers=auth_comm
+    )
+    assert r.status_code == 422
+
+
+async def test_log_concern_stores_description_and_raised_by(client, auth_comm):
+    r = await client.post(
+        "/api/v1/concerns",
+        json={"category": "corruption", "description": "Officer solicited a bribe at the checkpoint.",
+              "raised_by": "Jane Q. (market trader)"},
+        headers=auth_comm,
+    )
+    assert r.status_code == 201, r.text
+    body = r.json()
+    assert body["description"] == "Officer solicited a bribe at the checkpoint."
+    assert body["raised_by"] == "Jane Q. (market trader)"
 
 
 async def test_list_concerns_filters(client, auth_comm, make_concern):

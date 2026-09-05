@@ -3,10 +3,6 @@
 Every mutating handler enqueues a domain event in the same DB transaction
 (transactional outbox, SRS §3.4); audit-service consumes those events into
 the independent, hash-chained audit log (CLAUDE.md rule 3 / FR-AUD-01).
-
-FR-COMM-01 also asks to capture an "attendee summary", but docs Section 9.3.4's
-meetings table has no column for it — not implemented; flagged rather than
-inventing a field the schema doesn't define (CLAUDE.md rule 5).
 """
 import uuid
 
@@ -45,6 +41,7 @@ async def log_meeting(
         facilitator_id=payload.facilitator_id,
         meeting_date=payload.meeting_date,
         location=payload.location,
+        attendee_summary=payload.attendee_summary,
     )
     session.add(meeting)
     await session.flush()

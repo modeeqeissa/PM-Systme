@@ -1,7 +1,7 @@
 import datetime as dt
 import uuid
 
-from sqlalchemy import CheckConstraint, Date, ForeignKey, String, func
+from sqlalchemy import CheckConstraint, Date, ForeignKey, String, Text, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -19,6 +19,7 @@ class Meeting(Base):
     facilitator_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
     meeting_date: Mapped[dt.date] = mapped_column(Date, nullable=False)
     location: Mapped[str] = mapped_column(String(200), nullable=False)
+    attendee_summary: Mapped[str | None] = mapped_column(Text)
 
 
 class Concern(Base):
@@ -36,6 +37,8 @@ class Concern(Base):
         UUID(as_uuid=True), ForeignKey("meetings.id")
     )
     category: Mapped[str] = mapped_column(String(50), nullable=False)
+    description: Mapped[str] = mapped_column(Text, nullable=False)
+    raised_by: Mapped[str | None] = mapped_column(String(150))
     status: Mapped[str] = mapped_column(
         String(20), nullable=False, server_default="open"
     )
@@ -56,6 +59,7 @@ class FollowUpAction(Base):
     concern_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("concerns.id"), nullable=False
     )
+    description: Mapped[str] = mapped_column(Text, nullable=False)
     # logical FK -> hr_db.officers.id
     assigned_to: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
     due_date: Mapped[dt.date] = mapped_column(Date, nullable=False)

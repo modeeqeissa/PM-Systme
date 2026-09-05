@@ -2,7 +2,7 @@ import datetime as dt
 import uuid
 from enum import Enum
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class ConcernStatus(str, Enum):
@@ -23,6 +23,7 @@ class MeetingCreate(BaseModel):
     facilitator_id: uuid.UUID
     meeting_date: dt.date
     location: str
+    attendee_summary: str | None = None
 
 
 class MeetingOut(BaseModel):
@@ -33,12 +34,15 @@ class MeetingOut(BaseModel):
     facilitator_id: uuid.UUID
     meeting_date: dt.date
     location: str
+    attendee_summary: str | None = None
 
 
 # --- Concerns -------------------------------------------------------------
 class ConcernCreate(BaseModel):
     meeting_id: uuid.UUID | None = None
     category: str
+    description: str = Field(min_length=1)
+    raised_by: str | None = Field(default=None, max_length=150)
 
 
 class ConcernOut(BaseModel):
@@ -47,6 +51,8 @@ class ConcernOut(BaseModel):
     id: uuid.UUID
     meeting_id: uuid.UUID | None
     category: str
+    description: str
+    raised_by: str | None
     status: ConcernStatus
 
 
@@ -56,6 +62,7 @@ class ConcernStatusUpdate(BaseModel):
 
 # --- Follow-up actions ------------------------------------------------------
 class FollowUpActionCreate(BaseModel):
+    description: str = Field(min_length=1)
     assigned_to: uuid.UUID
     due_date: dt.date
 
@@ -65,6 +72,7 @@ class FollowUpActionOut(BaseModel):
 
     id: uuid.UUID
     concern_id: uuid.UUID
+    description: str
     assigned_to: uuid.UUID
     due_date: dt.date
     status: FollowUpActionStatus

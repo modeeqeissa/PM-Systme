@@ -1,10 +1,7 @@
 """Community concerns — FR-COMM-02.
 
-docs Section 9.3.4 gives concerns only category/status/meeting_id — no
-free-text description and no reporter identity — so a concern here records
-only "a concern of this category was raised" (optionally linked to a
-meeting), not any narrative detail. Flagged rather than inventing a
-description column the schema doesn't define (CLAUDE.md rule 5).
+`raised_by` is free text (a community member's name/identifier), not a
+system-user reference (docs Section 9.3.4).
 """
 import uuid
 
@@ -44,7 +41,12 @@ async def log_concern(
         if meeting is None:
             raise HTTPException(status_code=404, detail="meeting_id does not exist")
 
-    concern = Concern(meeting_id=payload.meeting_id, category=payload.category)
+    concern = Concern(
+        meeting_id=payload.meeting_id,
+        category=payload.category,
+        description=payload.description,
+        raised_by=payload.raised_by,
+    )
     session.add(concern)
     await session.flush()
     await session.refresh(concern)
@@ -61,6 +63,7 @@ async def log_concern(
             "concern_id": str(concern.id),
             "meeting_id": str(concern.meeting_id) if concern.meeting_id else None,
             "category": concern.category,
+            "description": concern.description,
         },
     )
     return ConcernOut.model_validate(concern)

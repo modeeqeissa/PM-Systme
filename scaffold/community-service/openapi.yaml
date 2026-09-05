@@ -13,12 +13,6 @@ info:
     token's `permissions` claim (CLAUDE.md rule 4). Missing/invalid token ->
     401; valid token without the permission -> 403.
 
-    docs Section 9.3.4 gives meetings no attendee-summary column (FR-COMM-01
-    asks for one), concerns no free-text description or reporter identity,
-    and follow_up_actions no description of the action itself — none of
-    these are implemented; flagged as schema gaps rather than invented
-    (CLAUDE.md rule 5).
-
     `follow_up_actions.status` "overdue" is set only by
     `POST /follow-up-actions/recompute-status` (FR-COMM-04) or the equivalent
     periodic background sweep — never accepted from a client via
@@ -257,6 +251,7 @@ components:
         facilitator_id: { type: string, format: uuid }
         meeting_date: { type: string, format: date }
         location: { type: string }
+        attendee_summary: { type: string, nullable: true }
     Meeting:
       allOf:
         - $ref: "#/components/schemas/MeetingCreate"
@@ -266,10 +261,12 @@ components:
 
     ConcernCreate:
       type: object
-      required: [category]
+      required: [category, description]
       properties:
         meeting_id: { type: string, format: uuid, nullable: true }
         category: { type: string }
+        description: { type: string, minLength: 1 }
+        raised_by: { type: string, nullable: true, maxLength: 150, description: "Free text — a community member's name/identifier, not a system user." }
     Concern:
       allOf:
         - $ref: "#/components/schemas/ConcernCreate"
@@ -285,8 +282,9 @@ components:
 
     FollowUpActionCreate:
       type: object
-      required: [assigned_to, due_date]
+      required: [description, assigned_to, due_date]
       properties:
+        description: { type: string, minLength: 1 }
         assigned_to: { type: string, format: uuid }
         due_date: { type: string, format: date }
     FollowUpAction:

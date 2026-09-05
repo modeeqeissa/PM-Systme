@@ -357,6 +357,8 @@ async def make_concern():
             concern = Concern(
                 meeting_id=overrides.get("meeting_id"),
                 category=overrides.get("category", "safety"),
+                description=overrides.get("description", "Speeding near the school gate."),
+                raised_by=overrides.get("raised_by"),
                 status=overrides.get("status", "open"),
             )
             session.add(concern)

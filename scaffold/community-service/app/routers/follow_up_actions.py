@@ -1,9 +1,5 @@
 """Follow-up actions against a concern — FR-COMM-03/04.
 
-docs Section 9.3.4 gives follow_up_actions no free-text description of what
-the action actually is — only assigned_to/due_date/status. Flagged rather
-than inventing a column the schema doesn't define (CLAUDE.md rule 5).
-
 `status` transitions: pending -> completed is a manual PATCH; pending ->
 overdue is set only by the recompute sweep (FR-COMM-04), never accepted
 directly from a client — see POST /follow-up-actions/recompute-status.
@@ -58,7 +54,10 @@ async def create_follow_up_action(
         raise HTTPException(status_code=404, detail="No concern with that id")
 
     action = FollowUpAction(
-        concern_id=concern_id, assigned_to=payload.assigned_to, due_date=payload.due_date
+        concern_id=concern_id,
+        description=payload.description,
+        assigned_to=payload.assigned_to,
+        due_date=payload.due_date,
     )
     session.add(action)
     await session.flush()
@@ -75,6 +74,7 @@ async def create_follow_up_action(
         payload={
             "follow_up_action_id": str(action.id),
             "concern_id": str(concern_id),
+            "description": action.description,
             "assigned_to": str(action.assigned_to),
             "due_date": action.due_date.isoformat(),
         },

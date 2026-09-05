@@ -24,7 +24,7 @@ async def test_create_and_list_follow_up_action(client, auth_comm, make_concern)
     assigned_to = str(uuid.uuid4())
     r = await client.post(
         f"/api/v1/concerns/{concern.id}/follow-up-actions",
-        json={"assigned_to": assigned_to, "due_date": "2026-12-01"},
+        json={"description": "Install speed bumps.", "assigned_to": assigned_to, "due_date": "2026-12-01"},
         headers=auth_comm,
     )
     assert r.status_code == 201, r.text
@@ -40,10 +40,39 @@ async def test_create_and_list_follow_up_action(client, auth_comm, make_concern)
     assert len(r.json()) == 1
 
 
+async def test_create_follow_up_action_requires_description_422(client, auth_comm, make_concern):
+    concern = await make_concern()
+    r = await client.post(
+        f"/api/v1/concerns/{concern.id}/follow-up-actions",
+        json={"assigned_to": str(uuid.uuid4()), "due_date": "2026-12-01"},
+        headers=auth_comm,
+    )
+    assert r.status_code == 422
+
+    r = await client.post(
+        f"/api/v1/concerns/{concern.id}/follow-up-actions",
+        json={"description": "", "assigned_to": str(uuid.uuid4()), "due_date": "2026-12-01"},
+        headers=auth_comm,
+    )
+    assert r.status_code == 422
+
+
+async def test_create_follow_up_action_stores_description(client, auth_comm, make_concern):
+    concern = await make_concern()
+    r = await client.post(
+        f"/api/v1/concerns/{concern.id}/follow-up-actions",
+        json={"description": "Liaise with roads dept about signage.",
+              "assigned_to": str(uuid.uuid4()), "due_date": "2026-12-01"},
+        headers=auth_comm,
+    )
+    assert r.status_code == 201, r.text
+    assert r.json()["description"] == "Liaise with roads dept about signage."
+
+
 async def test_create_follow_up_action_unknown_concern_404(client, auth_comm):
     r = await client.post(
         f"/api/v1/concerns/{uuid.uuid4()}/follow-up-actions",
-        json={"assigned_to": str(uuid.uuid4()), "due_date": "2026-12-01"},
+        json={"description": "Install speed bumps.", "assigned_to": str(uuid.uuid4()), "due_date": "2026-12-01"},
         headers=auth_comm,
     )
     assert r.status_code == 404
@@ -55,7 +84,7 @@ async def test_create_follow_up_action_requires_community_write(
     concern = await make_concern()
     r = await client.post(
         f"/api/v1/concerns/{concern.id}/follow-up-actions",
-        json={"assigned_to": str(uuid.uuid4()), "due_date": "2026-12-01"},
+        json={"description": "Install speed bumps.", "assigned_to": str(uuid.uuid4()), "due_date": "2026-12-01"},
         headers=auth_none,
     )
     assert r.status_code == 403
@@ -67,12 +96,12 @@ async def test_global_list_filter_by_assigned_to_and_status(client, auth_comm, m
     officer_b = str(uuid.uuid4())
     await client.post(
         f"/api/v1/concerns/{concern.id}/follow-up-actions",
-        json={"assigned_to": officer_a, "due_date": "2026-12-01"},
+        json={"description": "Install speed bumps.", "assigned_to": officer_a, "due_date": "2026-12-01"},
         headers=auth_comm,
     )
     await client.post(
         f"/api/v1/concerns/{concern.id}/follow-up-actions",
-        json={"assigned_to": officer_b, "due_date": "2026-12-15"},
+        json={"description": "Install speed bumps.", "assigned_to": officer_b, "due_date": "2026-12-15"},
         headers=auth_comm,
     )
 
@@ -98,7 +127,7 @@ async def test_mark_follow_up_action_completed(client, auth_comm, make_concern):
     concern = await make_concern()
     r = await client.post(
         f"/api/v1/concerns/{concern.id}/follow-up-actions",
-        json={"assigned_to": str(uuid.uuid4()), "due_date": "2026-12-01"},
+        json={"description": "Install speed bumps.", "assigned_to": str(uuid.uuid4()), "due_date": "2026-12-01"},
         headers=auth_comm,
     )
     action_id = r.json()["id"]
@@ -116,7 +145,7 @@ async def test_cannot_manually_set_overdue_422(client, auth_comm, make_concern):
     concern = await make_concern()
     r = await client.post(
         f"/api/v1/concerns/{concern.id}/follow-up-actions",
-        json={"assigned_to": str(uuid.uuid4()), "due_date": "2026-12-01"},
+        json={"description": "Install speed bumps.", "assigned_to": str(uuid.uuid4()), "due_date": "2026-12-01"},
         headers=auth_comm,
     )
     action_id = r.json()["id"]
@@ -135,7 +164,7 @@ async def test_update_follow_up_action_requires_community_write(
     concern = await make_concern()
     r = await client.post(
         f"/api/v1/concerns/{concern.id}/follow-up-actions",
-        json={"assigned_to": str(uuid.uuid4()), "due_date": "2026-12-01"},
+        json={"description": "Install speed bumps.", "assigned_to": str(uuid.uuid4()), "due_date": "2026-12-01"},
         headers=auth_comm,
     )
     action_id = r.json()["id"]
@@ -158,7 +187,7 @@ async def test_recompute_flags_overdue(client, auth_comm, make_concern, today):
     concern = await make_concern()
     r = await client.post(
         f"/api/v1/concerns/{concern.id}/follow-up-actions",
-        json={"assigned_to": str(uuid.uuid4()), "due_date": "2026-12-01"},
+        json={"description": "Install speed bumps.", "assigned_to": str(uuid.uuid4()), "due_date": "2026-12-01"},
         headers=auth_comm,
     )
     action_id = r.json()["id"]
@@ -178,7 +207,7 @@ async def test_recompute_ignores_future_due_dates(client, auth_comm, make_concer
     concern = await make_concern()
     await client.post(
         f"/api/v1/concerns/{concern.id}/follow-up-actions",
-        json={"assigned_to": str(uuid.uuid4()), "due_date": "2099-01-01"},
+        json={"description": "Install speed bumps.", "assigned_to": str(uuid.uuid4()), "due_date": "2099-01-01"},
         headers=auth_comm,
     )
     r = await client.post("/api/v1/follow-up-actions/recompute-status", headers=auth_comm)

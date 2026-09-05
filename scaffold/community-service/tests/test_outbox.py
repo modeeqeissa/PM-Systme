@@ -39,7 +39,7 @@ async def test_meeting_logged_enqueues(client, auth_comm):
 
 async def test_concern_logged_and_status_changed_enqueue(client, auth_comm):
     r = await client.post(
-        "/api/v1/concerns", json={"category": "safety"}, headers=auth_comm
+        "/api/v1/concerns", json={"description": "Reported at meeting.", "category": "safety"}, headers=auth_comm
     )
     concern_id = r.json()["id"]
     await client.patch(
@@ -58,7 +58,7 @@ async def test_follow_up_action_created_and_completed_enqueue(client, auth_comm,
     concern = await make_concern()
     r = await client.post(
         f"/api/v1/concerns/{concern.id}/follow-up-actions",
-        json={"assigned_to": str(uuid.uuid4()), "due_date": "2026-12-01"},
+        json={"description": "Install speed bumps.", "assigned_to": str(uuid.uuid4()), "due_date": "2026-12-01"},
         headers=auth_comm,
     )
     action_id = r.json()["id"]
@@ -79,7 +79,7 @@ async def test_recompute_overdue_enqueues(client, auth_comm, make_concern, today
     concern = await make_concern()
     r = await client.post(
         f"/api/v1/concerns/{concern.id}/follow-up-actions",
-        json={"assigned_to": str(uuid.uuid4()), "due_date": "2026-12-01"},
+        json={"description": "Install speed bumps.", "assigned_to": str(uuid.uuid4()), "due_date": "2026-12-01"},
         headers=auth_comm,
     )
     action_id = r.json()["id"]
@@ -96,7 +96,7 @@ async def test_recompute_overdue_enqueues(client, auth_comm, make_concern, today
 async def test_event_id_is_unique(client, auth_comm):
     for i in range(3):
         await client.post(
-            "/api/v1/concerns", json={"category": f"cat-{i}"}, headers=auth_comm
+            "/api/v1/concerns", json={"description": "Reported at meeting.", "category": f"cat-{i}"}, headers=auth_comm
         )
     rows = await _outbox_rows("ConcernLogged")
     ids = [str(r.event_id) for r in rows]
@@ -138,7 +138,7 @@ async def test_recompute_task_sweep_once_matches_endpoint_behavior(
     concern = await make_concern()
     r = await client.post(
         f"/api/v1/concerns/{concern.id}/follow-up-actions",
-        json={"assigned_to": str(uuid.uuid4()), "due_date": "2026-12-01"},
+        json={"description": "Install speed bumps.", "assigned_to": str(uuid.uuid4()), "due_date": "2026-12-01"},
         headers=auth_comm,
     )
     action_id = r.json()["id"]

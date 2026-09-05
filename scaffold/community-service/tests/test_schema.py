@@ -1,4 +1,4 @@
-"""Migration 0001 creates the community_db schema (docs Section 9.3.4)."""
+"""Migrations 0001+0003 create the community_db schema (docs Section 9.3.4)."""
 import psycopg2
 
 from tests.conftest import _PG, TEST_DB
@@ -27,7 +27,8 @@ def test_concern_status_check_constraint():
         with conn.cursor() as cur:
             try:
                 cur.execute(
-                    "INSERT INTO concerns (category, status) VALUES ('safety', 'bogus')"
+                    "INSERT INTO concerns (category, description, status) "
+                    "VALUES ('safety', 'x', 'bogus')"
                 )
                 raise AssertionError("bad status should violate ck_concerns_status")
             except psycopg2.errors.CheckViolation:
