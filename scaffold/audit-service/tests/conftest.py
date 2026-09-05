@@ -135,6 +135,8 @@ _BASE_TOPIC = {
     "ConcernStatusChanged": "community.concern_status_changed",
     "FollowUpActionCreated": "community.follow_up_action_created",
     "FollowUpActionStatusChanged": "community.follow_up_action_status_changed",
+    "IntegrationConfigUpdated": "integration.config_updated",
+    "ExternalSystemCallLogged": "integration.external_system_call_logged",
     "SomethingUnmapped": "case.opened",
 }
 

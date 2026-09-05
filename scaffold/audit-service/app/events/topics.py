@@ -48,6 +48,9 @@ _BASE_TOPICS = (
     "community.concern_status_changed",
     "community.follow_up_action_created",
     "community.follow_up_action_status_changed",
+    # integration-gateway-service (FR-INT-01..05)
+    "integration.config_updated",
+    "integration.external_system_call_logged",
 )
 
 

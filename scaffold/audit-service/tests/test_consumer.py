@@ -130,7 +130,19 @@ async def test_all_event_types_map_to_expected_entity_and_action(client, emit, c
         service="community-service",
     )
 
-    assert await consumer.process_available() == 39
+    # integration-gateway-service (FR-INT-01..05)
+    await emit(
+        "IntegrationConfigUpdated",
+        {"integration_config_id": 1},
+        service="integration-gateway-service",
+    )
+    await emit(
+        "ExternalSystemCallLogged",
+        {"correlation_id": str(uuid.uuid4())},
+        service="integration-gateway-service",
+    )
+
+    assert await consumer.process_available() == 41
     rows = await _audit_rows()
     seen = {(r.entity_type, r.action) for r in rows}
     assert seen == {
@@ -172,6 +184,8 @@ async def test_all_event_types_map_to_expected_entity_and_action(client, emit, c
         ("concern", "update"),
         ("follow_up_action", "create"),
         ("follow_up_action", "update"),
+        ("integration_config", "update"),
+        ("external_system_call", "create"),
     }
     # custody event id was an int in the payload -> stored as text entity_id
     custody = next(r for r in rows if r.entity_type == "custody_event")

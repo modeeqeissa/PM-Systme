@@ -135,6 +135,32 @@ resolve recipient contact details are chosen.
 
 ---
 
+## TD-005 — integration-gateway-service adapters are stubs — nothing real to call
+
+**Is:** integration-gateway-service (FR-INT-01..05) is built as a real
+framework — correlation-id middleware (`app/services/correlation.py`,
+`X-Correlation-Id` on every request), `integration_configs` seeded with the
+four systems docs §9.3.9 names (CAD, NCDB, COURTS, JAIL) with a per-system
+kill switch, `external_system_logs` capturing an inbound + outbound pair per
+call, and every mutating endpoint enqueuing a domain event
+(`IntegrationConfigUpdated`, `ExternalSystemCallLogged`) that audit-service
+consumes into its hash-chained log (FR-INT-05 + FR-AUD-01).
+
+**What's stubbed:** `POST /adapters/{system_name}/call` logs a well-formed
+request/response pair and returns a response explicitly marked `mock: true`
+— there is no outbound HTTP to any real endpoint. The SRS gives only a
+one-line functional description per system, not a request/response contract,
+so the adapter passes the request body through and echoes it rather than
+validating against invented field names (CLAUDE.md rule 5).
+
+**Resolve when:** each external system's real contract is available — then
+per-system request/response schemas, an actual outbound client, auth/mTLS to
+that system, and error/retry handling replace the stub in
+`app/services/adapters.py`. One TD line, four independent unblocks (CAD,
+NCDB, COURTS, JAIL).
+
+---
+
 ## Build order
 Phase 0 pilot: **iam ✅ → case ✅ → evidence ✅ → Kafka + transactional outbox
 ✅ → audit-service ✅ → dashboard-service read models ✅**. Full event pipeline

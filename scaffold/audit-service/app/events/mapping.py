@@ -52,6 +52,9 @@ EVENT_MAP: dict[str, tuple[str, str, str]] = {
     "ConcernStatusChanged": ("concern", "update", "concern_id"),
     "FollowUpActionCreated": ("follow_up_action", "create", "follow_up_action_id"),
     "FollowUpActionStatusChanged": ("follow_up_action", "update", "follow_up_action_id"),
+    # integration-gateway-service (FR-INT-01..05)
+    "IntegrationConfigUpdated": ("integration_config", "update", "integration_config_id"),
+    "ExternalSystemCallLogged": ("external_system_call", "create", "correlation_id"),
 }
 
 

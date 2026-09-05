@@ -1,27 +1,165 @@
 openapi: 3.0.3
 info:
   title: PMP Integration Gateway Service
-  version: "0.1-stub"
+  version: "1.0"
   description: >
-    Phase 1 service — SCHEMA ONLY for now. The integration_db schema (docs Section
-    9.3.9) is migrated and verifiable, but no domain endpoints are
-    implemented yet (FR section 4.9). Only GET /health is live; routers are
-    mounted in app/main.py once the Phase 1 build begins.
+    Implements the FR-INT-01..05 framework (docs Section 4.9) as a deliberate
+    stub — there is nothing real to integrate with yet. FastAPI must generate
+    a schema that matches this contract — treat mismatches as a bug, not a
+    spec update, unless the SRS itself is being revised.
+
+    All endpoints require a bearer access token (RS256 JWT) issued by
+    iam-service; its signature is verified against iam-service's JWKS and the
+    required `integration.<read|write>` permission must be present in the
+    token's `permissions` claim (CLAUDE.md rule 4). Missing/invalid token ->
+    401; valid token without the permission -> 403.
+
+    Every request carries an `X-Correlation-Id` response header (generated if
+    the caller didn't supply one) — FR-INT-05's traceability requirement.
+    `POST /adapters/{system_name}/call` is the only adapter surface: it logs
+    an inbound + outbound pair in external_system_logs, publishes an
+    `ExternalSystemCallLogged` domain event (consumed into audit-service's
+    independent hash-chained log, FR-AUD-01), and returns a response clearly
+    marked `mock: true`. Real per-system request/response contracts (CAD
+    incident sync fields, NCDB identity-check fields, court scheduling
+    fields, jail custody fields) aren't defined anywhere beyond a one-line
+    functional description, so the body is passed through and echoed rather
+    than validated against invented fields (CLAUDE.md rule 5). See TODO.md
+    TD-005 for what unblocks a real implementation per system.
+
+    `integration_configs` is seeded with the four systems docs Section 9.3.9
+    names (CAD, NCDB, COURTS, JAIL) — there is no endpoint to create new
+    ones. `PATCH /integration-configs/{id}` is the per-system kill switch;
+    disabling one makes `POST /adapters/{system_name}/call` fail with 409.
 servers:
   - url: /api/v1
+security:
+  - bearerAuth: []
 paths:
-  /health:
+  /integration-configs:
     get:
-      tags: [ops]
-      summary: Liveness probe
+      summary: List the four named external-system configs
+      description: Requires `integration.read`.
+      security: [{ bearerAuth: [] }]
       responses:
         "200":
-          description: Service is up
+          description: Integration configs
           content:
             application/json:
-              schema:
-                type: object
-                required: [status, service]
-                properties:
-                  status: { type: string, enum: [ok] }
-                  service: { type: string }
+              schema: { type: array, items: { $ref: "#/components/schemas/IntegrationConfig" } }
+        "401": { description: Missing or invalid access token }
+        "403": { description: Caller lacks integration.read }
+
+  /integration-configs/{config_id}:
+    get:
+      summary: Get one integration config
+      description: Requires `integration.read`.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { in: path, name: config_id, required: true, schema: { type: integer } }
+      responses:
+        "200": { description: Integration config, content: { application/json: { schema: { $ref: "#/components/schemas/IntegrationConfig" } } } }
+        "401": { description: Missing or invalid access token }
+        "403": { description: Caller lacks integration.read }
+        "404": { description: No integration config with that id }
+    patch:
+      summary: Toggle a system's kill switch
+      description: >
+        Requires `integration.write`. Publishes an `IntegrationConfigUpdated`
+        domain event.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { in: path, name: config_id, required: true, schema: { type: integer } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/IntegrationConfigUpdate" }
+      responses:
+        "200": { description: Updated, content: { application/json: { schema: { $ref: "#/components/schemas/IntegrationConfig" } } } }
+        "401": { description: Missing or invalid access token }
+        "403": { description: Caller lacks integration.write }
+        "404": { description: No integration config with that id }
+
+  /external-system-logs:
+    get:
+      summary: List logged external-system calls (FR-INT-05)
+      description: Requires `integration.read`.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { in: query, name: system_name, schema: { type: string } }
+        - { in: query, name: direction, schema: { type: string, enum: [inbound, outbound] } }
+        - { in: query, name: correlation_id, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: External system logs
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/ExternalSystemLog" } }
+        "401": { description: Missing or invalid access token }
+        "403": { description: Caller lacks integration.read }
+
+  /adapters/{system_name}/call:
+    post:
+      summary: Call a named external system's stub adapter (FR-INT-01..04)
+      description: >
+        Requires `integration.write`. `system_name` must be one of CAD,
+        NCDB, COURTS, JAIL (case-insensitive). Logs an inbound + outbound
+        pair in external_system_logs and publishes an
+        `ExternalSystemCallLogged` domain event. Returns a stub response
+        marked `mock: true` — there is nothing real to call.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { in: path, name: system_name, required: true, schema: { type: string } }
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { type: object }
+      responses:
+        "200": { description: Stub response, content: { application/json: { schema: { $ref: "#/components/schemas/AdapterCallResponse" } } } }
+        "401": { description: Missing or invalid access token }
+        "403": { description: Caller lacks integration.write }
+        "404": { description: Unknown system_name }
+        "409": { description: This system's integration is disabled (kill switch) }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: RS256 access token issued by iam-service (/api/v1/auth/mfa/verify).
+  schemas:
+    IntegrationConfig:
+      type: object
+      required: [id, system_name, enabled]
+      properties:
+        id: { type: integer }
+        system_name: { type: string }
+        enabled: { type: boolean }
+    IntegrationConfigUpdate:
+      type: object
+      required: [enabled]
+      properties:
+        enabled: { type: boolean }
+
+    ExternalSystemLog:
+      type: object
+      required: [id, system_name, direction, correlation_id]
+      properties:
+        id: { type: integer }
+        system_name: { type: string }
+        direction: { type: string, enum: [inbound, outbound] }
+        correlation_id: { type: string, format: uuid }
+        response_status: { type: integer, nullable: true }
+
+    AdapterCallResponse:
+      type: object
+      required: [mock, system_name, correlation_id, message, request_echo]
+      properties:
+        mock: { type: boolean }
+        system_name: { type: string }
+        correlation_id: { type: string, format: uuid }
+        message: { type: string }
+        request_echo: { type: object }
