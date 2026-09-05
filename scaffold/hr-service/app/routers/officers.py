@@ -24,6 +24,25 @@ def _actor(claims: dict) -> tuple[str, str]:
     return claims.get("sub"), ",".join(claims.get("roles") or [])
 
 
+def _emit_supervisor_changed(session, officer, previous, actor_id, actor_role) -> None:
+    """OfficerSupervisorChanged — notification-service consumes it to know an
+    officer's supervisor for FR-COMM-04 escalation. Payload carries the new
+    (and previous) supervisor_id so a downstream map can be kept current."""
+    enqueue(
+        session,
+        event_type="OfficerSupervisorChanged",
+        aggregate_type="officer",
+        aggregate_id=officer.id,
+        actor_id=actor_id,
+        actor_role=actor_role,
+        payload={
+            "officer_id": str(officer.id),
+            "supervisor_id": str(officer.supervisor_id) if officer.supervisor_id else None,
+            "previous_supervisor_id": str(previous) if previous else None,
+        },
+    )
+
+
 @router.post(
     "",
     response_model=OfficerOut,
@@ -44,12 +63,17 @@ async def create_officer(
     if unit is None:
         raise HTTPException(status_code=404, detail="unit_id does not exist")
 
+    if payload.supervisor_id is not None:
+        if await session.get(Officer, payload.supervisor_id) is None:
+            raise HTTPException(status_code=404, detail="supervisor_id does not exist")
+
     officer = Officer(
         user_id=payload.user_id,
         badge_number=payload.badge_number,
         rank=payload.rank,
         unit_id=payload.unit_id,
         hire_date=payload.hire_date,
+        supervisor_id=payload.supervisor_id,
         status=payload.status.value,
     )
     session.add(officer)
@@ -80,9 +104,12 @@ async def create_officer(
             "badge_number": officer.badge_number,
             "rank": officer.rank,
             "unit_id": str(officer.unit_id),
+            "supervisor_id": str(officer.supervisor_id) if officer.supervisor_id else None,
             "status": officer.status,
         },
     )
+    if officer.supervisor_id is not None:
+        _emit_supervisor_changed(session, officer, None, actor_id, actor_role)
     return OfficerOut.model_validate(officer)
 
 
@@ -164,6 +191,21 @@ async def update_officer(
         officer.status = payload.status.value
         updated_fields.append("status")
 
+    # supervisor_id: "supervisor_id": null in the body clears it, absent leaves
+    # it — distinguished via model_fields_set.
+    supervisor_changed = False
+    previous_supervisor_id = officer.supervisor_id
+    if "supervisor_id" in payload.model_fields_set:
+        if payload.supervisor_id is not None and payload.supervisor_id != officer.id:
+            if await session.get(Officer, payload.supervisor_id) is None:
+                raise HTTPException(status_code=404, detail="supervisor_id does not exist")
+        if payload.supervisor_id == officer.id:
+            raise HTTPException(status_code=422, detail="an officer cannot supervise themselves")
+        if payload.supervisor_id != officer.supervisor_id:
+            officer.supervisor_id = payload.supervisor_id
+            updated_fields.append("supervisor_id")
+            supervisor_changed = True
+
     try:
         await session.flush()
     except IntegrityError:
@@ -181,4 +223,8 @@ async def update_officer(
         actor_role=actor_role,
         payload={"officer_id": str(officer.id), "fields": updated_fields},
     )
+    if supervisor_changed:
+        _emit_supervisor_changed(
+            session, officer, previous_supervisor_id, actor_id, actor_role
+        )
     return OfficerOut.model_validate(officer)

@@ -23,6 +23,7 @@ EVENT_MAP: dict[str, tuple[str, str, str]] = {
     # hr-service (FR-HR-01..07)
     "OfficerCreated": ("officer", "create", "officer_id"),
     "OfficerUpdated": ("officer", "update", "officer_id"),
+    "OfficerSupervisorChanged": ("officer", "update", "officer_id"),
     "UnitCreated": ("unit", "create", "unit_id"),
     "AssignmentRecorded": ("assignment", "create", "assignment_id"),
     "TransferRequested": ("transfer", "create", "transfer_id"),

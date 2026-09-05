@@ -11,6 +11,7 @@ from app.events.config import topic_prefix
 _TOPICS = {
     "OfficerCreated": "hr.officer_created",
     "OfficerUpdated": "hr.officer_updated",
+    "OfficerSupervisorChanged": "hr.officer_supervisor_changed",
     "UnitCreated": "hr.unit_created",
     "AssignmentRecorded": "hr.assignment_recorded",
     "TransferRequested": "hr.transfer_requested",

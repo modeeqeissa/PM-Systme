@@ -64,6 +64,9 @@ async def test_all_event_types_map_to_expected_entity_and_action(client, emit, c
     # hr-service (FR-HR-01..07)
     await emit("OfficerCreated", {"officer_id": str(uuid.uuid4())}, service="hr-service")
     await emit("OfficerUpdated", {"officer_id": str(uuid.uuid4())}, service="hr-service")
+    await emit(
+        "OfficerSupervisorChanged", {"officer_id": str(uuid.uuid4())}, service="hr-service"
+    )
     await emit("UnitCreated", {"unit_id": str(uuid.uuid4())}, service="hr-service")
     await emit("AssignmentRecorded", {"assignment_id": str(uuid.uuid4())}, service="hr-service")
     await emit("TransferRequested", {"transfer_id": str(uuid.uuid4())}, service="hr-service")
@@ -142,7 +145,7 @@ async def test_all_event_types_map_to_expected_entity_and_action(client, emit, c
         service="integration-gateway-service",
     )
 
-    assert await consumer.process_available() == 41
+    assert await consumer.process_available() == 42
     rows = await _audit_rows()
     seen = {(r.entity_type, r.action) for r in rows}
     assert seen == {

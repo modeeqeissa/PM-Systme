@@ -50,6 +50,10 @@ class Officer(Base):
         UUID(as_uuid=True), ForeignKey("units.id"), nullable=False
     )
     hire_date: Mapped[dt.date] = mapped_column(Date, nullable=False)
+    # self-referencing FK — direct supervisor (docs §9.3.6, FR-COMM-04)
+    supervisor_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("officers.id", ondelete="SET NULL")
+    )
     status: Mapped[str] = mapped_column(
         String(20), nullable=False, server_default="active"
     )

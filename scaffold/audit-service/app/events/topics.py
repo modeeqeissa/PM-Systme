@@ -21,6 +21,7 @@ _BASE_TOPICS = (
     # hr-service (FR-HR-01..07)
     "hr.officer_created",
     "hr.officer_updated",
+    "hr.officer_supervisor_changed",
     "hr.unit_created",
     "hr.assignment_recorded",
     "hr.transfer_requested",

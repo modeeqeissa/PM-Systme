@@ -68,7 +68,7 @@ paths:
         "201": { description: Created, content: { application/json: { schema: { $ref: "#/components/schemas/Officer" } } } }
         "401": { description: Missing or invalid access token }
         "403": { description: Caller lacks hr.officer.write }
-        "404": { description: unit_id does not exist }
+        "404": { description: unit_id or supervisor_id does not exist }
         "409": { description: user_id or badge_number already in use }
     get:
       summary: List officers (FR-HR-01)
@@ -101,12 +101,14 @@ paths:
         "403": { description: Caller lacks hr.officer.read }
         "404": { description: No officer with that id }
     patch:
-      summary: Correct badge_number/hire_date/status (FR-HR-01)
+      summary: Correct badge_number/hire_date/status/supervisor_id (FR-HR-01)
       description: >
         Requires `hr.officer.write`. `rank` and `unit_id` are NOT editable
         here — they're owned by the audited promotion (FR-HR-04) and
         transfer-approval (FR-HR-03) workflows. Publishes an `OfficerUpdated`
-        domain event.
+        domain event, plus an `OfficerSupervisorChanged` event if
+        `supervisor_id` changed. A `supervisor_id` that doesn't reference an
+        existing officer is 404; setting it to the officer's own id is 422.
       security: [{ bearerAuth: [] }]
       parameters:
         - { in: path, name: officer_id, required: true, schema: { type: string, format: uuid } }
@@ -119,8 +121,9 @@ paths:
         "200": { description: Updated, content: { application/json: { schema: { $ref: "#/components/schemas/Officer" } } } }
         "401": { description: Missing or invalid access token }
         "403": { description: Caller lacks hr.officer.write }
-        "404": { description: No officer with that id }
+        "404": { description: No officer with that id, or supervisor_id does not exist }
         "409": { description: badge_number already in use }
+        "422": { description: an officer cannot supervise themselves }
 
   /officers/{officer_id}/assignments:
     post:
@@ -542,6 +545,7 @@ components:
         rank: { type: string }
         unit_id: { type: string, format: uuid }
         hire_date: { type: string, format: date }
+        supervisor_id: { type: string, format: uuid, nullable: true, description: "Direct supervisor (another officer); 404 if it doesn't exist." }
         status: { type: string, enum: [active, on_leave, suspended, retired], default: active }
     Officer:
       allOf:
@@ -551,9 +555,13 @@ components:
             id: { type: string, format: uuid }
     OfficerUpdate:
       type: object
+      description: >
+        `supervisor_id: null` clears the supervisor; omitting the key leaves it.
+        A change publishes an `OfficerSupervisorChanged` event.
       properties:
         badge_number: { type: string, nullable: true }
         hire_date: { type: string, format: date, nullable: true }
+        supervisor_id: { type: string, format: uuid, nullable: true }
         status: { type: string, enum: [active, on_leave, suspended, retired], nullable: true }
 
     AssignmentCreate:

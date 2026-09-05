@@ -366,6 +366,7 @@ async def make_officer(make_unit):
                 rank=overrides.get("rank", "Constable"),
                 unit_id=unit.id,
                 hire_date=hire_date,
+                supervisor_id=overrides.get("supervisor_id"),
                 status=overrides.get("status", "active"),
             )
             session.add(officer)

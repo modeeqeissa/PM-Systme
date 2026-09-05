@@ -54,6 +54,7 @@ class OfficerCreate(BaseModel):
     rank: str = Field(max_length=50)
     unit_id: uuid.UUID
     hire_date: dt.date
+    supervisor_id: uuid.UUID | None = None
     status: OfficerStatus = OfficerStatus.active
 
 
@@ -66,11 +67,12 @@ class OfficerOut(BaseModel):
     rank: str
     unit_id: uuid.UUID
     hire_date: dt.date
+    supervisor_id: uuid.UUID | None = None
     status: OfficerStatus
 
 
 class OfficerUpdate(BaseModel):
-    """Corrections to badge_number/hire_date/status only.
+    """Corrections to badge_number/hire_date/status/supervisor_id only.
 
     rank and unit_id are deliberately NOT editable here — they're owned by the
     audited promotion (FR-HR-04) and transfer-approval (FR-HR-03) workflows,
@@ -79,6 +81,7 @@ class OfficerUpdate(BaseModel):
 
     badge_number: str | None = Field(default=None, max_length=20)
     hire_date: dt.date | None = None
+    supervisor_id: uuid.UUID | None = None
     status: OfficerStatus | None = None
 
 

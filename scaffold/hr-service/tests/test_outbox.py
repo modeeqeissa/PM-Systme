@@ -38,6 +38,54 @@ async def test_officer_created_and_unit_created_enqueued(client, auth_hr, make_u
     assert rows[0].body["actor_id"] is not None  # came from the JWT
 
 
+async def test_supervisor_changed_enqueues_on_create_and_patch(client, auth_hr, make_officer):
+    supervisor = await make_officer(rank="Sergeant")
+    officer = await make_officer()
+
+    # set via PATCH
+    await client.patch(
+        f"/api/v1/officers/{officer.id}",
+        json={"supervisor_id": str(supervisor.id)},
+        headers=auth_hr,
+    )
+    rows = await _outbox_rows("OfficerSupervisorChanged")
+    assert len(rows) == 1
+    assert rows[0].topic.endswith("hr.officer_supervisor_changed")
+    assert rows[0].body["payload"]["officer_id"] == str(officer.id)
+    assert rows[0].body["payload"]["supervisor_id"] == str(supervisor.id)
+    assert rows[0].body["payload"]["previous_supervisor_id"] is None
+
+    # no-op PATCH (same supervisor) enqueues nothing new
+    await client.patch(
+        f"/api/v1/officers/{officer.id}",
+        json={"supervisor_id": str(supervisor.id)},
+        headers=auth_hr,
+    )
+    assert len(await _outbox_rows("OfficerSupervisorChanged")) == 1
+
+
+async def test_supervisor_id_in_officer_created_payload(client, auth_hr, make_officer, make_unit):
+    supervisor = await make_officer(rank="Inspector")
+    unit = await make_unit()
+    r = await client.post(
+        "/api/v1/officers",
+        json={
+            "user_id": str(uuid.uuid4()),
+            "badge_number": "OUTBOX-SUP",
+            "rank": "Constable",
+            "unit_id": str(unit.id),
+            "hire_date": "2020-01-01",
+            "supervisor_id": str(supervisor.id),
+        },
+        headers=auth_hr,
+    )
+    officer_id = r.json()["id"]
+    created = await _outbox_rows("OfficerCreated")
+    assert created[-1].body["payload"]["supervisor_id"] == str(supervisor.id)
+    changed = await _outbox_rows("OfficerSupervisorChanged")
+    assert any(c.body["payload"]["officer_id"] == officer_id for c in changed)
+
+
 async def test_discipline_record_create_update_delete_all_enqueue(
     client, auth_hr, make_officer
 ):
