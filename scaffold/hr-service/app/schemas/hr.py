@@ -111,6 +111,7 @@ class TransferOut(BaseModel):
     from_unit_id: uuid.UUID | None = None
     to_unit_id: uuid.UUID | None = None
     status: str
+    requested_at: dt.datetime
     effective_date: dt.date | None = None
     approved_by: uuid.UUID | None = None
     created_at: dt.datetime

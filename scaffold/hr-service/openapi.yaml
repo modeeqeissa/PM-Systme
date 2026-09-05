@@ -585,6 +585,7 @@ components:
             officer_id: { type: string, format: uuid }
             from_unit_id: { type: string, format: uuid, nullable: true }
             status: { type: string, enum: [pending, approved, rejected] }
+            requested_at: { type: string, format: date-time, description: "Set automatically at request time." }
             effective_date: { type: string, format: date, nullable: true, description: "Set on approval; null until then or on rejection." }
             approved_by: { type: string, format: uuid, nullable: true, description: "Set on approval; null until then or on rejection." }
             created_at: { type: string, format: date-time }

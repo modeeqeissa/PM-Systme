@@ -14,6 +14,7 @@ async def test_request_transfer(client, auth_hr, make_officer, make_unit):
     assert body["status"] == "pending"
     assert body["from_unit_id"] == str(officer.unit_id)
     assert body["to_unit_id"] == str(to_unit.id)
+    assert body["requested_at"] is not None  # docs Section 9.3.6: set at request time
     assert body["effective_date"] is None
     assert body["approved_by"] is None
 

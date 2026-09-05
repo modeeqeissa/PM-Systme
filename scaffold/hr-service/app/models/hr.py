@@ -90,6 +90,11 @@ class Transfer(Base):
     status: Mapped[str] = mapped_column(
         String(20), nullable=False, server_default="pending"
     )
+    # docs Section 9.3.6: set automatically at request time, not client-supplied
+    # (unlike created_at, this IS an SRS-tracked domain fact, not bookkeeping).
+    requested_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
     # set only on approval (docs Section 9.3.6) — remain NULL on rejection
     effective_date: Mapped[dt.date | None] = mapped_column(Date)
     approved_by: Mapped[uuid.UUID | None] = mapped_column(
