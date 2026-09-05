@@ -1,27 +1,311 @@
 openapi: 3.0.3
 info:
   title: PMP Community Policing Service
-  version: "0.1-stub"
+  version: "1.0"
   description: >
-    Phase 1 service — SCHEMA ONLY for now. The community_db schema (docs Section
-    9.3.4) is migrated and verifiable, but no domain endpoints are
-    implemented yet (FR section 4.4). Only GET /health is live; routers are
-    mounted in app/main.py once the Phase 1 build begins.
+    Implements FR-COMM-01..04 (docs Section 4.4). FastAPI must generate a
+    schema that matches this contract — treat mismatches as a bug, not a spec
+    update, unless the SRS itself is being revised.
+
+    All endpoints require a bearer access token (RS256 JWT) issued by
+    iam-service; its signature is verified against iam-service's JWKS and the
+    required `community.<read|write>` permission must be present in the
+    token's `permissions` claim (CLAUDE.md rule 4). Missing/invalid token ->
+    401; valid token without the permission -> 403.
+
+    docs Section 9.3.4 gives meetings no attendee-summary column (FR-COMM-01
+    asks for one), concerns no free-text description or reporter identity,
+    and follow_up_actions no description of the action itself — none of
+    these are implemented; flagged as schema gaps rather than invented
+    (CLAUDE.md rule 5).
+
+    `follow_up_actions.status` "overdue" is set only by
+    `POST /follow-up-actions/recompute-status` (FR-COMM-04) or the equivalent
+    periodic background sweep — never accepted from a client via
+    `PATCH /follow-up-actions/{id}` (422 if attempted).
+
+    FR-COMM-05 (summary reporting by category/station/resolution time) is
+    reporting over existing data, not new domain state — like FR-HR-08 and
+    FR-TRAIN-04, it is deferred to dashboard-service rather than built here.
+    Note that concerns raised independently of a meeting (`meeting_id` null)
+    carry no station attribution at all in this schema, which will limit any
+    station-level rollup of them regardless of where it is built.
 servers:
   - url: /api/v1
+security:
+  - bearerAuth: []
 paths:
-  /health:
+  /meetings:
+    post:
+      summary: Log a community meeting (FR-COMM-01)
+      description: Requires `community.write`. Publishes a `MeetingLogged` domain event.
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/MeetingCreate" }
+      responses:
+        "201": { description: Created, content: { application/json: { schema: { $ref: "#/components/schemas/Meeting" } } } }
+        "401": { description: Missing or invalid access token }
+        "403": { description: Caller lacks community.write }
     get:
-      tags: [ops]
-      summary: Liveness probe
+      summary: List community meetings
+      description: Requires `community.read`.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { in: query, name: station_id, schema: { type: string, format: uuid } }
       responses:
         "200":
-          description: Service is up
+          description: Meetings
           content:
             application/json:
-              schema:
-                type: object
-                required: [status, service]
-                properties:
-                  status: { type: string, enum: [ok] }
-                  service: { type: string }
+              schema: { type: array, items: { $ref: "#/components/schemas/Meeting" } }
+        "401": { description: Missing or invalid access token }
+        "403": { description: Caller lacks community.read }
+
+  /meetings/{meeting_id}:
+    get:
+      summary: Get a community meeting
+      description: Requires `community.read`.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { in: path, name: meeting_id, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200": { description: Meeting, content: { application/json: { schema: { $ref: "#/components/schemas/Meeting" } } } }
+        "401": { description: Missing or invalid access token }
+        "403": { description: Caller lacks community.read }
+        "404": { description: No meeting with that id }
+
+  /concerns:
+    post:
+      summary: Log a concern (FR-COMM-02)
+      description: >
+        Requires `community.write`. `meeting_id` is optional — a concern may
+        be raised independently of a meeting. Publishes a `ConcernLogged`
+        domain event.
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ConcernCreate" }
+      responses:
+        "201": { description: Created, content: { application/json: { schema: { $ref: "#/components/schemas/Concern" } } } }
+        "401": { description: Missing or invalid access token }
+        "403": { description: Caller lacks community.write }
+        "404": { description: meeting_id does not exist }
+    get:
+      summary: List concerns
+      description: Requires `community.read`.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { in: query, name: meeting_id, schema: { type: string, format: uuid } }
+        - { in: query, name: category, schema: { type: string } }
+        - { in: query, name: status, schema: { type: string, enum: [open, in_progress, resolved] } }
+      responses:
+        "200":
+          description: Concerns
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/Concern" } }
+        "401": { description: Missing or invalid access token }
+        "403": { description: Caller lacks community.read }
+
+  /concerns/{concern_id}:
+    get:
+      summary: Get a concern
+      description: Requires `community.read`.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { in: path, name: concern_id, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200": { description: Concern, content: { application/json: { schema: { $ref: "#/components/schemas/Concern" } } } }
+        "401": { description: Missing or invalid access token }
+        "403": { description: Caller lacks community.read }
+        "404": { description: No concern with that id }
+    patch:
+      summary: Update a concern's resolution status
+      description: Requires `community.write`. Publishes a `ConcernStatusChanged` domain event.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { in: path, name: concern_id, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ConcernStatusUpdate" }
+      responses:
+        "200": { description: Updated, content: { application/json: { schema: { $ref: "#/components/schemas/Concern" } } } }
+        "401": { description: Missing or invalid access token }
+        "403": { description: Caller lacks community.write }
+        "404": { description: No concern with that id }
+
+  /concerns/{concern_id}/follow-up-actions:
+    post:
+      summary: Create a follow-up action against a concern (FR-COMM-03)
+      description: Requires `community.write`. Publishes a `FollowUpActionCreated` domain event.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { in: path, name: concern_id, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/FollowUpActionCreate" }
+      responses:
+        "201": { description: Created, content: { application/json: { schema: { $ref: "#/components/schemas/FollowUpAction" } } } }
+        "401": { description: Missing or invalid access token }
+        "403": { description: Caller lacks community.write }
+        "404": { description: No concern with that id }
+    get:
+      summary: List follow-up actions for a concern
+      description: Requires `community.read`.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { in: path, name: concern_id, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: Follow-up actions
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/FollowUpAction" } }
+        "401": { description: Missing or invalid access token }
+        "403": { description: Caller lacks community.read }
+        "404": { description: No concern with that id }
+
+  /follow-up-actions:
+    get:
+      summary: List follow-up actions (global queue)
+      description: Requires `community.read`.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { in: query, name: assigned_to, schema: { type: string, format: uuid } }
+        - { in: query, name: status, schema: { type: string, enum: [pending, overdue, completed] } }
+      responses:
+        "200":
+          description: Follow-up actions
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/FollowUpAction" } }
+        "401": { description: Missing or invalid access token }
+        "403": { description: Caller lacks community.read }
+
+  /follow-up-actions/{follow_up_action_id}:
+    get:
+      summary: Get a follow-up action
+      description: Requires `community.read`.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { in: path, name: follow_up_action_id, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200": { description: Follow-up action, content: { application/json: { schema: { $ref: "#/components/schemas/FollowUpAction" } } } }
+        "401": { description: Missing or invalid access token }
+        "403": { description: Caller lacks community.read }
+        "404": { description: No follow-up action with that id }
+    patch:
+      summary: Update a follow-up action's status (FR-COMM-03)
+      description: >
+        Requires `community.write`. Publishes a `FollowUpActionStatusChanged`
+        domain event. `status: overdue` is rejected with 422 — that
+        transition is system-set only, see
+        `POST /follow-up-actions/recompute-status`.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { in: path, name: follow_up_action_id, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/FollowUpActionStatusUpdate" }
+      responses:
+        "200": { description: Updated, content: { application/json: { schema: { $ref: "#/components/schemas/FollowUpAction" } } } }
+        "401": { description: Missing or invalid access token }
+        "403": { description: Caller lacks community.write }
+        "404": { description: No follow-up action with that id }
+        "422": { description: "status 'overdue' is set automatically, not via this endpoint" }
+
+  /follow-up-actions/recompute-status:
+    post:
+      summary: Flag overdue follow-up actions (FR-COMM-04)
+      description: >
+        Requires `community.write`. Flags every pending follow-up action past
+        its due_date as overdue; changed rows publish a
+        `FollowUpActionStatusChanged` domain event (which notification-service
+        consumes to notify the assigned officer). The same recompute also
+        runs on a periodic background sweep — this endpoint is for
+        on-demand/testing use.
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200": { description: Recompute result, content: { application/json: { schema: { $ref: "#/components/schemas/RecomputeResult" } } } }
+        "401": { description: Missing or invalid access token }
+        "403": { description: Caller lacks community.write }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: RS256 access token issued by iam-service (/api/v1/auth/mfa/verify).
+  schemas:
+    MeetingCreate:
+      type: object
+      required: [station_id, facilitator_id, meeting_date, location]
+      properties:
+        station_id: { type: string, format: uuid }
+        facilitator_id: { type: string, format: uuid }
+        meeting_date: { type: string, format: date }
+        location: { type: string }
+    Meeting:
+      allOf:
+        - $ref: "#/components/schemas/MeetingCreate"
+        - type: object
+          properties:
+            id: { type: string, format: uuid }
+
+    ConcernCreate:
+      type: object
+      required: [category]
+      properties:
+        meeting_id: { type: string, format: uuid, nullable: true }
+        category: { type: string }
+    Concern:
+      allOf:
+        - $ref: "#/components/schemas/ConcernCreate"
+        - type: object
+          properties:
+            id: { type: string, format: uuid }
+            status: { type: string, enum: [open, in_progress, resolved] }
+    ConcernStatusUpdate:
+      type: object
+      required: [status]
+      properties:
+        status: { type: string, enum: [open, in_progress, resolved] }
+
+    FollowUpActionCreate:
+      type: object
+      required: [assigned_to, due_date]
+      properties:
+        assigned_to: { type: string, format: uuid }
+        due_date: { type: string, format: date }
+    FollowUpAction:
+      allOf:
+        - $ref: "#/components/schemas/FollowUpActionCreate"
+        - type: object
+          properties:
+            id: { type: string, format: uuid }
+            concern_id: { type: string, format: uuid }
+            status: { type: string, enum: [pending, overdue, completed] }
+    FollowUpActionStatusUpdate:
+      type: object
+      required: [status]
+      properties:
+        status: { type: string, enum: [pending, overdue, completed] }
+
+    RecomputeResult:
+      type: object
+      required: [checked, updated]
+      properties:
+        checked: { type: integer }
+        updated: { type: integer }

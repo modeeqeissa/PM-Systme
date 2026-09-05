@@ -113,7 +113,24 @@ async def test_all_event_types_map_to_expected_entity_and_action(client, emit, c
         service="training-service",
     )
 
-    assert await consumer.process_available() == 34
+    # community-service (FR-COMM-01..04)
+    await emit("MeetingLogged", {"meeting_id": str(uuid.uuid4())}, service="community-service")
+    await emit("ConcernLogged", {"concern_id": str(uuid.uuid4())}, service="community-service")
+    await emit(
+        "ConcernStatusChanged", {"concern_id": str(uuid.uuid4())}, service="community-service"
+    )
+    await emit(
+        "FollowUpActionCreated",
+        {"follow_up_action_id": str(uuid.uuid4())},
+        service="community-service",
+    )
+    await emit(
+        "FollowUpActionStatusChanged",
+        {"follow_up_action_id": str(uuid.uuid4())},
+        service="community-service",
+    )
+
+    assert await consumer.process_available() == 39
     rows = await _audit_rows()
     seen = {(r.entity_type, r.action) for r in rows}
     assert seen == {
@@ -150,6 +167,11 @@ async def test_all_event_types_map_to_expected_entity_and_action(client, emit, c
         ("certification", "delete"),
         ("officer_certification", "create"),
         ("officer_certification", "update"),
+        ("meeting", "create"),
+        ("concern", "create"),
+        ("concern", "update"),
+        ("follow_up_action", "create"),
+        ("follow_up_action", "update"),
     }
     # custody event id was an int in the payload -> stored as text entity_id
     custody = next(r for r in rows if r.entity_type == "custody_event")

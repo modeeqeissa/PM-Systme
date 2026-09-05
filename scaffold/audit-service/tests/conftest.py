@@ -130,6 +130,11 @@ _BASE_TOPIC = {
     "CertificationDeleted": "training.certification_deleted",
     "OfficerCertificationIssued": "training.officer_certification_issued",
     "OfficerCertificationStatusChanged": "training.officer_certification_status_changed",
+    "MeetingLogged": "community.meeting_logged",
+    "ConcernLogged": "community.concern_logged",
+    "ConcernStatusChanged": "community.concern_status_changed",
+    "FollowUpActionCreated": "community.follow_up_action_created",
+    "FollowUpActionStatusChanged": "community.follow_up_action_status_changed",
     "SomethingUnmapped": "case.opened",
 }
 

@@ -46,6 +46,12 @@ EVENT_MAP: dict[str, tuple[str, str, str]] = {
     "OfficerCertificationStatusChanged": (
         "officer_certification", "update", "officer_certification_id",
     ),
+    # community-service (FR-COMM-01..04)
+    "MeetingLogged": ("meeting", "create", "meeting_id"),
+    "ConcernLogged": ("concern", "create", "concern_id"),
+    "ConcernStatusChanged": ("concern", "update", "concern_id"),
+    "FollowUpActionCreated": ("follow_up_action", "create", "follow_up_action_id"),
+    "FollowUpActionStatusChanged": ("follow_up_action", "update", "follow_up_action_id"),
 }
 
 

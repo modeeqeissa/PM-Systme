@@ -42,6 +42,12 @@ _BASE_TOPICS = (
     "training.certification_deleted",
     "training.officer_certification_issued",
     "training.officer_certification_status_changed",
+    # community-service (FR-COMM-01..04)
+    "community.meeting_logged",
+    "community.concern_logged",
+    "community.concern_status_changed",
+    "community.follow_up_action_created",
+    "community.follow_up_action_status_changed",
 )
 
 
