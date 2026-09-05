@@ -1,7 +1,18 @@
 import datetime as dt
 import uuid
 
-from sqlalchemy import BigInteger, CheckConstraint, DateTime, ForeignKey, String, func
+from sqlalchemy import (
+    BigInteger,
+    Boolean,
+    CheckConstraint,
+    DateTime,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+    func,
+)
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -12,6 +23,8 @@ class NotificationTemplate(Base):
     __tablename__ = "notification_templates"
 
     code: Mapped[str] = mapped_column(String(50), primary_key=True)
+    subject: Mapped[str | None] = mapped_column(String(200))
+    body: Mapped[str] = mapped_column(Text, nullable=False)
 
 
 class Notification(Base):
@@ -59,6 +72,28 @@ class OfficerUserMap(Base):
 
     officer_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
     user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    # the officer's direct supervisor (another officer), for FR-COMM-04
+    # escalation — fed by hr.officer_created / hr.officer_supervisor_changed.
+    supervisor_officer_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
+
+
+class NotificationPreference(Base):
+    """Per-user opt-out per channel (FR-NOTIF-02). Absence of a row means the
+    channel is enabled (default)."""
+
+    __tablename__ = "notification_preferences"
+    __table_args__ = (
+        UniqueConstraint("user_id", "channel", name="uq_notification_preferences_user_channel"),
+        CheckConstraint(
+            "channel IN ('email','sms','push','in_app')",
+            name="ck_notification_preferences_channel",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    channel: Mapped[str] = mapped_column(String(20), nullable=False)
+    enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="true")
 
 
 class ConsumedEvent(Base):

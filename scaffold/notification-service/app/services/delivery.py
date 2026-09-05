@@ -15,10 +15,10 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app import config
-from app.models import Notification
+from app.models import Notification, NotificationPreference
 from app.services.channels.base import DeliveryError, NotificationChannel
 from app.services.channels.dev import DevChannel
-from app.services.templates import render
+from app.services.templates import TemplateError, render
 
 log = logging.getLogger("notification-service.delivery-worker")
 
@@ -62,18 +62,38 @@ class DeliveryWorker:
             ).all()
             handled = 0
             for row in rows:
+                # FR-NOTIF-02: a row explicitly disabling this channel for this
+                # user suppresses delivery. No 'suppressed' status exists in
+                # SRS §9.3.8's enum, so it lands as 'failed' with a logged
+                # reason — terminal, not retried.
+                pref = await session.scalar(
+                    select(NotificationPreference).where(
+                        NotificationPreference.user_id == row.recipient_user_id,
+                        NotificationPreference.channel == row.channel,
+                    )
+                )
+                if pref is not None and not pref.enabled:
+                    log.info(
+                        "notification %s suppressed: recipient disabled channel %s",
+                        row.id, row.channel,
+                    )
+                    row.status = "failed"
+                    handled += 1
+                    continue
+
                 channel = self._channels.get(row.channel)
                 try:
                     if channel is None:
                         raise DeliveryError(f"no channel registered for {row.channel!r}")
-                    body = render(row.template_code, row.payload)
+                    subject, body = await render(session, row.template_code, row.payload)
                     await channel.send(
                         recipient_user_id=row.recipient_user_id,
                         channel=row.channel,
+                        subject=subject,
                         rendered_body=body,
                     )
                     row.status = "sent"
-                except (DeliveryError, KeyError):
+                except (DeliveryError, TemplateError):
                     log.exception("delivery failed for notification %s", row.id)
                     row.status = "failed"
                 handled += 1

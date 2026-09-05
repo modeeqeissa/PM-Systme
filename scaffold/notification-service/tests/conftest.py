@@ -111,6 +111,7 @@ _user_ids: dict[str, str] = {}
 
 _BASE_TOPIC = {
     "OfficerCreated": "hr.officer_created",
+    "OfficerSupervisorChanged": "hr.officer_supervisor_changed",
     "TransferStatusChanged": "hr.transfer_status_changed",
     "LeaveStatusChanged": "hr.leave_status_changed",
     "OfficerCertificationStatusChanged": "training.officer_certification_status_changed",
@@ -299,8 +300,8 @@ async def _clean_tables():
     async with engine.begin() as conn:
         await conn.execute(
             text(
-                "TRUNCATE notifications, officer_user_map, consumed_events "
-                "RESTART IDENTITY CASCADE"
+                "TRUNCATE notifications, notification_preferences, officer_user_map, "
+                "consumed_events RESTART IDENTITY CASCADE"
             )
         )
     yield
@@ -361,9 +362,9 @@ async def delivery_worker():
 
 @pytest_asyncio.fixture
 async def make_officer_map():
-    async def _make(officer_id: uuid.UUID, user_id: uuid.UUID) -> OfficerUserMap:
+    async def _make(officer_id: uuid.UUID, user_id: uuid.UUID, supervisor_officer_id: uuid.UUID | None = None) -> OfficerUserMap:
         async with SessionLocal() as session:
-            row = OfficerUserMap(officer_id=officer_id, user_id=user_id)
+            row = OfficerUserMap(officer_id=officer_id, user_id=user_id, supervisor_officer_id=supervisor_officer_id)
             session.add(row)
             await session.commit()
             return row

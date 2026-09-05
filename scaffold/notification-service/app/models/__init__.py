@@ -3,6 +3,7 @@ from app.models.base import Base
 from app.models.notification import (
     ConsumedEvent,
     Notification,
+    NotificationPreference,
     NotificationTemplate,
     OfficerUserMap,
 )
@@ -11,6 +12,7 @@ __all__ = [
     "Base",
     "NotificationTemplate",
     "Notification",
+    "NotificationPreference",
     "OfficerUserMap",
     "ConsumedEvent",
 ]

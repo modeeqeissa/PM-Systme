@@ -11,11 +11,17 @@ class DevChannel:
     def __init__(self) -> None:
         self.sent: list[dict] = []
 
-    async def send(self, *, recipient_user_id, channel: str, rendered_body: str) -> None:
+    async def send(
+        self, *, recipient_user_id, channel: str, subject: str | None, rendered_body: str
+    ) -> None:
         record = {
             "recipient_user_id": str(recipient_user_id),
             "channel": channel,
+            "subject": subject,
             "rendered_body": rendered_body,
         }
         self.sent.append(record)
-        log.info("DEV CHANNEL would send [%s] to %s: %s", channel, recipient_user_id, rendered_body)
+        log.info(
+            "DEV CHANNEL would send [%s] to %s | %s | %s",
+            channel, recipient_user_id, subject or "(no subject)", rendered_body,
+        )

@@ -76,16 +76,23 @@ class NotificationConsumer:
                     break
                 continue
             seen_any = True
-            for _tp, messages in batch.items():
-                for message in messages:
-                    envelope = json.loads(message.value)
-                    async with self._sessionmaker() as session:
-                        try:
-                            if await self._handle(session, envelope):
-                                queued += 1
-                            await session.commit()
-                        except IntegrityError:
-                            await session.rollback()
+            # Order the batch by occurred_at: OfficerSupervisorChanged depends
+            # on its OfficerCreated (different topic), so per-partition order
+            # alone isn't causal. Envelope timestamps are.
+            envelopes = [
+                json.loads(message.value)
+                for _tp, messages in batch.items()
+                for message in messages
+            ]
+            envelopes.sort(key=lambda e: e.get("occurred_at") or "")
+            for envelope in envelopes:
+                async with self._sessionmaker() as session:
+                    try:
+                        if await self._handle(session, envelope):
+                            queued += 1
+                        await session.commit()
+                    except IntegrityError:
+                        await session.rollback()
             await self._consumer.commit()
         return queued
 

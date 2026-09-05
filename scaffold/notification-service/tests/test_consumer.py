@@ -140,6 +140,63 @@ async def test_follow_up_action_overdue_notifies_assigned_officer(
     assert rows[0].recipient_user_id == user_id
 
 
+async def test_officer_supervisor_changed_updates_the_map(client, emit, consumer, make_officer_map):
+    officer_id = uuid.uuid4()
+    supervisor_id = uuid.uuid4()
+    await make_officer_map(officer_id, uuid.uuid4())
+
+    await emit(
+        "OfficerSupervisorChanged",
+        {"officer_id": str(officer_id), "supervisor_id": str(supervisor_id)},
+    )
+    assert await consumer.process_available() == 0
+
+    async with SessionLocal() as s:
+        row = await s.get(OfficerUserMap, officer_id)
+    assert row.supervisor_officer_id == supervisor_id
+
+
+async def test_overdue_follow_up_also_notifies_the_supervisor(client, emit, consumer, make_officer_map):
+    assignee_id = uuid.uuid4()
+    assignee_user = uuid.uuid4()
+    supervisor_id = uuid.uuid4()
+    supervisor_user = uuid.uuid4()
+    await make_officer_map(assignee_id, assignee_user, supervisor_officer_id=supervisor_id)
+    await make_officer_map(supervisor_id, supervisor_user)
+
+    await emit(
+        "FollowUpActionStatusChanged",
+        {
+            "follow_up_action_id": str(uuid.uuid4()),
+            "assigned_to": str(assignee_id),
+            "to_status": "overdue",
+        },
+    )
+    await consumer.process_available()
+
+    rows = await _notifications()
+    by_recipient = {r.recipient_user_id: r for r in rows}
+    assert by_recipient[assignee_user].template_code == "FOLLOWUP_OVERDUE"
+    assert by_recipient[supervisor_user].template_code == "FOLLOWUP_OVERDUE_SUPERVISOR"
+
+
+async def test_supervisor_learned_via_officer_created_supervisor_id(client, emit, consumer):
+    officer_id = uuid.uuid4()
+    supervisor_id = uuid.uuid4()
+    await emit(
+        "OfficerCreated",
+        {
+            "officer_id": str(officer_id),
+            "user_id": str(uuid.uuid4()),
+            "supervisor_id": str(supervisor_id),
+        },
+    )
+    await consumer.process_available()
+    async with SessionLocal() as s:
+        row = await s.get(OfficerUserMap, officer_id)
+    assert row.supervisor_officer_id == supervisor_id
+
+
 async def test_account_locked_out_notifies_directly_by_user_id(client, emit, consumer):
     user_id = str(uuid.uuid4())
     await emit(

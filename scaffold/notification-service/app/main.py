@@ -12,7 +12,7 @@ from fastapi import FastAPI
 
 from app import config, db
 from app.events import NotificationConsumer
-from app.routers import notifications
+from app.routers import notifications, preferences
 from app.services.delivery import DeliveryWorker
 
 API_PREFIX = "/api/v1"
@@ -42,12 +42,12 @@ def create_app() -> FastAPI:
     app = FastAPI(
         title="PMP Notification Service",
         version="1.0",
-        description="Implements FR-NOTIF-01/03 (docs Section 4.8). FR-NOTIF-02 "
-        "(channel preferences) is deferred — no supporting table in SRS §9.3.8.",
+        description="Implements FR-NOTIF-01/02/03 (docs Section 4.8).",
         lifespan=lifespan,
     )
 
     app.include_router(notifications.router, prefix=API_PREFIX)
+    app.include_router(preferences.router, prefix=API_PREFIX)
 
     @app.get("/health", tags=["ops"], include_in_schema=False)
     async def health() -> dict[str, str]:

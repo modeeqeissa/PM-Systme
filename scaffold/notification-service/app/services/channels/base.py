@@ -16,6 +16,8 @@ class DeliveryError(Exception):
 
 
 class NotificationChannel(Protocol):
-    async def send(self, *, recipient_user_id, channel: str, rendered_body: str) -> None:
+    async def send(
+        self, *, recipient_user_id, channel: str, subject: str | None, rendered_body: str
+    ) -> None:
         """Attempt delivery. Raise DeliveryError on failure."""
         ...

@@ -8,6 +8,7 @@ from app.config import topic_prefix
 
 _BASE_TOPICS = (
     "hr.officer_created",
+    "hr.officer_supervisor_changed",
     "hr.transfer_status_changed",
     "hr.leave_status_changed",
     "training.officer_certification_status_changed",

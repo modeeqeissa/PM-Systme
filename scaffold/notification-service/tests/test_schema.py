@@ -1,10 +1,29 @@
-"""Migrations 0001+0002 create the notification_db schema (docs Section 9.3.8)
+"""Migrations 0001..0003 create the notification_db schema (docs Section 9.3.8:
+notifications, notification_templates.subject/body, notification_preferences)
 plus service-local infrastructure (officer_user_map, consumed_events)."""
 import psycopg2
 
 from tests.conftest import _PG, TEST_DB
 
-EXPECTED = {"notification_templates", "notifications", "officer_user_map", "consumed_events"}
+EXPECTED = {
+    "notification_templates",
+    "notifications",
+    "notification_preferences",
+    "officer_user_map",
+    "consumed_events",
+}
+
+
+def test_templates_are_seeded_with_bodies():
+    conn = psycopg2.connect(dbname=TEST_DB, **_PG)
+    try:
+        with conn.cursor() as cur:
+            cur.execute("SELECT code, body FROM notification_templates")
+            rows = dict(cur.fetchall())
+    finally:
+        conn.close()
+    assert "FOLLOWUP_OVERDUE_SUPERVISOR" in rows
+    assert all(body for body in rows.values())  # body is NOT NULL and non-empty
 
 
 def test_expected_tables_exist():

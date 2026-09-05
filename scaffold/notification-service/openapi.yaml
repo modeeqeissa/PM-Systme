@@ -3,24 +3,28 @@ info:
   title: PMP Notification Service
   version: "1.0"
   description: >
-    Implements FR-NOTIF-01/03 (docs Section 4.8). FastAPI must generate a
+    Implements FR-NOTIF-01/02/03 (docs Section 4.8). FastAPI must generate a
     schema that matches this contract — treat mismatches as a bug, not a spec
     update, unless the SRS itself is being revised.
 
     Notifications are never created through this API — a Kafka consumer
     turns domain events from other services into queued notifications (see
     app/events/mapping.py for the event -> template mapping), and a
-    background delivery worker attempts delivery. All endpoints here are
-    read-only and self-scoped: a caller sees only notifications addressed to
-    their own `sub` (identity_db.users.id) — no RBAC permission code gates
-    them, the same way reading one's own profile needs none.
+    background delivery worker renders them from `notification_templates`
+    rows and attempts delivery. All endpoints here are self-scoped: a caller
+    sees and sets only their own rows, by `sub` (identity_db.users.id) — no
+    RBAC permission code gates them, the same way reading one's own profile
+    needs none.
 
-    FR-NOTIF-02 (per-user channel preferences) is deferred: SRS §9.3.8 has no
-    supporting table for it. Every generated notification defaults to
-    channel="in_app" — notification-service also has no access to a
-    recipient's actual email/phone (identity_db is another service's
-    database, CLAUDE.md rule 1), so a real email/SMS channel has nothing to
-    target even once a provider is chosen. See TODO.md TD-004.
+    FR-NOTIF-02: `GET`/`PUT /notification-preferences` let a user opt out of
+    a channel; the delivery worker suppresses a notification whose
+    (recipient, channel) preference is disabled (it lands as `failed` — SRS
+    §9.3.8's status enum has no "suppressed"). Absence of a row = enabled.
+
+    Every generated notification currently uses channel="in_app": the
+    DevChannel is still the only real delivery path, and notification-service
+    has no access to a recipient's email/phone (identity_db is another
+    service's DB, CLAUDE.md rule 1). See TODO.md TD-004.
 servers:
   - url: /api/v1
 security:
@@ -53,6 +57,31 @@ paths:
         "401": { description: Missing or invalid access token }
         "404": { description: No notification with that id for the caller }
 
+  /notification-preferences:
+    get:
+      summary: List the caller's own channel preferences (FR-NOTIF-02)
+      description: Self-scoped. A channel with no row is enabled by default.
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200":
+          description: Preferences
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/NotificationPreference" } }
+        "401": { description: Missing or invalid access token }
+    put:
+      summary: Set the caller's preference for one channel (FR-NOTIF-02)
+      description: Self-scoped upsert on (caller, channel).
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/NotificationPreference" }
+      responses:
+        "200": { description: Saved, content: { application/json: { schema: { $ref: "#/components/schemas/NotificationPreference" } } } }
+        "401": { description: Missing or invalid access token }
+
 components:
   securitySchemes:
     bearerAuth:
@@ -71,3 +100,10 @@ components:
         template_code: { type: string }
         payload: { type: object }
         status: { type: string, enum: [queued, sent, delivered, failed] }
+
+    NotificationPreference:
+      type: object
+      required: [channel, enabled]
+      properties:
+        channel: { type: string, enum: [email, sms, push, in_app] }
+        enabled: { type: boolean }

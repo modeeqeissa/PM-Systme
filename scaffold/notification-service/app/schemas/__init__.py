@@ -1,3 +1,15 @@
-from app.schemas.notification import NotificationChannel, NotificationOut, NotificationStatus
+from app.schemas.notification import (
+    NotificationChannel,
+    NotificationOut,
+    NotificationPreferenceOut,
+    NotificationPreferenceUpsert,
+    NotificationStatus,
+)
 
-__all__ = ["NotificationChannel", "NotificationStatus", "NotificationOut"]
+__all__ = [
+    "NotificationChannel",
+    "NotificationStatus",
+    "NotificationOut",
+    "NotificationPreferenceOut",
+    "NotificationPreferenceUpsert",
+]

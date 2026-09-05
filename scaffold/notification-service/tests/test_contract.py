@@ -42,6 +42,8 @@ def test_no_undocumented_operations():
 _PROTECTED = [
     ("/notifications", "get"),
     ("/notifications/{notification_id}", "get"),
+    ("/notification-preferences", "get"),
+    ("/notification-preferences", "put"),
 ]
 
 

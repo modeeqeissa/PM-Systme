@@ -112,22 +112,23 @@ vendor decision AND a contact-detail resolution path (probably a small
 read-only lookup exposed by iam-service, not direct DB access), neither of
 which exists today.
 
-**Also flagged, not invented:** `notification_templates` (SRS §9.3.8) has
-only a `code` column, no template-body field — rendered text lives in
-`app/services/templates.py` instead, with the DB table seeded (migration
-0002) purely so the `notifications.template_code` FK has rows to reference.
-FR-NOTIF-02 (per-user channel preference) has no supporting table either, so
-every generated notification defaults to `channel="in_app"`.
+**CLOSED 2026-09-06 (corrected SRS + migration 0003):** `notification_
+templates` now has `subject`/`body` — rendered text is DB rows, editable
+without a deploy. `notification_preferences` (FR-NOTIF-02) exists with
+`GET`/`PUT /notification-preferences`; the delivery worker suppresses a
+notification whose (recipient, channel) preference is disabled. Only the
+default channel and the DevChannel below remain.
 
 **Known ordering limitation:** the officer_id -> user_id lookup
-(`app.models.OfficerUserMap`, fed by `hr.officer_created`) depends on that
-event having already been consumed. Kafka only orders messages within one
-topic, not across topics, so on a cold backfill a `TransferStatusChanged`
-(etc.) message can be processed before its officer's `OfficerCreated`
-message from a different topic — observed live during this build. The
-notification is silently dropped with a logged warning rather than retried.
-In steady state (not a cold backfill) this is very unlikely, since an
-officer's creation event will almost always be consumed long before any
+(`app.models.OfficerUserMap`, fed by `hr.officer_created` /
+`hr.officer_supervisor_changed`) depends on those events having been
+consumed. Kafka only orders messages within one topic; the consumer now
+sorts each poll batch by `occurred_at` (as dashboard-service does) which
+makes it causal *within a batch*, but a message split across polls can
+still land early on a cold backfill — the notification is then dropped with
+a logged warning rather than retried. In steady state this is very
+unlikely, since an officer's creation event will almost always be consumed
+long before any
 transfer/leave/certification/follow-up event references them.
 
 **Resolve when:** a channel provider (SMTP/SMS gateway) and a scoped way to
@@ -170,21 +171,23 @@ end-to-end, including `evidence.hash_mismatch` (verify-with-mismatch → audit
 
 Phase 1 **complete (2026-09-06)** — all 10 services fully built:
 hr (FR-HR-01..07), training (FR-TRAIN-01..03), community (FR-COMM-01..04),
-notification (FR-NOTIF-01/03, TD-004), integration-gateway (FR-INT-01..05
-framework, TD-005), plus dashboard `mv_unit_readiness` (FR-DASH-02). 433
-backend tests + web-portal 67, all `/health` up. 41 event types flow into
-audit-service's hash chain.
+notification (FR-NOTIF-01/02/03, TD-004), integration-gateway (FR-INT-01..05
+framework, TD-005), plus dashboard `mv_unit_readiness` (FR-DASH-02). 42
+event types flow into audit-service's hash chain.
 
-**Open, flagged (not forgotten):** TD-004, TD-005 above. Plus schema gaps
-raised during the build, each needing an SRS revision before it can be
-implemented rather than invented:
-- community meetings have no `attendee_summary` (FR-COMM-01 asks for one);
-  concerns have no description / reporter; follow_up_actions have no action
-  description (docs §9.3.4).
-- FR-COMM-04 "notify the assigned officer *and their supervisor*" — hr_db
-  officers has no supervisor/manager relationship, so only the assigned
-  officer is notified.
+**Schema-gap follow-up done 2026-09-06** (corrected SRS pulled first):
+community migration 0003 (meetings.attendee_summary, concerns.description
+NOT NULL + raised_by, follow_up_actions.description NOT NULL); hr migration
+0006 (officers.supervisor_id, self-ref FK) + `OfficerSupervisorChanged`
+event; notification migration 0003 (notification_templates.subject/body —
+text now DB rows; notification_preferences + `GET`/`PUT
+/notification-preferences`, delivery worker honours a disabled channel).
+FR-COMM-04's supervisor-notification path is wired end to end and
+live-verified: an overdue follow-up now produces a `FOLLOWUP_OVERDUE`
+record for the assignee AND a `FOLLOWUP_OVERDUE_SUPERVISOR` record for the
+assignee's supervisor.
+
+**Open, flagged (not forgotten):** TD-004, TD-005 above. Plus:
 - FR-COMM-05 / FR-HR-08 / FR-TRAIN-04 style summary-reporting FRs are
   deferred as reporting-over-existing-data (dashboard-service territory),
   not new domain state.
-- FR-NOTIF-02 (per-user channel preferences) has no table in §9.3.8.

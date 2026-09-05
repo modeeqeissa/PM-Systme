@@ -27,3 +27,15 @@ class NotificationOut(BaseModel):
     template_code: str
     payload: dict
     status: NotificationStatus
+
+
+class NotificationPreferenceOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    channel: NotificationChannel
+    enabled: bool
+
+
+class NotificationPreferenceUpsert(BaseModel):
+    channel: NotificationChannel
+    enabled: bool
