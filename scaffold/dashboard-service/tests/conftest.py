@@ -94,6 +94,15 @@ _BASE_TOPIC = {
     "EvidenceLogged": "evidence.logged",
     "CustodyEventRecorded": "evidence.custody_recorded",
     "EvidenceHashMismatch": "evidence.hash_mismatch",
+    "UnitCreated": "hr.unit_created",
+    "OfficerCreated": "hr.officer_created",
+    "AssignmentRecorded": "hr.assignment_recorded",
+    "TransferRequested": "hr.transfer_requested",
+    "TransferStatusChanged": "hr.transfer_status_changed",
+    "LeaveRequested": "hr.leave_requested",
+    "LeaveStatusChanged": "hr.leave_status_changed",
+    "OfficerCertificationIssued": "training.officer_certification_issued",
+    "OfficerCertificationStatusChanged": "training.officer_certification_status_changed",
 }
 
 
@@ -260,7 +269,8 @@ async def _clean_tables():
         await conn.execute(
             text(
                 "TRUNCATE mv_station_case_kpis, mv_crime_trends, mv_evidence_integrity, "
-                "dash_case, dash_consumed_events RESTART IDENTITY CASCADE"
+                "dash_case, dash_unit, dash_officer, dash_transfer, dash_leave, "
+                "dash_officer_cert, dash_consumed_events RESTART IDENTITY CASCADE"
             )
         )
     yield

@@ -8,7 +8,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.deps import get_session, require_permission
 from app.models import MvCrimeTrends, MvEvidenceIntegrity, MvStationCaseKpis
-from app.schemas import CaseKpis, CrimeTrendBucket, EvidenceIntegrityKpis, KpiSnapshot
+from app.schemas import (
+    CaseKpis,
+    CrimeTrendBucket,
+    EvidenceIntegrityKpis,
+    KpiSnapshot,
+    UnitReadiness,
+)
+from app.services.unit_readiness import unit_readiness
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 
@@ -74,6 +81,11 @@ async def kpi_snapshot(
     )
     logged, pending, mism = (await session.execute(ei)).one()
 
+    readiness = [
+        UnitReadiness(**row)
+        for row in await unit_readiness(session, station_id=station_id)
+    ]
+
     return KpiSnapshot(
         station_id=station_id,
         as_of=dt.datetime.now(dt.timezone.utc),
@@ -84,4 +96,5 @@ async def kpi_snapshot(
             pending_transfer_ack=int(pending),
             hash_mismatches=int(mism),
         ),
+        unit_readiness=readiness,
     )

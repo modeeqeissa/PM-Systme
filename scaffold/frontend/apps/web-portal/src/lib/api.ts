@@ -372,6 +372,16 @@ export interface KpiSnapshot {
     pending_transfer_ack: number;
     hash_mismatches: number;
   };
+  unit_readiness: UnitReadiness[];
+}
+
+export interface UnitReadiness {
+  unit_id: string;
+  station_id: string;
+  unit_name: string | null;
+  total_officers: number;
+  certified_officer_pct: number | null;
+  on_leave_count: number;
 }
 
 export const dashboard = {

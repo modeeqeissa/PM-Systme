@@ -239,10 +239,57 @@ export function DashboardPage() {
             </div>
           </Card>
 
-          <p className="text-xs text-slate-400">
-            mv_unit_readiness is intentionally not shown — hr-service / training-service
-            aren't built yet, so it has no data to project.
-          </p>
+          <Card>
+            <h2 className="mb-1 text-sm font-medium uppercase tracking-wide text-slate-500">
+              Unit readiness
+            </h2>
+            <p className="mb-4 text-xs text-slate-500">
+              mv_unit_readiness (FR-DASH-02) — certification compliance and current leave
+              per unit, from hr-service / training-service events.
+            </p>
+            {snap.unit_readiness.length === 0 ? (
+              <p className="text-sm text-slate-500">No units projected yet.</p>
+            ) : (
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-left text-xs uppercase tracking-wide text-slate-400">
+                    <th className="pb-2 font-medium">Unit</th>
+                    <th className="pb-2 text-right font-medium">Officers</th>
+                    <th className="pb-2 text-right font-medium">Certified</th>
+                    <th className="pb-2 text-right font-medium">On leave</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {[...snap.unit_readiness]
+                    .sort((a, b) =>
+                      (a.unit_name ?? a.unit_id).localeCompare(b.unit_name ?? b.unit_id),
+                    )
+                    .map((u) => (
+                      <tr key={u.unit_id} className="border-t border-slate-100">
+                        <td className="py-2 text-slate-800">
+                          {u.unit_name ?? u.unit_id.slice(0, 8)}
+                        </td>
+                        <td className="py-2 text-right font-mono text-slate-900">
+                          {u.total_officers}
+                        </td>
+                        <td className="py-2 text-right font-mono text-slate-900">
+                          {u.certified_officer_pct === null
+                            ? "—"
+                            : `${u.certified_officer_pct.toFixed(0)}%`}
+                        </td>
+                        <td
+                          className={`py-2 text-right font-mono ${
+                            u.on_leave_count > 0 ? "text-amber-600" : "text-slate-900"
+                          }`}
+                        >
+                          {u.on_leave_count}
+                        </td>
+                      </tr>
+                    ))}
+                </tbody>
+              </table>
+            )}
+          </Card>
         </div>
       )}
     </div>

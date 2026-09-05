@@ -63,6 +63,65 @@ class MvCrimeTrends(Base):
     count: Mapped[int] = mapped_column(BigInteger, nullable=False, server_default="0")
 
 
+class DashUnit(Base):
+    """unit_id -> station_id/name (from hr.unit_created), so mv_unit_readiness
+    can be station-scoped and labelled."""
+
+    __tablename__ = "dash_unit"
+
+    unit_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
+    station_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    name: Mapped[str | None] = mapped_column(String(100))
+
+
+class DashOfficer(Base):
+    """officer_id -> current unit_id (from hr.officer_created / hr.assignment_
+    recorded / an approved hr.transfer_status_changed)."""
+
+    __tablename__ = "dash_officer"
+
+    officer_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
+    unit_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+
+
+class DashTransfer(Base):
+    """transfer_id -> to_unit_id (from hr.transfer_requested, which carries it —
+    hr.transfer_status_changed does not, so it's cached here until approval)."""
+
+    __tablename__ = "dash_transfer"
+
+    transfer_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
+    to_unit_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+
+
+class DashLeave(Base):
+    """One row per leave request (from hr.leave_requested + hr.leave_status_
+    changed). on_leave_count is computed at read time: status='approved' and
+    today within [start_date, end_date]."""
+
+    __tablename__ = "dash_leave"
+
+    leave_request_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
+    officer_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    start_date: Mapped[dt.date] = mapped_column(Date, nullable=False)
+    end_date: Mapped[dt.date] = mapped_column(Date, nullable=False)
+    status: Mapped[str] = mapped_column(String(20), nullable=False)
+
+
+class DashOfficerCert(Base):
+    """One row per issued officer certification (from training.officer_
+    certification_issued + ..._status_changed). An officer counts as certified
+    if any of their rows is 'active' or 'expiring_soon'."""
+
+    __tablename__ = "dash_officer_cert"
+
+    officer_certification_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True
+    )
+    officer_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    status: Mapped[str] = mapped_column(String(20), nullable=False)
+
+
 class MvEvidenceIntegrity(Base):
     """Evidence integrity signals per evidence item.
 

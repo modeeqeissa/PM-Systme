@@ -46,7 +46,7 @@ components:
   schemas:
     KpiSnapshot:
       type: object
-      required: [station_id, as_of, cases, crime_trends, evidence_integrity]
+      required: [station_id, as_of, cases, crime_trends, evidence_integrity, unit_readiness]
       properties:
         station_id: { type: string, format: uuid, nullable: true, description: null = force-wide }
         as_of: { type: string, format: date-time }
@@ -55,6 +55,26 @@ components:
           type: array
           items: { $ref: "#/components/schemas/CrimeTrendBucket" }
         evidence_integrity: { $ref: "#/components/schemas/EvidenceIntegrityKpis" }
+        unit_readiness:
+          type: array
+          items: { $ref: "#/components/schemas/UnitReadiness" }
+
+    UnitReadiness:
+      type: object
+      required: [unit_id, station_id, total_officers, certified_officer_pct, on_leave_count]
+      description: >
+        FR-DASH-02. Computed at read time from incrementally-maintained
+        dimensions (docs Section 9.3.7 mv_unit_readiness). certified_officer_pct
+        is the share of the unit's officers holding at least one non-expired
+        certification; on_leave_count is officers with an approved leave
+        spanning today.
+      properties:
+        unit_id: { type: string, format: uuid }
+        station_id: { type: string, format: uuid }
+        unit_name: { type: string, nullable: true }
+        total_officers: { type: integer }
+        certified_officer_pct: { type: number, nullable: true, description: null when the unit has no officers }
+        on_leave_count: { type: integer }
 
     CaseKpis:
       type: object

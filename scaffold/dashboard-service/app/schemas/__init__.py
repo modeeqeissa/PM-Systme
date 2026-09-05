@@ -3,6 +3,13 @@ from app.schemas.kpis import (
     CrimeTrendBucket,
     EvidenceIntegrityKpis,
     KpiSnapshot,
+    UnitReadiness,
 )
 
-__all__ = ["KpiSnapshot", "CaseKpis", "CrimeTrendBucket", "EvidenceIntegrityKpis"]
+__all__ = [
+    "KpiSnapshot",
+    "CaseKpis",
+    "CrimeTrendBucket",
+    "EvidenceIntegrityKpis",
+    "UnitReadiness",
+]

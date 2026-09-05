@@ -28,6 +28,7 @@ function snapshot(over: Partial<KpiSnapshot> = {}): KpiSnapshot {
       { month: MONTH, incident_type: "theft", count: 3 },
     ],
     evidence_integrity: { evidence_logged: 0, pending_transfer_ack: 0, hash_mismatches: 0 },
+    unit_readiness: [],
     ...over,
   };
 }

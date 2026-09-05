@@ -9,6 +9,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import NIL_UUID
 from app.models import (
     DashCase,
+    DashLeave,
+    DashOfficer,
+    DashOfficerCert,
+    DashTransfer,
+    DashUnit,
     MvCrimeTrends,
     MvEvidenceIntegrity,
     MvStationCaseKpis,
@@ -19,6 +24,17 @@ def _parse_ts(value: str | None) -> dt.datetime:
     if not value:
         return dt.datetime.now(dt.timezone.utc)
     return dt.datetime.fromisoformat(value)
+
+
+async def _upsert_officer_unit(session: AsyncSession, officer_id: str, unit_id: str) -> None:
+    stmt = insert(DashOfficer).values(
+        officer_id=uuid.UUID(officer_id), unit_id=uuid.UUID(unit_id)
+    )
+    await session.execute(
+        stmt.on_conflict_do_update(
+            index_elements=["officer_id"], set_={"unit_id": stmt.excluded.unit_id}
+        )
+    )
 
 
 def _month_start(d: dt.date) -> dt.date:
@@ -120,4 +136,93 @@ async def apply_event(session: AsyncSession, envelope: dict) -> None:
     elif event_type == "EvidenceHashMismatch":
         await _bump_evidence_integrity(
             session, uuid.UUID(payload["evidence_id"]), hash_mismatch_count=1
+        )
+
+    # --- FR-DASH-02 mv_unit_readiness dimensions --------------------------
+    elif event_type == "UnitCreated":
+        stmt = insert(DashUnit).values(
+            unit_id=uuid.UUID(payload["unit_id"]),
+            station_id=uuid.UUID(str(payload.get("station_id") or NIL_UUID)),
+            name=payload.get("name"),
+        )
+        await session.execute(
+            stmt.on_conflict_do_update(
+                index_elements=["unit_id"],
+                set_={"station_id": stmt.excluded.station_id, "name": stmt.excluded.name},
+            )
+        )
+
+    elif event_type == "OfficerCreated":
+        if payload.get("unit_id"):
+            await _upsert_officer_unit(session, payload["officer_id"], payload["unit_id"])
+
+    elif event_type == "AssignmentRecorded":
+        await _upsert_officer_unit(session, payload["officer_id"], payload["unit_id"])
+
+    elif event_type == "TransferRequested":
+        if payload.get("to_unit_id"):
+            await session.execute(
+                insert(DashTransfer)
+                .values(
+                    transfer_id=uuid.UUID(payload["transfer_id"]),
+                    to_unit_id=uuid.UUID(payload["to_unit_id"]),
+                )
+                .on_conflict_do_nothing(index_elements=["transfer_id"])
+            )
+
+    elif event_type == "TransferStatusChanged":
+        if payload.get("to_status") == "approved":
+            transfer = await session.get(
+                DashTransfer, uuid.UUID(payload["transfer_id"])
+            )
+            if transfer is not None:
+                await _upsert_officer_unit(
+                    session, payload["officer_id"], str(transfer.to_unit_id)
+                )
+
+    elif event_type == "LeaveRequested":
+        # start_date/end_date were added to the LeaveRequested payload with
+        # hr-service migration 0004; a pre-0004 event without them can't feed
+        # the date-relative on_leave_count, so it's skipped.
+        if payload.get("start_date") and payload.get("end_date"):
+            await session.execute(
+                insert(DashLeave)
+                .values(
+                    leave_request_id=uuid.UUID(payload["leave_request_id"]),
+                    officer_id=uuid.UUID(payload["officer_id"]),
+                    start_date=dt.date.fromisoformat(payload["start_date"]),
+                    end_date=dt.date.fromisoformat(payload["end_date"]),
+                    status="pending",
+                )
+                .on_conflict_do_nothing(index_elements=["leave_request_id"])
+            )
+
+    elif event_type == "LeaveStatusChanged":
+        await session.execute(
+            update(DashLeave)
+            .where(DashLeave.leave_request_id == uuid.UUID(payload["leave_request_id"]))
+            .values(status=payload["to_status"])
+        )
+
+    elif event_type == "OfficerCertificationIssued":
+        stmt = insert(DashOfficerCert).values(
+            officer_certification_id=uuid.UUID(payload["officer_certification_id"]),
+            officer_id=uuid.UUID(payload["officer_id"]),
+            status=payload["status"],
+        )
+        await session.execute(
+            stmt.on_conflict_do_update(
+                index_elements=["officer_certification_id"],
+                set_={"status": stmt.excluded.status},
+            )
+        )
+
+    elif event_type == "OfficerCertificationStatusChanged":
+        await session.execute(
+            update(DashOfficerCert)
+            .where(
+                DashOfficerCert.officer_certification_id
+                == uuid.UUID(payload["officer_certification_id"])
+            )
+            .values(status=payload["to_status"])
         )

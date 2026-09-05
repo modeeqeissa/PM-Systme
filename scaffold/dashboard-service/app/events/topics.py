@@ -10,6 +10,16 @@ _BASE_TOPICS = (
     "evidence.logged",
     "evidence.custody_recorded",
     "evidence.hash_mismatch",
+    # FR-DASH-02 mv_unit_readiness (hr-service + training-service)
+    "hr.unit_created",
+    "hr.officer_created",
+    "hr.assignment_recorded",
+    "hr.transfer_requested",
+    "hr.transfer_status_changed",
+    "hr.leave_requested",
+    "hr.leave_status_changed",
+    "training.officer_certification_issued",
+    "training.officer_certification_status_changed",
 )
 
 

@@ -23,9 +23,19 @@ class EvidenceIntegrityKpis(BaseModel):
     hash_mismatches: int
 
 
+class UnitReadiness(BaseModel):
+    unit_id: uuid.UUID
+    station_id: uuid.UUID
+    unit_name: str | None = None
+    total_officers: int
+    certified_officer_pct: float | None = None
+    on_leave_count: int
+
+
 class KpiSnapshot(BaseModel):
     station_id: uuid.UUID | None = None
     as_of: dt.datetime
     cases: CaseKpis
     crime_trends: list[CrimeTrendBucket]
     evidence_integrity: EvidenceIntegrityKpis
+    unit_readiness: list[UnitReadiness]

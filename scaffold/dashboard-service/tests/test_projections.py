@@ -90,7 +90,8 @@ async def test_arrest_recorded_increments_when_case_known(client, emit, consumer
     station = str(uuid.uuid4())
     case_id = str(uuid.uuid4())
     await emit("CaseOpened", {"case_id": case_id, "station_id": station,
-                              "opened_at": "2026-09-03T00:00:00+00:00"})
+                              "opened_at": "2026-09-03T00:00:00+00:00"},
+               occurred_at="2026-09-03T00:00:00+00:00")
     await emit("ArrestRecorded", {"arrest_id": str(uuid.uuid4()), "case_id": case_id},
                occurred_at="2026-09-04T00:00:00+00:00")
     assert await consumer.process_available() == 2
