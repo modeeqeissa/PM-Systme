@@ -1,9 +1,10 @@
-"""Migration 0001 creates the notification_db schema (docs Section 9.3.8)."""
+"""Migrations 0001+0002 create the notification_db schema (docs Section 9.3.8)
+plus service-local infrastructure (officer_user_map, consumed_events)."""
 import psycopg2
 
 from tests.conftest import _PG, TEST_DB
 
-EXPECTED = {"notification_templates", "notifications"}
+EXPECTED = {"notification_templates", "notifications", "officer_user_map", "consumed_events"}
 
 
 def test_expected_tables_exist():
@@ -21,13 +22,11 @@ def test_expected_tables_exist():
 
 
 def test_notification_channel_and_template_fk():
+    """CERT_EXPIRING is seeded by migration 0002 (app.services.templates)."""
     conn = psycopg2.connect(dbname=TEST_DB, **_PG)
     conn.autocommit = True
     try:
         with conn.cursor() as cur:
-            cur.execute(
-                "INSERT INTO notification_templates (code) VALUES ('CERT_EXPIRING')"
-            )
             try:
                 cur.execute(
                     "INSERT INTO notifications (recipient_user_id, channel, "

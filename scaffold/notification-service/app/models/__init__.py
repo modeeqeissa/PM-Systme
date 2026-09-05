@@ -1,5 +1,16 @@
-"""ORM for notification_db (docs Section 9.3.8 / migration 0001). Phase 1 stub."""
+"""ORM for notification_db (docs Section 9.3.8 / migration 0001+0002)."""
 from app.models.base import Base
-from app.models.notification import Notification, NotificationTemplate
+from app.models.notification import (
+    ConsumedEvent,
+    Notification,
+    NotificationTemplate,
+    OfficerUserMap,
+)
 
-__all__ = ["Base", "NotificationTemplate", "Notification"]
+__all__ = [
+    "Base",
+    "NotificationTemplate",
+    "Notification",
+    "OfficerUserMap",
+    "ConsumedEvent",
+]

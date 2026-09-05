@@ -1,6 +1,7 @@
+import datetime as dt
 import uuid
 
-from sqlalchemy import BigInteger, CheckConstraint, ForeignKey, String
+from sqlalchemy import BigInteger, CheckConstraint, DateTime, ForeignKey, String, func
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -37,4 +38,35 @@ class Notification(Base):
     payload: Mapped[dict] = mapped_column(JSONB, nullable=False)
     status: Mapped[str] = mapped_column(
         String(20), nullable=False, server_default="queued"
+    )
+
+
+class OfficerUserMap(Base):
+    """officer_id -> user_id lookup (service-local, not SRS-tracked — same
+    category as dashboard-service's dash_case dimension).
+
+    Every domain event that should trigger a notification for an officer
+    (TransferStatusChanged, LeaveStatusChanged, OfficerCertificationStatus
+    Changed, FollowUpActionStatusChanged) carries only officer_id (hr_db.
+    officers.id), but notifications.recipient_user_id must be identity_db.
+    users.id. hr-service's OfficerCreated is the only event that carries
+    both, so this table is fed from it — CLAUDE.md rule 1 (no cross-service
+    DB access) means notification-service cannot just look the mapping up in
+    hr_db directly.
+    """
+
+    __tablename__ = "officer_user_map"
+
+    officer_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
+    user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+
+
+class ConsumedEvent(Base):
+    """Idempotency ledger — one row per Kafka event_id already applied (SRS §9.4)."""
+
+    __tablename__ = "consumed_events"
+
+    event_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
+    consumed_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
     )

@@ -79,11 +79,59 @@ independent Audit Log entry SRS §5.8 requires.
   `audit-service/tests/test_consumer.py` (mapping of all four).
 - No `TODO(TD-003)` code markers existed; none to remove.
 
-### Still deferred with notification-service
-- FR-IAM-05's *notification* half ("notify ICT/security"): notification-service
-  will consume `account.locked_out` once it is built.
+### Still deferred
 - iam-service `POST /users/{id}/password` and role/permission-definition changes
   don't emit yet — add when Phase 1 revisits iam.
+
+**UPDATE 2026-09-05:** FR-IAM-05's notification half is done — notification-
+service now consumes `account.locked_out` directly (`user_id` is already an
+identity_db id, no lookup needed). See TD-004.
+
+---
+
+## TD-004 — notification-service has no real delivery provider — deliberately deferred
+
+**Is:** notification-service (FR-NOTIF-01/03) consumes `hr.transfer_status_
+changed`, `hr.leave_status_changed`, `training.officer_certification_status_
+changed`, `community.follow_up_action_status_changed`, and `account.locked_
+out`, and queues a `notifications` row per relevant transition (mapping in
+`notification-service/app/events/mapping.py`). A background `DeliveryWorker`
+(`app/services/delivery.py`) picks up queued rows and calls a pluggable
+`NotificationChannel.send()` per row.
+
+**Why this is honest, not a cut corner:** no email/SMS/push provider has been
+chosen yet, so the only implementation is `DevChannel` (`app/services/
+channels/dev.py`) — it logs and keeps an in-memory record of what would have
+been sent, then marks the row `sent`. Every `channel` value (email/sms/push/
+in_app) maps to the same `DevChannel` instance until a real one exists.
+Separately — and this would still be true even with a chosen provider —
+notification-service has no access to a recipient's actual email address or
+phone number: that lives in identity_db, and CLAUDE.md rule 1 forbids
+reading another service's database directly. A real integration needs both a
+vendor decision AND a contact-detail resolution path (probably a small
+read-only lookup exposed by iam-service, not direct DB access), neither of
+which exists today.
+
+**Also flagged, not invented:** `notification_templates` (SRS §9.3.8) has
+only a `code` column, no template-body field — rendered text lives in
+`app/services/templates.py` instead, with the DB table seeded (migration
+0002) purely so the `notifications.template_code` FK has rows to reference.
+FR-NOTIF-02 (per-user channel preference) has no supporting table either, so
+every generated notification defaults to `channel="in_app"`.
+
+**Known ordering limitation:** the officer_id -> user_id lookup
+(`app.models.OfficerUserMap`, fed by `hr.officer_created`) depends on that
+event having already been consumed. Kafka only orders messages within one
+topic, not across topics, so on a cold backfill a `TransferStatusChanged`
+(etc.) message can be processed before its officer's `OfficerCreated`
+message from a different topic — observed live during this build. The
+notification is silently dropped with a logged warning rather than retried.
+In steady state (not a cold backfill) this is very unlikely, since an
+officer's creation event will almost always be consumed long before any
+transfer/leave/certification/follow-up event references them.
+
+**Resolve when:** a channel provider (SMTP/SMS gateway) and a scoped way to
+resolve recipient contact details are chosen.
 
 ---
 
