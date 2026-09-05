@@ -36,6 +36,16 @@ EVENT_MAP: dict[str, tuple[str, str, str]] = {
     "PerformanceReviewRecorded": ("performance_review", "create", "performance_review_id"),
     "PerformanceReviewUpdated": ("performance_review", "update", "performance_review_id"),
     "PerformanceReviewDeleted": ("performance_review", "delete", "performance_review_id"),
+    # training-service (FR-TRAIN-01..03)
+    "CourseCreated": ("course", "create", "course_id"),
+    "CourseUpdated": ("course", "update", "course_id"),
+    "CourseDeleted": ("course", "delete", "course_id"),
+    "CertificationCreated": ("certification", "create", "certification_id"),
+    "CertificationDeleted": ("certification", "delete", "certification_id"),
+    "OfficerCertificationIssued": ("officer_certification", "create", "officer_certification_id"),
+    "OfficerCertificationStatusChanged": (
+        "officer_certification", "update", "officer_certification_id",
+    ),
 }
 
 

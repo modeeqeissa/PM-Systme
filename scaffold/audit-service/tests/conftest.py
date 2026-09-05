@@ -123,6 +123,13 @@ _BASE_TOPIC = {
     "PerformanceReviewRecorded": "hr.performance_review_recorded",
     "PerformanceReviewUpdated": "hr.performance_review_updated",
     "PerformanceReviewDeleted": "hr.performance_review_deleted",
+    "CourseCreated": "training.course_created",
+    "CourseUpdated": "training.course_updated",
+    "CourseDeleted": "training.course_deleted",
+    "CertificationCreated": "training.certification_created",
+    "CertificationDeleted": "training.certification_deleted",
+    "OfficerCertificationIssued": "training.officer_certification_issued",
+    "OfficerCertificationStatusChanged": "training.officer_certification_status_changed",
     "SomethingUnmapped": "case.opened",
 }
 

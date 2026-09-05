@@ -1,27 +1,288 @@
 openapi: 3.0.3
 info:
   title: PMP Training & Certification Service
-  version: "0.1-stub"
+  version: "1.0"
   description: >
-    Phase 1 service — SCHEMA ONLY for now. The training_db schema (docs Section
-    9.3.5) is migrated and verifiable, but no domain endpoints are
-    implemented yet (FR section 4.5). Only GET /health is live; routers are
-    mounted in app/main.py once the Phase 1 build begins.
+    Implements FR-TRAIN-01..03 (docs Section 4.5). FastAPI must generate a
+    schema that matches this contract — treat mismatches as a bug, not a spec
+    update, unless the SRS itself is being revised.
+
+    All endpoints require a bearer access token (RS256 JWT) issued by
+    iam-service; its signature is verified against iam-service's JWKS and the
+    required `training.cert.<read|write>` permission must be present in the
+    token's `permissions` claim (CLAUDE.md rule 4). Missing/invalid token ->
+    401; valid token without the permission -> 403.
+
+    `officer_id` on officer_certifications is a logical reference into
+    hr_db.officers (CLAUDE.md rule 1: no cross-service DB access) — it is
+    accepted as given, not validated for existence.
+
+    `expires_date` and `status` on officer_certifications are always computed
+    server-side (issued_date + the linked course's validity_months) and are
+    never accepted from the client. `POST /officer-certifications/recompute-status`
+    re-derives every status against today's date (FR-TRAIN-03); the same
+    recompute also runs on a periodic background sweep.
+
+    FR-TRAIN-04 (station-level compliance view) is dashboard-service's read
+    model, built from the events this service publishes — not an endpoint
+    here. FR-TRAIN-05 (blocking duty assignment on missing/expired
+    certification) has no supporting hook in hr-service's assignment flow yet
+    and is deferred rather than built against invented schema.
 servers:
   - url: /api/v1
+security:
+  - bearerAuth: []
 paths:
-  /health:
+  /courses:
+    post:
+      summary: Add a course to the catalog (FR-TRAIN-01)
+      description: Requires `training.cert.write`. Publishes a `CourseCreated` domain event.
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CourseCreate" }
+      responses:
+        "201": { description: Created, content: { application/json: { schema: { $ref: "#/components/schemas/Course" } } } }
+        "401": { description: Missing or invalid access token }
+        "403": { description: Caller lacks training.cert.write }
     get:
-      tags: [ops]
-      summary: Liveness probe
+      summary: List courses
+      description: Requires `training.cert.read`.
+      security: [{ bearerAuth: [] }]
       responses:
         "200":
-          description: Service is up
+          description: Courses
           content:
             application/json:
-              schema:
-                type: object
-                required: [status, service]
-                properties:
-                  status: { type: string, enum: [ok] }
-                  service: { type: string }
+              schema: { type: array, items: { $ref: "#/components/schemas/Course" } }
+        "401": { description: Missing or invalid access token }
+        "403": { description: Caller lacks training.cert.read }
+
+  /courses/{course_id}:
+    get:
+      summary: Get a course
+      description: Requires `training.cert.read`.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { in: path, name: course_id, required: true, schema: { type: integer } }
+      responses:
+        "200": { description: Course, content: { application/json: { schema: { $ref: "#/components/schemas/Course" } } } }
+        "401": { description: Missing or invalid access token }
+        "403": { description: Caller lacks training.cert.read }
+        "404": { description: No course with that id }
+    patch:
+      summary: Update a course
+      description: Requires `training.cert.write`. Publishes a `CourseUpdated` domain event.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { in: path, name: course_id, required: true, schema: { type: integer } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CourseUpdate" }
+      responses:
+        "200": { description: Updated, content: { application/json: { schema: { $ref: "#/components/schemas/Course" } } } }
+        "401": { description: Missing or invalid access token }
+        "403": { description: Caller lacks training.cert.write }
+        "404": { description: No course with that id }
+    delete:
+      summary: Delete a course
+      description: >
+        Requires `training.cert.write`. Fails with 409 if a certification
+        still references this course. Publishes a `CourseDeleted` domain event.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { in: path, name: course_id, required: true, schema: { type: integer } }
+      responses:
+        "204": { description: Deleted }
+        "401": { description: Missing or invalid access token }
+        "403": { description: Caller lacks training.cert.write }
+        "404": { description: No course with that id }
+        "409": { description: Course still has certifications referencing it }
+
+  /certifications:
+    post:
+      summary: Define a certification issuable on completing a course (FR-TRAIN-01)
+      description: Requires `training.cert.write`. Publishes a `CertificationCreated` domain event.
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CertificationCreate" }
+      responses:
+        "201": { description: Created, content: { application/json: { schema: { $ref: "#/components/schemas/Certification" } } } }
+        "401": { description: Missing or invalid access token }
+        "403": { description: Caller lacks training.cert.write }
+        "404": { description: course_id does not exist }
+    get:
+      summary: List certifications
+      description: Requires `training.cert.read`.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { in: query, name: course_id, schema: { type: integer } }
+      responses:
+        "200":
+          description: Certifications
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/Certification" } }
+        "401": { description: Missing or invalid access token }
+        "403": { description: Caller lacks training.cert.read }
+
+  /certifications/{certification_id}:
+    get:
+      summary: Get a certification
+      description: Requires `training.cert.read`.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { in: path, name: certification_id, required: true, schema: { type: integer } }
+      responses:
+        "200": { description: Certification, content: { application/json: { schema: { $ref: "#/components/schemas/Certification" } } } }
+        "401": { description: Missing or invalid access token }
+        "403": { description: Caller lacks training.cert.read }
+        "404": { description: No certification with that id }
+    delete:
+      summary: Delete a certification
+      description: >
+        Requires `training.cert.write`. Fails with 409 if an officer
+        certification still references this certification. Publishes a
+        `CertificationDeleted` domain event.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { in: path, name: certification_id, required: true, schema: { type: integer } }
+      responses:
+        "204": { description: Deleted }
+        "401": { description: Missing or invalid access token }
+        "403": { description: Caller lacks training.cert.write }
+        "404": { description: No certification with that id }
+        "409": { description: Certification still has officer_certifications referencing it }
+
+  /officer-certifications:
+    post:
+      summary: Issue a certification to an officer (FR-TRAIN-02)
+      description: >
+        Requires `training.cert.write`. `expires_date` and `status` are
+        computed server-side, not accepted from the client. Publishes an
+        `OfficerCertificationIssued` domain event.
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/OfficerCertificationCreate" }
+      responses:
+        "201": { description: Created, content: { application/json: { schema: { $ref: "#/components/schemas/OfficerCertification" } } } }
+        "401": { description: Missing or invalid access token }
+        "403": { description: Caller lacks training.cert.write }
+        "404": { description: certification_id does not exist }
+    get:
+      summary: List issued officer certifications
+      description: Requires `training.cert.read`.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { in: query, name: officer_id, schema: { type: string, format: uuid } }
+        - { in: query, name: status, schema: { type: string, enum: [active, expiring_soon, expired] } }
+      responses:
+        "200":
+          description: Officer certifications
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/OfficerCertification" } }
+        "401": { description: Missing or invalid access token }
+        "403": { description: Caller lacks training.cert.read }
+
+  /officer-certifications/{officer_certification_id}:
+    get:
+      summary: Get an issued officer certification
+      description: Requires `training.cert.read`.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { in: path, name: officer_certification_id, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200": { description: Officer certification, content: { application/json: { schema: { $ref: "#/components/schemas/OfficerCertification" } } } }
+        "401": { description: Missing or invalid access token }
+        "403": { description: Caller lacks training.cert.read }
+        "404": { description: No officer certification with that id }
+
+  /officer-certifications/recompute-status:
+    post:
+      summary: Recompute expiry status for every issued certification (FR-TRAIN-03)
+      description: >
+        Requires `training.cert.write`. Re-derives each officer_certification's
+        status against today's date; changed rows publish an
+        `OfficerCertificationStatusChanged` domain event. The same recompute
+        also runs on a periodic background sweep — this endpoint is for
+        on-demand/testing use.
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200": { description: Recompute result, content: { application/json: { schema: { $ref: "#/components/schemas/RecomputeResult" } } } }
+        "401": { description: Missing or invalid access token }
+        "403": { description: Caller lacks training.cert.write }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: RS256 access token issued by iam-service (/api/v1/auth/mfa/verify).
+  schemas:
+    CourseCreate:
+      type: object
+      required: [title, validity_months]
+      properties:
+        title: { type: string }
+        validity_months: { type: integer, minimum: 1 }
+        mandatory: { type: boolean, default: false }
+    CourseUpdate:
+      type: object
+      properties:
+        title: { type: string, nullable: true }
+        validity_months: { type: integer, minimum: 1, nullable: true }
+        mandatory: { type: boolean, nullable: true }
+    Course:
+      allOf:
+        - $ref: "#/components/schemas/CourseCreate"
+        - type: object
+          properties:
+            id: { type: integer }
+
+    CertificationCreate:
+      type: object
+      required: [course_id]
+      properties:
+        course_id: { type: integer }
+    Certification:
+      allOf:
+        - $ref: "#/components/schemas/CertificationCreate"
+        - type: object
+          properties:
+            id: { type: integer }
+
+    OfficerCertificationCreate:
+      type: object
+      required: [officer_id, certification_id]
+      properties:
+        officer_id: { type: string, format: uuid }
+        certification_id: { type: integer }
+        issued_date: { type: string, format: date, nullable: true, description: "Defaults to today if omitted." }
+    OfficerCertification:
+      allOf:
+        - $ref: "#/components/schemas/OfficerCertificationCreate"
+        - type: object
+          properties:
+            id: { type: string, format: uuid }
+            issued_date: { type: string, format: date }
+            expires_date: { type: string, format: date, description: "Computed server-side: issued_date + course.validity_months." }
+            status: { type: string, enum: [active, expiring_soon, expired] }
+
+    RecomputeResult:
+      type: object
+      required: [checked, updated]
+      properties:
+        checked: { type: integer }
+        updated: { type: integer }

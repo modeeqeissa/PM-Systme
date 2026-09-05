@@ -96,7 +96,24 @@ async def test_all_event_types_map_to_expected_entity_and_action(client, emit, c
         service="hr-service",
     )
 
-    assert await consumer.process_available() == 27
+    # training-service (FR-TRAIN-01..03)
+    await emit("CourseCreated", {"course_id": 1}, service="training-service")
+    await emit("CourseUpdated", {"course_id": 1}, service="training-service")
+    await emit("CourseDeleted", {"course_id": 1}, service="training-service")
+    await emit("CertificationCreated", {"certification_id": 1}, service="training-service")
+    await emit("CertificationDeleted", {"certification_id": 1}, service="training-service")
+    await emit(
+        "OfficerCertificationIssued",
+        {"officer_certification_id": str(uuid.uuid4())},
+        service="training-service",
+    )
+    await emit(
+        "OfficerCertificationStatusChanged",
+        {"officer_certification_id": str(uuid.uuid4())},
+        service="training-service",
+    )
+
+    assert await consumer.process_available() == 34
     rows = await _audit_rows()
     seen = {(r.entity_type, r.action) for r in rows}
     assert seen == {
@@ -126,6 +143,13 @@ async def test_all_event_types_map_to_expected_entity_and_action(client, emit, c
         ("performance_review", "create"),
         ("performance_review", "update"),
         ("performance_review", "delete"),
+        ("course", "create"),
+        ("course", "update"),
+        ("course", "delete"),
+        ("certification", "create"),
+        ("certification", "delete"),
+        ("officer_certification", "create"),
+        ("officer_certification", "update"),
     }
     # custody event id was an int in the payload -> stored as text entity_id
     custody = next(r for r in rows if r.entity_type == "custody_event")

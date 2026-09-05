@@ -34,6 +34,14 @@ _BASE_TOPICS = (
     "hr.performance_review_recorded",
     "hr.performance_review_updated",
     "hr.performance_review_deleted",
+    # training-service (FR-TRAIN-01..03)
+    "training.course_created",
+    "training.course_updated",
+    "training.course_deleted",
+    "training.certification_created",
+    "training.certification_deleted",
+    "training.officer_certification_issued",
+    "training.officer_certification_status_changed",
 )
 
 
