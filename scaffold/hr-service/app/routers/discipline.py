@@ -53,7 +53,11 @@ async def create_discipline_record(
         raise HTTPException(status_code=404, detail="No officer with that id")
 
     record = DisciplineRecord(
-        officer_id=officer_id, confidentiality_level=payload.confidentiality_level
+        officer_id=officer_id,
+        incident_date=payload.incident_date,
+        description=payload.description,
+        outcome=payload.outcome,
+        confidentiality_level=payload.confidentiality_level,
     )
     session.add(record)
     await session.flush()
@@ -67,9 +71,15 @@ async def create_discipline_record(
         aggregate_id=record.id,
         actor_id=actor_id,
         actor_role=actor_role,
+        # description is deliberately NOT included: audit_logs is readable by
+        # anyone with audit.read (e.g. Auditor), a wider audience than
+        # hr.discipline.read — the confidential narrative shouldn't leak into
+        # the audit trail's metadata just because the fact-of-record does.
         payload={
             "discipline_record_id": str(record.id),
             "officer_id": str(officer_id),
+            "incident_date": record.incident_date.isoformat(),
+            "outcome": record.outcome,
             "confidentiality_level": record.confidentiality_level,
         },
     )
@@ -142,6 +152,12 @@ async def update_discipline_record(
     if record is None:
         raise HTTPException(status_code=404, detail="No discipline record with that id")
 
+    if payload.incident_date is not None:
+        record.incident_date = payload.incident_date
+    if payload.description is not None:
+        record.description = payload.description
+    if payload.outcome is not None:
+        record.outcome = payload.outcome
     if payload.confidentiality_level is not None:
         record.confidentiality_level = payload.confidentiality_level
     await session.flush()
@@ -155,9 +171,12 @@ async def update_discipline_record(
         aggregate_id=record.id,
         actor_id=actor_id,
         actor_role=actor_role,
+        # description excluded — see create_discipline_record.
         payload={
             "discipline_record_id": str(record.id),
             "officer_id": str(record.officer_id),
+            "incident_date": record.incident_date.isoformat(),
+            "outcome": record.outcome,
             "confidentiality_level": record.confidentiality_level,
         },
     )

@@ -214,10 +214,14 @@ paths:
     patch:
       summary: Approve or reject a pending transfer (FR-HR-03)
       description: >
-        Requires `hr.transfer.approve`. On approval, updates the officer's
-        current unit and closes/opens the corresponding assignment record
-        (same effect as POST .../assignments). Publishes a
-        `TransferStatusChanged` domain event.
+        Requires `hr.transfer.approve`. approved_by and effective_date are
+        required in the body when approving (422 otherwise; both ignored on
+        rejection, per docs Section 9.3.6 — "set on approval"); approved_by
+        must reference an existing officer (404 otherwise). On approval,
+        updates the officer's current unit and closes/opens the
+        corresponding assignment record, effective on effective_date (same
+        effect as POST .../assignments). Publishes a `TransferStatusChanged`
+        domain event.
       security: [{ bearerAuth: [] }]
       parameters:
         - { in: path, name: transfer_id, required: true, schema: { type: string, format: uuid } }
@@ -230,7 +234,7 @@ paths:
         "200": { description: Updated, content: { application/json: { schema: { $ref: "#/components/schemas/Transfer" } } } }
         "401": { description: Missing or invalid access token }
         "403": { description: Caller lacks hr.transfer.approve }
-        "404": { description: No transfer with that id }
+        "404": { description: No transfer with that id, or approved_by does not exist }
         "409": { description: Transfer is not pending }
 
   /officers/{officer_id}/promotions:
@@ -239,8 +243,10 @@ paths:
       description: >
         Requires `hr.promotion.write`. No approval workflow — `previous_rank`
         is the officer's current rank at the time of recording; the officer's
-        rank is updated immediately. Publishes a `PromotionRecorded` domain
-        event.
+        rank is updated immediately. effective_date and approved_by are
+        required (docs Section 9.3.6, both NOT NULL); approved_by must
+        reference an existing officer (404 otherwise). Publishes a
+        `PromotionRecorded` domain event.
       security: [{ bearerAuth: [] }]
       parameters:
         - { in: path, name: officer_id, required: true, schema: { type: string, format: uuid } }
@@ -253,7 +259,7 @@ paths:
         "201": { description: Recorded, content: { application/json: { schema: { $ref: "#/components/schemas/Promotion" } } } }
         "401": { description: Missing or invalid access token }
         "403": { description: Caller lacks hr.promotion.write }
-        "404": { description: No officer with that id }
+        "404": { description: No officer with that id, or approved_by does not exist }
     get:
       summary: Promotion history for one officer (FR-HR-04)
       description: Requires `hr.promotion.read`.
@@ -327,8 +333,10 @@ paths:
       description: >
         Requires `hr.leave.approve`. Routed to the requester's supervisor per
         FR-HR-05 — enforced here as the `hr.leave.approve` permission, held by
-        Station Commander and HR Officer. Publishes a `LeaveStatusChanged`
-        domain event.
+        Station Commander and HR Officer. approved_by is required in the body
+        when approving (422 otherwise; ignored on rejection, per docs Section
+        9.3.6 — "set on approval") and must reference an existing officer
+        (404 otherwise). Publishes a `LeaveStatusChanged` domain event.
       security: [{ bearerAuth: [] }]
       parameters:
         - { in: path, name: leave_request_id, required: true, schema: { type: string, format: uuid } }
@@ -341,7 +349,7 @@ paths:
         "200": { description: Updated, content: { application/json: { schema: { $ref: "#/components/schemas/LeaveRequest" } } } }
         "401": { description: Missing or invalid access token }
         "403": { description: Caller lacks hr.leave.approve }
-        "404": { description: No leave request with that id }
+        "404": { description: No leave request with that id, or approved_by does not exist }
         "409": { description: Leave request is not pending }
 
   /officers/{officer_id}/discipline-records:
@@ -577,18 +585,30 @@ components:
             officer_id: { type: string, format: uuid }
             from_unit_id: { type: string, format: uuid, nullable: true }
             status: { type: string, enum: [pending, approved, rejected] }
+            effective_date: { type: string, format: date, nullable: true, description: "Set on approval; null until then or on rejection." }
+            approved_by: { type: string, format: uuid, nullable: true, description: "Set on approval; null until then or on rejection." }
             created_at: { type: string, format: date-time }
     TransferStatusUpdate:
       type: object
       required: [status]
+      description: >
+        approved_by and effective_date are required when status is
+        "approved" (422 otherwise); both are ignored on "rejected".
       properties:
         status: { type: string, enum: [approved, rejected] }
+        approved_by: { type: string, format: uuid, nullable: true }
+        effective_date: { type: string, format: date, nullable: true }
 
     PromotionCreate:
       type: object
-      required: [new_rank]
+      required: [new_rank, effective_date, approved_by]
+      description: >
+        No separate approval workflow — effective_date and approved_by are
+        supplied here, at recording time.
       properties:
         new_rank: { type: string }
+        effective_date: { type: string, format: date }
+        approved_by: { type: string, format: uuid }
     Promotion:
       allOf:
         - $ref: "#/components/schemas/PromotionCreate"
@@ -601,9 +621,11 @@ components:
 
     LeaveRequestCreate:
       type: object
-      required: [leave_type]
+      required: [leave_type, start_date, end_date]
       properties:
         leave_type: { type: string }
+        start_date: { type: string, format: date }
+        end_date: { type: string, format: date }
     LeaveRequest:
       allOf:
         - $ref: "#/components/schemas/LeaveRequestCreate"
@@ -612,16 +634,25 @@ components:
             id: { type: string, format: uuid }
             officer_id: { type: string, format: uuid }
             status: { type: string, enum: [pending, approved, rejected] }
+            approved_by: { type: string, format: uuid, nullable: true, description: "Set on approval; null until then or on rejection." }
             created_at: { type: string, format: date-time }
     LeaveStatusUpdate:
       type: object
       required: [status]
+      description: >
+        approved_by is required when status is "approved" (422 otherwise);
+        ignored on "rejected".
       properties:
         status: { type: string, enum: [approved, rejected] }
+        approved_by: { type: string, format: uuid, nullable: true }
 
     DisciplineRecordCreate:
       type: object
+      required: [incident_date, description]
       properties:
+        incident_date: { type: string, format: date }
+        description: { type: string }
+        outcome: { type: string, nullable: true }
         confidentiality_level: { type: string, default: restricted }
     DisciplineRecord:
       allOf:
@@ -634,6 +665,9 @@ components:
     DisciplineRecordUpdate:
       type: object
       properties:
+        incident_date: { type: string, format: date, nullable: true }
+        description: { type: string, nullable: true }
+        outcome: { type: string, nullable: true }
         confidentiality_level: { type: string, nullable: true }
 
     PerformanceReviewCreate:
@@ -643,6 +677,7 @@ components:
         reviewer_id: { type: string, format: uuid }
         period: { type: string }
         score: { type: number, format: float, minimum: 0, maximum: 99.99 }
+        comments: { type: string, nullable: true }
     PerformanceReview:
       allOf:
         - $ref: "#/components/schemas/PerformanceReviewCreate"
@@ -656,3 +691,4 @@ components:
       properties:
         period: { type: string, nullable: true }
         score: { type: number, format: float, minimum: 0, maximum: 99.99, nullable: true }
+        comments: { type: string, nullable: true }

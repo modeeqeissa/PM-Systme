@@ -2,7 +2,9 @@
 
 No approval workflow / status column on promotions (unlike transfers/leave) —
 matches docs Section 9.3.6 exactly, so a promotion is recorded as already
-decided and immediately updates the officer's rank.
+decided and immediately updates the officer's rank. effective_date and
+approved_by are therefore supplied at recording time rather than by a
+separate approve step.
 """
 import uuid
 
@@ -29,7 +31,7 @@ def _actor(claims: dict) -> tuple[str, str]:
     responses={
         401: {"description": "Missing or invalid access token"},
         403: {"description": "Caller lacks hr.promotion.write"},
-        404: {"description": "No officer with that id"},
+        404: {"description": "No officer with that id, or approved_by does not exist"},
     },
 )
 async def record_promotion(
@@ -41,10 +43,17 @@ async def record_promotion(
     officer = await session.get(Officer, officer_id)
     if officer is None:
         raise HTTPException(status_code=404, detail="No officer with that id")
+    approver = await session.get(Officer, payload.approved_by)
+    if approver is None:
+        raise HTTPException(status_code=404, detail="approved_by does not exist")
 
     previous_rank = officer.rank
     promotion = Promotion(
-        officer_id=officer_id, previous_rank=previous_rank, new_rank=payload.new_rank
+        officer_id=officer_id,
+        previous_rank=previous_rank,
+        new_rank=payload.new_rank,
+        effective_date=payload.effective_date,
+        approved_by=payload.approved_by,
     )
     session.add(promotion)
     officer.rank = payload.new_rank
@@ -64,6 +73,8 @@ async def record_promotion(
             "officer_id": str(officer_id),
             "previous_rank": previous_rank,
             "new_rank": payload.new_rank,
+            "effective_date": payload.effective_date.isoformat(),
+            "approved_by": str(payload.approved_by),
         },
     )
     return PromotionOut.model_validate(promotion)

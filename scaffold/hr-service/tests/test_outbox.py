@@ -43,7 +43,9 @@ async def test_discipline_record_create_update_delete_all_enqueue(
 ):
     officer = await make_officer()
     r = await client.post(
-        f"/api/v1/officers/{officer.id}/discipline-records", json={}, headers=auth_hr
+        f"/api/v1/officers/{officer.id}/discipline-records",
+        json={"incident_date": "2026-08-15", "description": "Late for shift."},
+        headers=auth_hr,
     )
     record_id = r.json()["id"]
     await client.patch(
@@ -60,12 +62,17 @@ async def test_discipline_record_create_update_delete_all_enqueue(
     assert created[0].aggregate_id == record_id
     assert updated[0].body["payload"]["confidentiality_level"] == "confidential"
     assert deleted[0].aggregate_id == record_id
+    # the confidential narrative never reaches the (more widely-readable) audit
+    # trail — only the fact-of-record does.
+    assert "description" not in created[0].body["payload"]
+    assert "description" not in updated[0].body["payload"]
 
 
 async def test_transfer_requested_and_status_changed_enqueue(
     client, auth_hr, auth_cmd, make_officer, make_unit
 ):
     officer = await make_officer()
+    approver = await make_officer()
     to_unit = await make_unit()
     r = await client.post(
         f"/api/v1/officers/{officer.id}/transfers",
@@ -74,7 +81,13 @@ async def test_transfer_requested_and_status_changed_enqueue(
     )
     transfer_id = r.json()["id"]
     await client.patch(
-        f"/api/v1/transfers/{transfer_id}", json={"status": "approved"}, headers=auth_cmd
+        f"/api/v1/transfers/{transfer_id}",
+        json={
+            "status": "approved",
+            "approved_by": str(approver.id),
+            "effective_date": "2026-10-01",
+        },
+        headers=auth_cmd,
     )
 
     requested = await _outbox_rows("TransferRequested")
@@ -83,6 +96,8 @@ async def test_transfer_requested_and_status_changed_enqueue(
     assert len(changed) == 1
     assert changed[0].body["payload"]["from_status"] == "pending"
     assert changed[0].body["payload"]["to_status"] == "approved"
+    assert changed[0].body["payload"]["approved_by"] == str(approver.id)
+    assert changed[0].body["payload"]["effective_date"] == "2026-10-01"
     # actor on the approval event is the approving Station Commander, not HR
     assert "Station Commander" in (changed[0].body["actor_role"] or "")
 
@@ -91,6 +106,7 @@ async def test_failed_transfer_decision_writes_no_new_outbox_row(
     client, auth_hr, auth_cmd, make_officer, make_unit
 ):
     officer = await make_officer()
+    approver = await make_officer()
     to_unit = await make_unit()
     r = await client.post(
         f"/api/v1/officers/{officer.id}/transfers",
@@ -99,7 +115,13 @@ async def test_failed_transfer_decision_writes_no_new_outbox_row(
     )
     transfer_id = r.json()["id"]
     await client.patch(
-        f"/api/v1/transfers/{transfer_id}", json={"status": "approved"}, headers=auth_cmd
+        f"/api/v1/transfers/{transfer_id}",
+        json={
+            "status": "approved",
+            "approved_by": str(approver.id),
+            "effective_date": "2026-10-01",
+        },
+        headers=auth_cmd,
     )
     assert len(await _outbox_rows("TransferStatusChanged")) == 1
 
@@ -112,10 +134,15 @@ async def test_failed_transfer_decision_writes_no_new_outbox_row(
 
 async def test_promotion_and_performance_review_enqueue(client, auth_hr, make_officer):
     officer = await make_officer()
+    approver = await make_officer()
     reviewer = await make_officer()
     r1 = await client.post(
         f"/api/v1/officers/{officer.id}/promotions",
-        json={"new_rank": "Sergeant"},
+        json={
+            "new_rank": "Sergeant",
+            "effective_date": "2026-10-01",
+            "approved_by": str(approver.id),
+        },
         headers=auth_hr,
     )
     r2 = await client.post(

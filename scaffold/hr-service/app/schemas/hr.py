@@ -1,17 +1,16 @@
 """Request/response models for hr-service — matches openapi.yaml exactly.
 
-Field surface intentionally mirrors docs Section 9.3.6 (hr_db) column-for-
-column. FR-HR-03/04/05/06/07 describe richer fields (effective dates,
-approving officer, leave dates, incident description, review comments) that
-Section 9.3.6 does not persist — that's a gap between the FR narrative and the
-migrated schema, not something to silently invent here (CLAUDE.md rule 5).
+Field surface mirrors docs Section 9.3.6 (hr_db) column-for-column. The SRS
+was corrected (2026-09-05) to add the effective-date/approver/incident-detail
+columns FR-HR-03..07 always described; this schema — and migration 0004 —
+catches up to that.
 """
 import datetime as dt
 import decimal
 import enum
 import uuid
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class OfficerStatus(str, enum.Enum):
@@ -112,16 +111,34 @@ class TransferOut(BaseModel):
     from_unit_id: uuid.UUID | None = None
     to_unit_id: uuid.UUID | None = None
     status: str
+    effective_date: dt.date | None = None
+    approved_by: uuid.UUID | None = None
     created_at: dt.datetime
 
 
 class TransferStatusUpdate(BaseModel):
     status: ApprovalStatus
+    # required when approving; ignored (left NULL) on rejection — docs
+    # Section 9.3.6: "set on approval".
+    approved_by: uuid.UUID | None = None
+    effective_date: dt.date | None = None
+
+    @model_validator(mode="after")
+    def _require_fields_on_approval(self) -> "TransferStatusUpdate":
+        if self.status == ApprovalStatus.approved and (
+            self.approved_by is None or self.effective_date is None
+        ):
+            raise ValueError("approved_by and effective_date are required when approving")
+        return self
 
 
 # --- promotions (FR-HR-04) ----------------------------------------------------
 class PromotionCreate(BaseModel):
     new_rank: str = Field(max_length=50)
+    # No separate approval workflow (no status column) — supplied here
+    # instead, both required (docs Section 9.3.6, both NOT NULL).
+    effective_date: dt.date
+    approved_by: uuid.UUID
 
 
 class PromotionOut(BaseModel):
@@ -131,12 +148,22 @@ class PromotionOut(BaseModel):
     officer_id: uuid.UUID
     previous_rank: str
     new_rank: str
+    effective_date: dt.date
+    approved_by: uuid.UUID
     created_at: dt.datetime
 
 
 # --- leave requests (FR-HR-05) ------------------------------------------------
 class LeaveRequestCreate(BaseModel):
     leave_type: str = Field(max_length=30)
+    start_date: dt.date
+    end_date: dt.date
+
+    @model_validator(mode="after")
+    def _dates_in_order(self) -> "LeaveRequestCreate":
+        if self.end_date < self.start_date:
+            raise ValueError("end_date must not be before start_date")
+        return self
 
 
 class LeaveRequestOut(BaseModel):
@@ -145,16 +172,31 @@ class LeaveRequestOut(BaseModel):
     id: uuid.UUID
     officer_id: uuid.UUID
     leave_type: str
+    start_date: dt.date
+    end_date: dt.date
     status: str
+    approved_by: uuid.UUID | None = None
     created_at: dt.datetime
 
 
 class LeaveStatusUpdate(BaseModel):
     status: ApprovalStatus
+    # required when approving; ignored (left NULL) on rejection — docs
+    # Section 9.3.6: "set on approval".
+    approved_by: uuid.UUID | None = None
+
+    @model_validator(mode="after")
+    def _require_approved_by_on_approval(self) -> "LeaveStatusUpdate":
+        if self.status == ApprovalStatus.approved and self.approved_by is None:
+            raise ValueError("approved_by is required when approving")
+        return self
 
 
 # --- discipline records (FR-HR-06) — confidentiality-gated --------------------
 class DisciplineRecordCreate(BaseModel):
+    incident_date: dt.date
+    description: str
+    outcome: str | None = Field(default=None, max_length=100)
     confidentiality_level: str = Field(default="restricted", max_length=20)
 
 
@@ -163,11 +205,17 @@ class DisciplineRecordOut(BaseModel):
 
     id: uuid.UUID
     officer_id: uuid.UUID
+    incident_date: dt.date
+    description: str
+    outcome: str | None = None
     confidentiality_level: str
     created_at: dt.datetime
 
 
 class DisciplineRecordUpdate(BaseModel):
+    incident_date: dt.date | None = None
+    description: str | None = None
+    outcome: str | None = Field(default=None, max_length=100)
     confidentiality_level: str | None = Field(default=None, max_length=20)
 
 
@@ -178,6 +226,7 @@ class PerformanceReviewCreate(BaseModel):
     # NUMERIC(4,2) tops out at 99.99; no range is specified in docs Section
     # 9.3.6 beyond that, so 0-99.99 is this build's assumption, not the SRS's.
     score: decimal.Decimal = Field(ge=0, le=decimal.Decimal("99.99"), decimal_places=2)
+    comments: str | None = None
 
 
 class PerformanceReviewOut(BaseModel):
@@ -188,6 +237,7 @@ class PerformanceReviewOut(BaseModel):
     reviewer_id: uuid.UUID
     period: str
     score: decimal.Decimal
+    comments: str | None = None
     created_at: dt.datetime
 
 
@@ -196,3 +246,4 @@ class PerformanceReviewUpdate(BaseModel):
     score: decimal.Decimal | None = Field(
         default=None, ge=0, le=decimal.Decimal("99.99"), decimal_places=2
     )
+    comments: str | None = None

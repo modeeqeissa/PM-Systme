@@ -4,7 +4,6 @@ Two routers share this module: one nested under an officer (request +
 history), one top-level (the approver's queue + the approve/reject action,
 found by transfer id rather than officer id).
 """
-import datetime as dt
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -136,7 +135,7 @@ async def list_transfers(
     responses={
         401: {"description": "Missing or invalid access token"},
         403: {"description": "Caller lacks hr.transfer.approve"},
-        404: {"description": "No transfer with that id"},
+        404: {"description": "No transfer with that id, or approved_by does not exist"},
         409: {"description": "Transfer is not pending"},
     },
 )
@@ -157,14 +156,21 @@ async def decide_transfer(
     from_status = transfer.status
     transfer.status = payload.status.value
 
-    if payload.status == ApprovalStatus.approved and transfer.to_unit_id is not None:
-        officer = await session.get(Officer, transfer.officer_id)
-        await reassign(
-            session,
-            officer,
-            unit_id=transfer.to_unit_id,
-            start_date=dt.date.today(),
-        )
+    if payload.status == ApprovalStatus.approved:
+        approver = await session.get(Officer, payload.approved_by)
+        if approver is None:
+            raise HTTPException(status_code=404, detail="approved_by does not exist")
+        transfer.approved_by = payload.approved_by
+        transfer.effective_date = payload.effective_date
+
+        if transfer.to_unit_id is not None:
+            officer = await session.get(Officer, transfer.officer_id)
+            await reassign(
+                session,
+                officer,
+                unit_id=transfer.to_unit_id,
+                start_date=payload.effective_date,
+            )
 
     await session.flush()
     await session.refresh(transfer)
@@ -182,6 +188,10 @@ async def decide_transfer(
             "officer_id": str(transfer.officer_id),
             "from_status": from_status,
             "to_status": transfer.status,
+            "effective_date": transfer.effective_date.isoformat()
+            if transfer.effective_date
+            else None,
+            "approved_by": str(transfer.approved_by) if transfer.approved_by else None,
         },
     )
     return TransferOut.model_validate(transfer)

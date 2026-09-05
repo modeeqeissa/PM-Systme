@@ -52,6 +52,7 @@ async def create_performance_review(
         reviewer_id=payload.reviewer_id,
         period=payload.period,
         score=payload.score,
+        comments=payload.comments,
     )
     session.add(review)
     await session.flush()
@@ -71,6 +72,7 @@ async def create_performance_review(
             "reviewer_id": str(payload.reviewer_id),
             "period": review.period,
             "score": str(review.score),
+            "comments": review.comments,
         },
     )
     return PerformanceReviewOut.model_validate(review)
@@ -146,6 +148,8 @@ async def update_performance_review(
         review.period = payload.period
     if payload.score is not None:
         review.score = payload.score
+    if payload.comments is not None:
+        review.comments = payload.comments
     await session.flush()
     await session.refresh(review)
 
@@ -162,6 +166,7 @@ async def update_performance_review(
             "officer_id": str(review.officer_id),
             "period": review.period,
             "score": str(review.score),
+            "comments": review.comments,
         },
     )
     return PerformanceReviewOut.model_validate(review)

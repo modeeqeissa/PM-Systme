@@ -1,7 +1,7 @@
 import datetime as dt
 import uuid
 
-from sqlalchemy import CheckConstraint, Date, DateTime, ForeignKey, Numeric, String, func
+from sqlalchemy import CheckConstraint, Date, DateTime, ForeignKey, Numeric, String, Text, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -90,6 +90,11 @@ class Transfer(Base):
     status: Mapped[str] = mapped_column(
         String(20), nullable=False, server_default="pending"
     )
+    # set only on approval (docs Section 9.3.6) — remain NULL on rejection
+    effective_date: Mapped[dt.date | None] = mapped_column(Date)
+    approved_by: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("officers.id")
+    )
     created_at: Mapped[dt.datetime] = _created_at()
 
 
@@ -102,6 +107,12 @@ class Promotion(Base):
     )
     previous_rank: Mapped[str] = mapped_column(String(50), nullable=False)
     new_rank: Mapped[str] = mapped_column(String(50), nullable=False)
+    # no separate approval workflow (no status column) — supplied at recording
+    # time instead (docs Section 9.3.6, both NOT NULL)
+    effective_date: Mapped[dt.date] = mapped_column(Date, nullable=False)
+    approved_by: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("officers.id"), nullable=False
+    )
     created_at: Mapped[dt.datetime] = _created_at()
 
 
@@ -119,8 +130,14 @@ class LeaveRequest(Base):
         UUID(as_uuid=True), ForeignKey("officers.id"), nullable=False
     )
     leave_type: Mapped[str] = mapped_column(String(30), nullable=False)
+    start_date: Mapped[dt.date] = mapped_column(Date, nullable=False)
+    end_date: Mapped[dt.date] = mapped_column(Date, nullable=False)
     status: Mapped[str] = mapped_column(
         String(20), nullable=False, server_default="pending"
+    )
+    # set only on approval (docs Section 9.3.6) — remains NULL on rejection
+    approved_by: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("officers.id")
     )
     created_at: Mapped[dt.datetime] = _created_at()
 
@@ -132,6 +149,9 @@ class DisciplineRecord(Base):
     officer_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("officers.id"), nullable=False
     )
+    incident_date: Mapped[dt.date] = mapped_column(Date, nullable=False)
+    description: Mapped[str] = mapped_column(Text, nullable=False)
+    outcome: Mapped[str | None] = mapped_column(String(100))
     # drives additional RBAC / audit scrutiny (docs Section 9.3.6)
     confidentiality_level: Mapped[str] = mapped_column(
         String(20), nullable=False, server_default="restricted"
@@ -151,4 +171,5 @@ class PerformanceReview(Base):
     )
     period: Mapped[str] = mapped_column(String(20), nullable=False)
     score: Mapped[float] = mapped_column(Numeric(4, 2), nullable=False)
+    comments: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[dt.datetime] = _created_at()

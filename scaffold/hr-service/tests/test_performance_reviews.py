@@ -15,6 +15,54 @@ async def test_create_performance_review(client, auth_hr, make_officer):
     assert body["reviewer_id"] == str(reviewer.id)
 
 
+async def test_create_performance_review_with_comments(client, auth_hr, make_officer):
+    officer = await make_officer()
+    reviewer = await make_officer(rank="Inspector")
+    r = await client.post(
+        f"/api/v1/officers/{officer.id}/performance-reviews",
+        json={
+            "reviewer_id": str(reviewer.id),
+            "period": "2026-H1",
+            "score": "87.50",
+            "comments": "Consistently exceeds expectations on case throughput.",
+        },
+        headers=auth_hr,
+    )
+    assert r.status_code == 201, r.text
+    assert r.json()["comments"] == "Consistently exceeds expectations on case throughput."
+
+
+async def test_create_performance_review_comments_default_to_null(client, auth_hr, make_officer):
+    officer = await make_officer()
+    reviewer = await make_officer()
+    r = await client.post(
+        f"/api/v1/officers/{officer.id}/performance-reviews",
+        json={"reviewer_id": str(reviewer.id), "period": "2026-H1", "score": "80"},
+        headers=auth_hr,
+    )
+    assert r.status_code == 201, r.text
+    assert r.json()["comments"] is None
+
+
+async def test_patch_performance_review_comments(client, auth_hr, make_officer):
+    officer = await make_officer()
+    reviewer = await make_officer()
+    r = await client.post(
+        f"/api/v1/officers/{officer.id}/performance-reviews",
+        json={"reviewer_id": str(reviewer.id), "period": "2026-H1", "score": "80"},
+        headers=auth_hr,
+    )
+    review_id = r.json()["id"]
+
+    r = await client.patch(
+        f"/api/v1/performance-reviews/{review_id}",
+        json={"comments": "Follow-up added after mid-cycle check-in."},
+        headers=auth_hr,
+    )
+    assert r.status_code == 200
+    assert r.json()["comments"] == "Follow-up added after mid-cycle check-in."
+
+
 async def test_create_performance_review_unknown_officer_404(client, auth_hr, make_officer):
     reviewer = await make_officer()
     r = await client.post(

@@ -8,7 +8,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.deps import get_session, require_permission
 from app.events import enqueue
 from app.models import LeaveRequest, Officer
-from app.schemas import LeaveRequestCreate, LeaveRequestOut, LeaveStatusUpdate, WorkflowStatus
+from app.schemas import (
+    ApprovalStatus,
+    LeaveRequestCreate,
+    LeaveRequestOut,
+    LeaveStatusUpdate,
+    WorkflowStatus,
+)
 
 by_officer_router = APIRouter(
     prefix="/officers/{officer_id}/leave-requests", tags=["leave"]
@@ -40,7 +46,13 @@ async def request_leave(
     if officer is None:
         raise HTTPException(status_code=404, detail="No officer with that id")
 
-    leave = LeaveRequest(officer_id=officer_id, leave_type=payload.leave_type, status="pending")
+    leave = LeaveRequest(
+        officer_id=officer_id,
+        leave_type=payload.leave_type,
+        start_date=payload.start_date,
+        end_date=payload.end_date,
+        status="pending",
+    )
     session.add(leave)
     await session.flush()
     await session.refresh(leave)
@@ -57,6 +69,8 @@ async def request_leave(
             "leave_request_id": str(leave.id),
             "officer_id": str(officer_id),
             "leave_type": leave.leave_type,
+            "start_date": leave.start_date.isoformat(),
+            "end_date": leave.end_date.isoformat(),
         },
     )
     return LeaveRequestOut.model_validate(leave)
@@ -116,7 +130,7 @@ async def list_leave_requests(
     responses={
         401: {"description": "Missing or invalid access token"},
         403: {"description": "Caller lacks hr.leave.approve"},
-        404: {"description": "No leave request with that id"},
+        404: {"description": "No leave request with that id, or approved_by does not exist"},
         409: {"description": "Leave request is not pending"},
     },
 )
@@ -136,6 +150,13 @@ async def decide_leave_request(
 
     from_status = leave.status
     leave.status = payload.status.value
+
+    if payload.status == ApprovalStatus.approved:
+        approver = await session.get(Officer, payload.approved_by)
+        if approver is None:
+            raise HTTPException(status_code=404, detail="approved_by does not exist")
+        leave.approved_by = payload.approved_by
+
     await session.flush()
     await session.refresh(leave)
 
@@ -152,6 +173,7 @@ async def decide_leave_request(
             "officer_id": str(leave.officer_id),
             "from_status": from_status,
             "to_status": leave.status,
+            "approved_by": str(leave.approved_by) if leave.approved_by else None,
         },
     )
     return LeaveRequestOut.model_validate(leave)
