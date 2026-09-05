@@ -168,9 +168,23 @@ Phase 0 pilot: **iam ✅ → case ✅ → evidence ✅ → Kafka + transactional
 end-to-end, including `evidence.hash_mismatch` (verify-with-mismatch → audit
 `read` entry + `mv_evidence_integrity.hash_mismatch_count`).
 
-Phase 1 **stubs scaffolded** (health-check only, schema migrated + verified,
-no logic/RBAC/events): community (8004), training (8005), hr (8006),
-notification (8008), integration-gateway (8009). See `SERVICES.md`.
+Phase 1 **complete (2026-09-06)** — all 10 services fully built:
+hr (FR-HR-01..07), training (FR-TRAIN-01..03), community (FR-COMM-01..04),
+notification (FR-NOTIF-01/03, TD-004), integration-gateway (FR-INT-01..05
+framework, TD-005), plus dashboard `mv_unit_readiness` (FR-DASH-02). 433
+backend tests + web-portal 67, all `/health` up. 41 event types flow into
+audit-service's hash chain.
 
-**Next:** fill in the Phase 1 services (start with notification-service — it can
-consume `account.locked_out` for the FR-IAM-05 alert half, plus FR-NOTIF).
+**Open, flagged (not forgotten):** TD-004, TD-005 above. Plus schema gaps
+raised during the build, each needing an SRS revision before it can be
+implemented rather than invented:
+- community meetings have no `attendee_summary` (FR-COMM-01 asks for one);
+  concerns have no description / reporter; follow_up_actions have no action
+  description (docs §9.3.4).
+- FR-COMM-04 "notify the assigned officer *and their supervisor*" — hr_db
+  officers has no supervisor/manager relationship, so only the assigned
+  officer is notified.
+- FR-COMM-05 / FR-HR-08 / FR-TRAIN-04 style summary-reporting FRs are
+  deferred as reporting-over-existing-data (dashboard-service territory),
+  not new domain state.
+- FR-NOTIF-02 (per-user channel preferences) has no table in §9.3.8.
