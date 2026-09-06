@@ -660,3 +660,69 @@ export const training = {
       request<RecomputeResult>("/api/training", "/api/v1/officer-certifications/recompute-status", json({})),
   },
 };
+
+// --- community-service (FR-COMM-01..04) ------------------------------
+export type ConcernStatus = "open" | "in_progress" | "resolved";
+export type FollowUpStatus = "pending" | "overdue" | "completed";
+
+export interface MeetingCreate {
+  station_id: string;
+  facilitator_id: string;
+  meeting_date: string;
+  location: string;
+  attendee_summary?: string | null;
+}
+export interface Meeting extends MeetingCreate {
+  id: string;
+}
+
+export interface ConcernCreate {
+  meeting_id?: string | null;
+  category: string;
+  description: string;
+  raised_by?: string | null;
+}
+export interface Concern extends ConcernCreate {
+  id: string;
+  status: ConcernStatus;
+}
+
+export interface FollowUpActionCreate {
+  description: string;
+  assigned_to: string;
+  due_date: string;
+}
+export interface FollowUpAction extends FollowUpActionCreate {
+  id: string;
+  concern_id: string;
+  status: FollowUpStatus;
+}
+
+export const community = {
+  meetings: {
+    list: (stationId?: string) =>
+      request<Meeting[]>("/api/community", `/api/v1/meetings${qs({ station_id: stationId })}`, { auth: true }),
+    get: (id: string) => request<Meeting>("/api/community", `/api/v1/meetings/${id}`, { auth: true }),
+    create: (body: MeetingCreate) => request<Meeting>("/api/community", "/api/v1/meetings", json(body)),
+  },
+  concerns: {
+    list: (params: { meeting_id?: string; category?: string; status?: ConcernStatus } = {}) =>
+      request<Concern[]>("/api/community", `/api/v1/concerns${qs(params)}`, { auth: true }),
+    get: (id: string) => request<Concern>("/api/community", `/api/v1/concerns/${id}`, { auth: true }),
+    create: (body: ConcernCreate) => request<Concern>("/api/community", "/api/v1/concerns", json(body)),
+    setStatus: (id: string, status: ConcernStatus) =>
+      request<Concern>("/api/community", `/api/v1/concerns/${id}`, patch({ status })),
+  },
+  followUps: {
+    forConcern: (concernId: string) =>
+      request<FollowUpAction[]>("/api/community", `/api/v1/concerns/${concernId}/follow-up-actions`, { auth: true }),
+    create: (concernId: string, body: FollowUpActionCreate) =>
+      request<FollowUpAction>("/api/community", `/api/v1/concerns/${concernId}/follow-up-actions`, json(body)),
+    list: (params: { assigned_to?: string; status?: FollowUpStatus } = {}) =>
+      request<FollowUpAction[]>("/api/community", `/api/v1/follow-up-actions${qs(params)}`, { auth: true }),
+    setStatus: (id: string, status: "pending" | "completed") =>
+      request<FollowUpAction>("/api/community", `/api/v1/follow-up-actions/${id}`, patch({ status })),
+    recompute: () =>
+      request<RecomputeResult>("/api/community", "/api/v1/follow-up-actions/recompute-status", json({})),
+  },
+};

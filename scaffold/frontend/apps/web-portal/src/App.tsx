@@ -11,6 +11,10 @@ import { LeaveApprovalsPage } from "./pages/hr/LeaveApprovalsPage";
 import { CourseCatalogPage } from "./pages/training/CourseCatalogPage";
 import { IssueCertificationPage } from "./pages/training/IssueCertificationPage";
 import { CompliancePage } from "./pages/training/CompliancePage";
+import { MeetingsPage } from "./pages/community/MeetingsPage";
+import { ConcernsPage } from "./pages/community/ConcernsPage";
+import { ConcernDetailPage } from "./pages/community/ConcernDetailPage";
+import { FollowUpsPage } from "./pages/community/FollowUpsPage";
 import { RequireAuth } from "./routes/RequireAuth";
 import { RequirePermission } from "./routes/RequirePermission";
 
@@ -94,6 +98,47 @@ export function App() {
           <Protected>
             <RequirePermission anyOf={["training.cert.read"]}>
               <CompliancePage />
+            </RequirePermission>
+          </Protected>
+        }
+      />
+
+      <Route
+        path="/community/meetings"
+        element={
+          <Protected>
+            <RequirePermission anyOf={["community.read"]}>
+              <MeetingsPage />
+            </RequirePermission>
+          </Protected>
+        }
+      />
+      <Route
+        path="/community/concerns"
+        element={
+          <Protected>
+            <RequirePermission anyOf={["community.read"]}>
+              <ConcernsPage />
+            </RequirePermission>
+          </Protected>
+        }
+      />
+      <Route
+        path="/community/concerns/:concernId"
+        element={
+          <Protected>
+            <RequirePermission anyOf={["community.read"]}>
+              <ConcernDetailPage />
+            </RequirePermission>
+          </Protected>
+        }
+      />
+      <Route
+        path="/community/follow-ups"
+        element={
+          <Protected>
+            <RequirePermission anyOf={["community.read"]}>
+              <FollowUpsPage />
             </RequirePermission>
           </Protected>
         }
