@@ -606,3 +606,57 @@ export const hr = {
     ) => request<PerformanceReview>("/api/hr", `/api/v1/officers/${officerId}/performance-reviews`, json(body)),
   },
 };
+
+// --- training-service (FR-TRAIN-01..03) ------------------------------
+export type CertStatus = "active" | "expiring_soon" | "expired";
+
+export interface Course {
+  id: number;
+  title: string;
+  validity_months: number;
+  mandatory: boolean;
+}
+export interface Certification {
+  id: number;
+  course_id: number;
+}
+export interface OfficerCertification {
+  id: string;
+  officer_id: string;
+  certification_id: number;
+  issued_date: string;
+  expires_date: string;
+  status: CertStatus;
+}
+export interface RecomputeResult {
+  checked: number;
+  updated: number;
+}
+
+export const training = {
+  courses: {
+    list: () => request<Course[]>("/api/training", "/api/v1/courses", { auth: true }),
+    create: (body: { title: string; validity_months: number; mandatory?: boolean }) =>
+      request<Course>("/api/training", "/api/v1/courses", json(body)),
+    update: (id: number, body: { title?: string | null; validity_months?: number | null; mandatory?: boolean | null }) =>
+      request<Course>("/api/training", `/api/v1/courses/${id}`, patch(body)),
+    remove: (id: number) =>
+      request<void>("/api/training", `/api/v1/courses/${id}`, { method: "DELETE", auth: true }),
+  },
+  certifications: {
+    list: (courseId?: number) =>
+      request<Certification[]>("/api/training", `/api/v1/certifications${qs({ course_id: courseId })}`, { auth: true }),
+    create: (body: { course_id: number }) =>
+      request<Certification>("/api/training", "/api/v1/certifications", json(body)),
+    remove: (id: number) =>
+      request<void>("/api/training", `/api/v1/certifications/${id}`, { method: "DELETE", auth: true }),
+  },
+  officerCerts: {
+    list: (params: { officer_id?: string; status?: CertStatus } = {}) =>
+      request<OfficerCertification[]>("/api/training", `/api/v1/officer-certifications${qs(params)}`, { auth: true }),
+    issue: (body: { officer_id: string; certification_id: number; issued_date?: string | null }) =>
+      request<OfficerCertification>("/api/training", "/api/v1/officer-certifications", json(body)),
+    recompute: () =>
+      request<RecomputeResult>("/api/training", "/api/v1/officer-certifications/recompute-status", json({})),
+  },
+};

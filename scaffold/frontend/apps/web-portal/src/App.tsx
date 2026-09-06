@@ -8,6 +8,9 @@ import { OfficerDirectoryPage } from "./pages/hr/OfficerDirectoryPage";
 import { OfficerProfilePage } from "./pages/hr/OfficerProfilePage";
 import { TransferApprovalsPage } from "./pages/hr/TransferApprovalsPage";
 import { LeaveApprovalsPage } from "./pages/hr/LeaveApprovalsPage";
+import { CourseCatalogPage } from "./pages/training/CourseCatalogPage";
+import { IssueCertificationPage } from "./pages/training/IssueCertificationPage";
+import { CompliancePage } from "./pages/training/CompliancePage";
 import { RequireAuth } from "./routes/RequireAuth";
 import { RequirePermission } from "./routes/RequirePermission";
 
@@ -60,6 +63,37 @@ export function App() {
           <Protected>
             <RequirePermission anyOf={["hr.leave.read", "hr.leave.approve"]}>
               <LeaveApprovalsPage />
+            </RequirePermission>
+          </Protected>
+        }
+      />
+
+      <Route
+        path="/training/courses"
+        element={
+          <Protected>
+            <RequirePermission anyOf={["training.cert.read"]}>
+              <CourseCatalogPage />
+            </RequirePermission>
+          </Protected>
+        }
+      />
+      <Route
+        path="/training/issue"
+        element={
+          <Protected>
+            <RequirePermission anyOf={["training.cert.read"]}>
+              <IssueCertificationPage />
+            </RequirePermission>
+          </Protected>
+        }
+      />
+      <Route
+        path="/training/compliance"
+        element={
+          <Protected>
+            <RequirePermission anyOf={["training.cert.read"]}>
+              <CompliancePage />
             </RequirePermission>
           </Protected>
         }

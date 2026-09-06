@@ -16,6 +16,7 @@ const ITEMS: { to: string; label: string; anyOf: string[] }[] = [
   { to: "/hr/transfers", label: "Transfer approvals", anyOf: ["hr.transfer.approve"] },
   { to: "/hr/leave", label: "Leave approvals", anyOf: ["hr.leave.approve"] },
   { to: "/training/courses", label: "Training", anyOf: ["training.cert.read"] },
+  { to: "/training/issue", label: "Issue cert", anyOf: ["training.cert.write"] },
   { to: "/training/compliance", label: "Compliance", anyOf: ["training.cert.read"] },
   { to: "/community/meetings", label: "Community", anyOf: ["community.read"] },
 ];
