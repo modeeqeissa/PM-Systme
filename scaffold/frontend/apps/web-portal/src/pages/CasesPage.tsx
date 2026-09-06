@@ -1,9 +1,10 @@
 import { useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { Alert, Button, Card, Spinner } from "@pmp/ui";
+import { Alert, Card, Spinner } from "@pmp/ui";
+import { NavBar } from "../components/NavBar";
 import { ApiError, cases as casesApi, type Case } from "../lib/api";
-import { clearToken, currentClaims } from "../lib/auth";
+import { currentClaims } from "../lib/auth";
 
 const STATUS_LABEL: Record<Case["status"], string> = {
   open: "Open",
@@ -37,18 +38,15 @@ export function CasesPage() {
     }
   }, [query.error, navigate]);
 
-  function signOut() {
-    clearToken();
-    navigate("/login", { replace: true });
-  }
-
   const leadOfficer = (c: Case) =>
     claims && c.lead_officer_id === claims.sub
       ? `You (${claims.badge_number})`
       : `${c.lead_officer_id.slice(0, 8)}…`;
 
   return (
-    <div className="mx-auto max-w-4xl px-4 py-8">
+    <div className="pt-8">
+      <NavBar />
+      <div className="mx-auto max-w-4xl px-4 pb-8">
       <div className="mb-6 flex items-center justify-between">
         <div>
           <h1 className="text-xl font-semibold text-slate-900">Cases</h1>
@@ -60,18 +58,12 @@ export function CasesPage() {
           )}
         </div>
         <div className="flex items-center gap-3">
-          <Link to="/dashboard" className="text-sm text-slate-500 underline">
-            Dashboard
-          </Link>
           <Link
             to="/incidents/new"
             className="inline-flex items-center justify-center rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-slate-700"
           >
             File incident
           </Link>
-          <Button variant="secondary" onClick={signOut}>
-            Sign out
-          </Button>
         </div>
       </div>
 
@@ -135,6 +127,7 @@ export function CasesPage() {
           </table>
         )}
       </Card>
+      </div>
     </div>
   );
 }

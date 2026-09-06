@@ -434,3 +434,175 @@ export const dashboard = {
     );
   },
 };
+
+/** Build a `?a=b` string from defined, non-empty values. */
+function qs(params: Record<string, string | number | undefined | null>): string {
+  const clean: Record<string, string> = {};
+  for (const [k, v] of Object.entries(params)) {
+    if (v !== undefined && v !== null && v !== "") clean[k] = String(v);
+  }
+  const s = new URLSearchParams(clean).toString();
+  return s ? `?${s}` : "";
+}
+
+const json = (body: unknown) => ({ method: "POST", body: JSON.stringify(body), auth: true }) as const;
+const patch = (body: unknown) => ({ method: "PATCH", body: JSON.stringify(body), auth: true }) as const;
+
+// --- hr-service (FR-HR-01..07) ----------------------------------------
+export type OfficerStatus = "active" | "on_leave" | "suspended" | "retired";
+export type ApprovalStatus = "pending" | "approved" | "rejected";
+
+export interface Unit {
+  id: string;
+  name: string;
+  station_id: string;
+}
+
+export interface OfficerCreate {
+  user_id: string;
+  badge_number: string;
+  rank: string;
+  unit_id: string;
+  hire_date: string; // YYYY-MM-DD
+  supervisor_id?: string | null;
+  status?: OfficerStatus;
+}
+export interface Officer extends OfficerCreate {
+  id: string;
+  status: OfficerStatus;
+}
+/** PATCH /officers/{id} — rank and unit_id are NOT editable here (promotion / transfer own them). */
+export interface OfficerPatch {
+  badge_number?: string | null;
+  hire_date?: string | null;
+  supervisor_id?: string | null;
+  status?: OfficerStatus | null;
+}
+
+export interface Assignment {
+  id: string;
+  officer_id: string;
+  unit_id: string;
+  start_date: string;
+  end_date: string | null;
+}
+
+export interface Transfer {
+  id: string;
+  officer_id: string;
+  to_unit_id: string;
+  from_unit_id: string | null;
+  status: ApprovalStatus;
+  requested_at: string;
+  effective_date: string | null;
+  approved_by: string | null;
+  created_at: string;
+}
+
+export interface Promotion {
+  id: string;
+  officer_id: string;
+  new_rank: string;
+  previous_rank: string;
+  effective_date: string;
+  approved_by: string;
+  created_at: string;
+}
+
+export interface LeaveRequest {
+  id: string;
+  officer_id: string;
+  leave_type: string;
+  start_date: string;
+  end_date: string;
+  status: ApprovalStatus;
+  approved_by: string | null;
+  created_at: string;
+}
+
+export interface DisciplineRecord {
+  id: string;
+  officer_id: string;
+  incident_date: string;
+  description: string;
+  outcome: string | null;
+  confidentiality_level: string;
+  created_at: string;
+}
+
+export interface PerformanceReview {
+  id: string;
+  officer_id: string;
+  reviewer_id: string;
+  period: string;
+  score: number;
+  comments: string | null;
+  created_at: string;
+}
+
+export const hr = {
+  units: {
+    list: (stationId?: string) =>
+      request<Unit[]>("/api/hr", `/api/v1/units${qs({ station_id: stationId })}`, { auth: true }),
+    create: (body: { name: string; station_id: string }) =>
+      request<Unit>("/api/hr", "/api/v1/units", json(body)),
+  },
+  officers: {
+    list: (params: { unit_id?: string; status?: OfficerStatus; limit?: number; offset?: number } = {}) =>
+      request<Officer[]>("/api/hr", `/api/v1/officers${qs(params)}`, { auth: true }),
+    get: (id: string) => request<Officer>("/api/hr", `/api/v1/officers/${id}`, { auth: true }),
+    create: (body: OfficerCreate) => request<Officer>("/api/hr", "/api/v1/officers", json(body)),
+    update: (id: string, body: OfficerPatch) =>
+      request<Officer>("/api/hr", `/api/v1/officers/${id}`, patch(body)),
+  },
+  assignments: {
+    list: (officerId: string) =>
+      request<Assignment[]>("/api/hr", `/api/v1/officers/${officerId}/assignments`, { auth: true }),
+    create: (officerId: string, body: { unit_id: string; start_date: string }) =>
+      request<Assignment>("/api/hr", `/api/v1/officers/${officerId}/assignments`, json(body)),
+  },
+  transfers: {
+    forOfficer: (officerId: string) =>
+      request<Transfer[]>("/api/hr", `/api/v1/officers/${officerId}/transfers`, { auth: true }),
+    request: (officerId: string, body: { to_unit_id: string }) =>
+      request<Transfer>("/api/hr", `/api/v1/officers/${officerId}/transfers`, json(body)),
+    queue: (status?: ApprovalStatus) =>
+      request<Transfer[]>("/api/hr", `/api/v1/transfers${qs({ status })}`, { auth: true }),
+    decide: (
+      transferId: string,
+      body: { status: "approved" | "rejected"; approved_by?: string | null; effective_date?: string | null },
+    ) => request<Transfer>("/api/hr", `/api/v1/transfers/${transferId}`, patch(body)),
+  },
+  promotions: {
+    list: (officerId: string) =>
+      request<Promotion[]>("/api/hr", `/api/v1/officers/${officerId}/promotions`, { auth: true }),
+    record: (officerId: string, body: { new_rank: string; effective_date: string; approved_by: string }) =>
+      request<Promotion>("/api/hr", `/api/v1/officers/${officerId}/promotions`, json(body)),
+  },
+  leave: {
+    forOfficer: (officerId: string) =>
+      request<LeaveRequest[]>("/api/hr", `/api/v1/officers/${officerId}/leave-requests`, { auth: true }),
+    request: (officerId: string, body: { leave_type: string; start_date: string; end_date: string }) =>
+      request<LeaveRequest>("/api/hr", `/api/v1/officers/${officerId}/leave-requests`, json(body)),
+    queue: (status?: ApprovalStatus) =>
+      request<LeaveRequest[]>("/api/hr", `/api/v1/leave-requests${qs({ status })}`, { auth: true }),
+    decide: (leaveId: string, body: { status: "approved" | "rejected"; approved_by?: string | null }) =>
+      request<LeaveRequest>("/api/hr", `/api/v1/leave-requests/${leaveId}`, patch(body)),
+  },
+  discipline: {
+    list: (officerId: string) =>
+      request<DisciplineRecord[]>("/api/hr", `/api/v1/officers/${officerId}/discipline-records`, { auth: true }),
+    create: (
+      officerId: string,
+      body: { incident_date: string; description: string; outcome?: string | null; confidentiality_level?: string },
+    ) => request<DisciplineRecord>("/api/hr", `/api/v1/officers/${officerId}/discipline-records`, json(body)),
+  },
+  performance: {
+    list: (officerId: string) =>
+      request<PerformanceReview[]>("/api/hr", `/api/v1/officers/${officerId}/performance-reviews`, { auth: true }),
+    create: (
+      officerId: string,
+      body: { reviewer_id: string; period: string; score: number; comments?: string | null },
+    ) => request<PerformanceReview>("/api/hr", `/api/v1/officers/${officerId}/performance-reviews`, json(body)),
+  },
+};
