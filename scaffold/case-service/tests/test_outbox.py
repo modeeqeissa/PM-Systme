@@ -134,6 +134,66 @@ async def test_court_proceeding_recorded_enqueued(client, make_case, auth_rw):
     assert rows[0].body["payload"]["verdict"] == "guilty"
 
 
+async def test_case_officer_assigned_and_unassigned_enqueue_events(
+    client, make_case, auth_ro
+):
+    case = await make_case(status="investigating")
+    officer_id = str(uuid.uuid4())
+
+    r = await client.post(
+        f"/api/v1/cases/{case.id}/officers",
+        json={"officer_id": officer_id, "role_on_case": "forensic liaison"},
+        headers=auth_ro,
+    )
+    assert r.status_code == 201
+
+    # a re-post that changes the role emits a second CaseOfficerAssigned
+    r = await client.post(
+        f"/api/v1/cases/{case.id}/officers",
+        json={"officer_id": officer_id, "role_on_case": "lead"},
+        headers=auth_ro,
+    )
+    assert r.status_code == 200
+
+    r = await client.delete(
+        f"/api/v1/cases/{case.id}/officers/{officer_id}", headers=auth_ro
+    )
+    assert r.status_code == 204
+
+    assigned = await _outbox_rows("CaseOfficerAssigned")
+    unassigned = await _outbox_rows("CaseOfficerUnassigned")
+    assert len(assigned) == 2
+    assert assigned[0].topic.endswith("case.officer_assigned")
+    assert assigned[0].aggregate_id == str(case.id)
+    assert assigned[0].body["payload"] == {
+        "case_id": str(case.id),
+        "officer_id": officer_id,
+        "role_on_case": "forensic liaison",
+        "previous_role": None,
+    }
+    assert assigned[1].body["payload"]["previous_role"] == "forensic liaison"
+    assert assigned[1].body["payload"]["role_on_case"] == "lead"
+    assert assigned[0].body["actor_id"] is not None  # from the JWT
+
+    assert len(unassigned) == 1
+    assert unassigned[0].topic.endswith("case.officer_unassigned")
+    assert unassigned[0].body["payload"] == {
+        "case_id": str(case.id),
+        "officer_id": officer_id,
+        "role_on_case": "lead",
+    }
+
+
+async def test_failed_officer_assign_writes_no_outbox_row(client, auth_ro):
+    r = await client.post(
+        f"/api/v1/cases/{uuid.uuid4()}/officers",
+        json={"officer_id": str(uuid.uuid4()), "role_on_case": "support"},
+        headers=auth_ro,
+    )
+    assert r.status_code == 404
+    assert await _outbox_rows("CaseOfficerAssigned") == []
+
+
 async def test_relay_publishes_to_kafka_and_marks_sent(
     client, auth_rw, outbox_relay, read_kafka
 ):

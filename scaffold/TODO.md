@@ -187,6 +187,26 @@ live-verified: an overdue follow-up now produces a `FOLLOWUP_OVERDUE`
 record for the assignee AND a `FOLLOWUP_OVERDUE_SUPERVISOR` record for the
 assignee's supervisor.
 
+**FR-CASE-07 done 2026-09-06** (the last deferred case-service piece):
+`case_officers` (docs §9.3.2, table existed unused since migration 0001) is
+now served — `GET`/`POST /cases/{id}/officers`, `DELETE
+/cases/{id}/officers/{officer_id}`. POST upserts (201 assign / 200 re-role);
+DELETE is a hard delete of the junction row (no §9.3.2 status column; case
+history is untouched, FR-CASE-09 unaffected). Mutations require
+`case.approve`, not `case.write` — staffing an investigation is a command
+decision (docs §2.3, Station Commander); the SRS enumerates case actions as
+read/write/approve/export, so no `case.assign` was invented. `CaseOfficer
+Assigned` / `CaseOfficerUnassigned` events flow through the outbox:
+audit-service records both (`case_officer` create/delete — 44 event types
+now), notification-service turns `CaseOfficerAssigned` into a
+`CASE_OFFICER_ASSIGNED` notification for the assigned officer (migration
+0004 seeds the template). Live-verified across iam + case + notification +
+audit: Patrol Officer opens a case -> Station Commander assigns an officer
+-> notification row for that officer delivered (status `sent`) + audit
+`case_officer/create`; unassign -> audit `case_officer/delete`, no
+notification; a `case.write`-only token gets 403. **case-service's entire
+original schema (docs §9.3.2) is now implemented.**
+
 **Open, flagged (not forgotten):** TD-004, TD-005 above. Plus:
 - FR-COMM-05 / FR-HR-08 / FR-TRAIN-04 style summary-reporting FRs are
   deferred as reporting-over-existing-data (dashboard-service territory),

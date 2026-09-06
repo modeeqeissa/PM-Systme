@@ -43,6 +43,14 @@ async def test_all_event_types_map_to_expected_entity_and_action(client, emit, c
     await emit("ArrestRecorded", {"arrest_id": str(uuid.uuid4())})
     await emit("StatementRecorded", {"statement_id": str(uuid.uuid4())})
     await emit("CourtProceedingRecorded", {"court_proceeding_id": str(uuid.uuid4())})
+    await emit(
+        "CaseOfficerAssigned",
+        {"case_id": str(uuid.uuid4()), "officer_id": str(uuid.uuid4()), "role_on_case": "support"},
+    )
+    await emit(
+        "CaseOfficerUnassigned",
+        {"case_id": str(uuid.uuid4()), "officer_id": str(uuid.uuid4()), "role_on_case": "support"},
+    )
     await emit("EvidenceLogged", {"evidence_id": str(uuid.uuid4())}, service="evidence-service")
     await emit("CustodyEventRecorded", {"custody_event_id": 7}, service="evidence-service")
     await emit(
@@ -145,7 +153,7 @@ async def test_all_event_types_map_to_expected_entity_and_action(client, emit, c
         service="integration-gateway-service",
     )
 
-    assert await consumer.process_available() == 42
+    assert await consumer.process_available() == 44
     rows = await _audit_rows()
     seen = {(r.entity_type, r.action) for r in rows}
     assert seen == {
@@ -154,6 +162,8 @@ async def test_all_event_types_map_to_expected_entity_and_action(client, emit, c
         ("arrest", "create"),
         ("statement", "create"),
         ("court_proceeding", "create"),
+        ("case_officer", "create"),
+        ("case_officer", "delete"),
         ("evidence_item", "create"),
         ("custody_event", "create"),
         ("evidence_item", "read"),   # hash-mismatch detection

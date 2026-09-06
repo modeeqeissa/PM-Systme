@@ -8,6 +8,7 @@ import {
   ApiError,
   type Arrest,
   type Case,
+  type CaseOfficer,
   type CourtProceeding,
   type CustodyEvent,
   type EvidenceItem,
@@ -26,6 +27,9 @@ const getStatements = vi.fn();
 const recordStatement = vi.fn();
 const getCourtProceedings = vi.fn();
 const recordCourtProceeding = vi.fn();
+const getOfficers = vi.fn();
+const assignOfficer = vi.fn();
+const unassignOfficer = vi.fn();
 
 vi.mock("../lib/api", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../lib/api")>();
@@ -40,6 +44,9 @@ vi.mock("../lib/api", async (importOriginal) => {
       recordStatement: (...a: unknown[]) => recordStatement(...a),
       courtProceedings: (...a: unknown[]) => getCourtProceedings(...a),
       recordCourtProceeding: (...a: unknown[]) => recordCourtProceeding(...a),
+      officers: (...a: unknown[]) => getOfficers(...a),
+      assignOfficer: (...a: unknown[]) => assignOfficer(...a),
+      unassignOfficer: (...a: unknown[]) => unassignOfficer(...a),
     },
     evidence: {
       create: (...a: unknown[]) => createEvidence(...a),
@@ -120,6 +127,15 @@ function statement(over: Partial<Statement> = {}): Statement {
   };
 }
 
+function caseOfficer(over: Partial<CaseOfficer> = {}): CaseOfficer {
+  return {
+    case_id: CASE_ID,
+    officer_id: "0ff1ce20-0000-4000-8000-000000000001",
+    role_on_case: "forensic liaison",
+    ...over,
+  };
+}
+
 function courtProceeding(over: Partial<CourtProceeding> = {}): CourtProceeding {
   return {
     id: "pppppppp-pppp-4ppp-8ppp-pppppppppppp",
@@ -158,12 +174,16 @@ beforeEach(() => {
   recordStatement.mockReset();
   getCourtProceedings.mockReset();
   recordCourtProceeding.mockReset();
+  getOfficers.mockReset();
+  assignOfficer.mockReset();
+  unassignOfficer.mockReset();
   setToken(fakeJwt({ sub: SUB, badge_number: "OFF-9" }));
   getCase.mockResolvedValue(theCase());
   getCustody.mockResolvedValue([custodyEvent()]);
   getArrests.mockResolvedValue([]);
   getStatements.mockResolvedValue([]);
   getCourtProceedings.mockResolvedValue([]);
+  getOfficers.mockResolvedValue([]);
 });
 
 async function addEvidence(user: ReturnType<typeof userEvent.setup>, withFile = true) {
@@ -308,6 +328,103 @@ describe("CaseDetailPage", () => {
       await addEvidence(user);
 
       expect(await screen.findByText(/permission to view custody/i)).toBeInTheDocument();
+    });
+  });
+
+  describe("assigned officers (FR-CASE-07)", () => {
+    const NEW_OFFICER = "0ff1ce20-0000-4000-8000-00000000abcd";
+
+    async function fillAndAssign(user: ReturnType<typeof userEvent.setup>) {
+      await user.type(screen.getByLabelText("Officer id"), NEW_OFFICER);
+      await user.type(screen.getByLabelText("Role on case"), "support");
+      await user.click(screen.getByRole("button", { name: "Assign officer" }));
+    }
+
+    it("lists officers already assigned to the case", async () => {
+      getOfficers.mockResolvedValue([caseOfficer()]);
+      renderPage();
+      const item = (
+        await screen.findByText("0ff1ce20-0000-4000-8000-000000000001")
+      ).closest("li")!;
+      expect(within(item).getByText("forensic liaison")).toBeInTheDocument();
+      expect(getOfficers).toHaveBeenCalledWith(CASE_ID);
+    });
+
+    it("shows an empty-state message with no assigned officers", async () => {
+      renderPage();
+      expect(
+        await screen.findByText("No supporting officers assigned yet."),
+      ).toBeInTheDocument();
+    });
+
+    it("POSTs officer_id + role_on_case and refetches the list", async () => {
+      const user = userEvent.setup();
+      assignOfficer.mockResolvedValue(caseOfficer({ officer_id: NEW_OFFICER, role_on_case: "support" }));
+      renderPage();
+      await screen.findByText("CASE-2026-000010");
+
+      getOfficers.mockResolvedValue([caseOfficer({ officer_id: NEW_OFFICER, role_on_case: "support" })]);
+      await fillAndAssign(user);
+
+      expect(assignOfficer).toHaveBeenCalledTimes(1);
+      const [postedCaseId, body] = assignOfficer.mock.calls[0];
+      expect(postedCaseId).toBe(CASE_ID);
+      expect(body).toEqual({ officer_id: NEW_OFFICER, role_on_case: "support" });
+      expect(await screen.findByText(NEW_OFFICER)).toBeInTheDocument();
+    });
+
+    it("unassigns an officer via DELETE and refetches", async () => {
+      const user = userEvent.setup();
+      getOfficers.mockResolvedValue([caseOfficer()]);
+      unassignOfficer.mockResolvedValue(undefined);
+      renderPage();
+      await screen.findByText("0ff1ce20-0000-4000-8000-000000000001");
+
+      getOfficers.mockResolvedValue([]);
+      await user.click(screen.getByRole("button", { name: "Unassign" }));
+
+      expect(unassignOfficer).toHaveBeenCalledWith(
+        CASE_ID,
+        "0ff1ce20-0000-4000-8000-000000000001",
+      );
+      expect(
+        await screen.findByText("No supporting officers assigned yet."),
+      ).toBeInTheDocument();
+    });
+
+    it("surfaces a 403 with a clear case.approve message", async () => {
+      const user = userEvent.setup();
+      assignOfficer.mockRejectedValue(new ApiError(403, "RBAC scope denied"));
+      renderPage();
+      await screen.findByText("CASE-2026-000010");
+      await fillAndAssign(user);
+      expect(
+        await screen.findByText(/can't change case staffing/i),
+      ).toBeInTheDocument();
+    });
+
+    it("surfaces 422 field errors", async () => {
+      const user = userEvent.setup();
+      assignOfficer.mockRejectedValue(
+        new ApiError(422, "Unprocessable", {
+          detail: [{ loc: ["body", "role_on_case"], msg: "String should have at least 1 character", type: "x" }],
+        }),
+      );
+      renderPage();
+      await screen.findByText("CASE-2026-000010");
+      await fillAndAssign(user);
+      expect(
+        await screen.findByText("String should have at least 1 character"),
+      ).toBeInTheDocument();
+    });
+
+    it("surfaces a 403 fetching the assigned-officers list", async () => {
+      getOfficers.mockReset();
+      getOfficers.mockRejectedValue(new ApiError(403, "RBAC scope denied"));
+      renderPage();
+      expect(
+        await screen.findByText(/permission to view assigned officers/i),
+      ).toBeInTheDocument();
     });
   });
 

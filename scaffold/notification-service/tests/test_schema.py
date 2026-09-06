@@ -1,4 +1,4 @@
-"""Migrations 0001..0003 create the notification_db schema (docs Section 9.3.8:
+"""Migrations 0001..0004 create the notification_db schema (docs Section 9.3.8:
 notifications, notification_templates.subject/body, notification_preferences)
 plus service-local infrastructure (officer_user_map, consumed_events)."""
 import psycopg2
@@ -23,6 +23,7 @@ def test_templates_are_seeded_with_bodies():
     finally:
         conn.close()
     assert "FOLLOWUP_OVERDUE_SUPERVISOR" in rows
+    assert "CASE_OFFICER_ASSIGNED" in rows  # migration 0004 (FR-CASE-07)
     assert all(body for body in rows.values())  # body is NOT NULL and non-empty
 
 

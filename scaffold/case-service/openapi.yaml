@@ -245,6 +245,75 @@ paths:
         "401": { description: Missing or invalid access token }
         "403": { description: Caller lacks case.write }
         "404": { description: No case with that id }
+  /cases/{case_id}/officers:
+    get:
+      summary: List supporting officers assigned to a case (FR-CASE-07)
+      description: Requires the `case.read` permission.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - in: path
+          name: case_id
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Current assignments
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/CaseOfficer" } }
+        "401": { description: Missing or invalid access token }
+        "403": { description: Caller lacks case.read }
+        "404": { description: No case with that id }
+    post:
+      summary: Assign or reassign a supporting officer on a case (FR-CASE-07)
+      description: >
+        Requires `case.approve` — staffing an investigation is a command
+        decision (docs §2.3, Station Commander), not a field-officer action.
+        A first assignment returns 201; posting again for an officer already on
+        the case updates their `role_on_case` and returns 200. Publishes a
+        `CaseOfficerAssigned` domain event, which notification-service turns
+        into a notification for the affected officer. `officer_id` is a logical
+        reference to hr_db.officers.id and is not validated here.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - in: path
+          name: case_id
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CaseOfficerAssign" }
+      responses:
+        "201": { description: Officer assigned, content: { application/json: { schema: { $ref: "#/components/schemas/CaseOfficer" } } } }
+        "200": { description: Existing assignment's role updated, content: { application/json: { schema: { $ref: "#/components/schemas/CaseOfficer" } } } }
+        "401": { description: Missing or invalid access token }
+        "403": { description: Caller lacks case.approve }
+        "404": { description: No case with that id }
+  /cases/{case_id}/officers/{officer_id}:
+    delete:
+      summary: Remove a supporting officer from a case (FR-CASE-07)
+      description: >
+        Requires `case.approve`. Hard-deletes the join row (`case_officers` is a
+        plain many-to-many junction, docs §9.3.2) and publishes a
+        `CaseOfficerUnassigned` domain event. The case record itself is never
+        deleted (FR-CASE-09).
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - in: path
+          name: case_id
+          required: true
+          schema: { type: string, format: uuid }
+        - in: path
+          name: officer_id
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "204": { description: Officer unassigned }
+        "401": { description: Missing or invalid access token }
+        "403": { description: Caller lacks case.approve }
+        "404": { description: No case with that id, or officer not assigned to it }
 
 components:
   securitySchemes:
@@ -333,4 +402,16 @@ components:
         - type: object
           properties:
             id: { type: string, format: uuid }
+            case_id: { type: string, format: uuid }
+    CaseOfficerAssign:
+      type: object
+      required: [officer_id, role_on_case]
+      properties:
+        officer_id: { type: string, format: uuid }
+        role_on_case: { type: string, minLength: 1, maxLength: 30, description: "Free text; e.g. lead, support, forensic liaison (docs §9.3.2)" }
+    CaseOfficer:
+      allOf:
+        - $ref: "#/components/schemas/CaseOfficerAssign"
+        - type: object
+          properties:
             case_id: { type: string, format: uuid }

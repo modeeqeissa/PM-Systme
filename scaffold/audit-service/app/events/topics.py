@@ -10,6 +10,8 @@ _BASE_TOPICS = (
     "case.arrest_recorded",
     "case.statement_recorded",
     "case.court_proceeding_recorded",
+    "case.officer_assigned",
+    "case.officer_unassigned",
     "evidence.logged",
     "evidence.custody_recorded",
     "evidence.hash_mismatch",

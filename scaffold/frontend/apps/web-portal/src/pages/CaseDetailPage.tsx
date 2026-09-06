@@ -9,6 +9,7 @@ import {
   evidence as evidenceApi,
   validationErrors,
   type Arrest,
+  type CaseOfficer,
   type CourtProceeding,
   type CustodyEvent,
   type EvidenceItem,
@@ -110,6 +111,8 @@ export function CaseDetailPage() {
             </div>
           </Card>
 
+          <AssignedOfficersSection caseId={query.data.id} />
+
           <ArrestsSection caseId={query.data.id} />
 
           <StatementsSection caseId={query.data.id} />
@@ -131,6 +134,163 @@ export function CaseDetailPage() {
         </>
       )}
     </div>
+  );
+}
+
+// --- Assigned officers (FR-CASE-07) -------------------------------------
+function AssignedOfficersSection({ caseId }: { caseId: string }) {
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+
+  const officersQuery = useQuery({
+    queryKey: ["case-officers", caseId],
+    queryFn: () => casesApi.officers(caseId),
+    retry: (n, err) => !(err instanceof ApiError) && n < 2,
+  });
+
+  const [officerId, setOfficerId] = useState("");
+  const [roleOnCase, setRoleOnCase] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [problem, setProblem] = useState<Problem | null>(null);
+  const [removingId, setRemovingId] = useState<string | null>(null);
+
+  const fieldErr = problem?.kind === "validation" ? problem.fields : {};
+
+  if (officersQuery.error instanceof ApiError && officersQuery.error.status === 401) {
+    navigate("/login", { replace: true });
+    return null;
+  }
+
+  async function submit(e: FormEvent) {
+    e.preventDefault();
+    setProblem(null);
+    setBusy(true);
+    try {
+      await casesApi.assignOfficer(caseId, {
+        officer_id: officerId.trim(),
+        role_on_case: roleOnCase.trim(),
+      });
+      await queryClient.invalidateQueries({ queryKey: ["case-officers", caseId] });
+      setOfficerId("");
+      setRoleOnCase("");
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 401) {
+        navigate("/login", { replace: true });
+        return;
+      }
+      setProblem(classify(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function unassign(id: string) {
+    setProblem(null);
+    setRemovingId(id);
+    try {
+      await casesApi.unassignOfficer(caseId, id);
+      await queryClient.invalidateQueries({ queryKey: ["case-officers", caseId] });
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 401) {
+        navigate("/login", { replace: true });
+        return;
+      }
+      setProblem(classify(err));
+    } finally {
+      setRemovingId(null);
+    }
+  }
+
+  return (
+    <Card className="mb-6">
+      <h2 className="text-lg font-semibold text-slate-900">Assigned officers</h2>
+      <p className="mb-4 text-sm text-slate-500">
+        FR-CASE-07 — assigns a supporting officer to this case; publishes a{" "}
+        <code>CaseOfficerAssigned</code> event that notifies the officer.
+        Requires the <code>case.approve</code> permission.
+      </p>
+
+      {problem?.kind === "forbidden" && (
+        <div className="mb-4">
+          <Alert variant="error">
+            Your role can't change case staffing. This needs the{" "}
+            <code>case.approve</code> permission.
+          </Alert>
+        </div>
+      )}
+      {problem?.kind === "network" && (
+        <div className="mb-4">
+          <Alert variant="error">Couldn't reach case-service. Try again.</Alert>
+        </div>
+      )}
+      {problem?.kind === "other" && (
+        <div className="mb-4">
+          <Alert variant="error">{problem.message}</Alert>
+        </div>
+      )}
+
+      <form onSubmit={submit} className="flex flex-col gap-4">
+        <TextInput
+          label="Officer id"
+          value={officerId}
+          onChange={(e) => setOfficerId(e.target.value)}
+          error={fieldErr.officer_id}
+          placeholder="uuid"
+          required
+        />
+        <TextInput
+          label="Role on case"
+          value={roleOnCase}
+          onChange={(e) => setRoleOnCase(e.target.value)}
+          error={fieldErr.role_on_case}
+          placeholder="e.g. lead, support, forensic liaison"
+          maxLength={30}
+          required
+        />
+        <div>
+          <Button type="submit" loading={busy}>
+            Assign officer
+          </Button>
+        </div>
+      </form>
+
+      <h3 className="mb-2 mt-6 text-xs font-medium uppercase tracking-wide text-slate-500">
+        Currently assigned
+      </h3>
+      {officersQuery.isLoading && <Spinner label="Loading assigned officers…" />}
+      {officersQuery.error instanceof ApiError && officersQuery.error.status === 403 && (
+        <Alert variant="error">
+          Needs the <code>case.read</code> permission to view assigned officers.
+        </Alert>
+      )}
+      {officersQuery.data && officersQuery.data.length === 0 && (
+        <p className="text-sm text-slate-500">No supporting officers assigned yet.</p>
+      )}
+      {officersQuery.data && officersQuery.data.length > 0 && (
+        <ul className="flex flex-col gap-3">
+          {officersQuery.data.map((o: CaseOfficer) => (
+            <li
+              key={o.officer_id}
+              className="flex items-center justify-between border-b border-slate-100 pb-2 text-sm last:border-0"
+            >
+              <span>
+                <span className="font-mono text-xs">{o.officer_id}</span>
+                <span className="ml-2 rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-700">
+                  {o.role_on_case}
+                </span>
+              </span>
+              <Button
+                variant="secondary"
+                onClick={() => unassign(o.officer_id)}
+                loading={removingId === o.officer_id}
+              >
+                Unassign
+              </Button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </Card>
   );
 }
 

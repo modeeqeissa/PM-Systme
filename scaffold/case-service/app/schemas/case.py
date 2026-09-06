@@ -2,7 +2,7 @@ import datetime as dt
 import enum
 import uuid
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class CaseStatus(str, enum.Enum):
@@ -85,6 +85,25 @@ class StatementOut(BaseModel):
     party_type: PartyType
     statement_text: str
     recorded_at: dt.datetime
+
+
+class CaseOfficerAssign(BaseModel):
+    """Request body for POST /cases/{case_id}/officers (FR-CASE-07).
+
+    ``role_on_case`` is free text (VARCHAR(30), no CHECK in migration 0001);
+    docs §9.3.2 gives "lead, support, forensic liaison" only as examples.
+    """
+
+    officer_id: uuid.UUID
+    role_on_case: str = Field(min_length=1, max_length=30)
+
+
+class CaseOfficerOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    case_id: uuid.UUID
+    officer_id: uuid.UUID
+    role_on_case: str
 
 
 class CourtProceedingCreate(BaseModel):

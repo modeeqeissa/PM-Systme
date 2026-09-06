@@ -111,6 +111,24 @@ async def apply_event(session: AsyncSession, envelope: dict) -> bool:
         _queue(session, recipient_user_id=user_id, template_code="ACCOUNT_LOCKED_OUT", payload=payload)
         return True
 
+    if event_type == "CaseOfficerAssigned":
+        # FR-CASE-07 — notify the officer added to (or re-roled on) a case.
+        # payload.officer_id is an hr_db.officers.id, resolved via the map.
+        row = await _officer_row(session, payload.get("officer_id"))
+        if row is None:
+            log.warning(
+                "no user_id mapped for officer_id=%s (CaseOfficerAssigned) — dropping notification",
+                payload.get("officer_id"),
+            )
+            return False
+        _queue(
+            session,
+            recipient_user_id=row.user_id,
+            template_code="CASE_OFFICER_ASSIGNED",
+            payload=payload,
+        )
+        return True
+
     spec = _OFFICER_EVENT_MAP.get(event_type)
     if spec is None:
         return False

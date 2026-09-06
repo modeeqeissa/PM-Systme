@@ -197,6 +197,50 @@ async def test_supervisor_learned_via_officer_created_supervisor_id(client, emit
     assert row.supervisor_officer_id == supervisor_id
 
 
+async def test_case_officer_assigned_notifies_the_officer(
+    client, emit, consumer, make_officer_map
+):
+    officer_id = uuid.uuid4()
+    user_id = uuid.uuid4()
+    await make_officer_map(officer_id, user_id)
+
+    await emit(
+        "CaseOfficerAssigned",
+        {
+            "case_id": str(uuid.uuid4()),
+            "officer_id": str(officer_id),
+            "role_on_case": "forensic liaison",
+            "previous_role": None,
+        },
+        service="case-service",
+        actor_role="Station Commander",
+    )
+    assert await consumer.process_available() == 1
+
+    rows = await _notifications()
+    assert len(rows) == 1
+    assert rows[0].recipient_user_id == user_id
+    assert rows[0].template_code == "CASE_OFFICER_ASSIGNED"
+    assert rows[0].channel == "in_app"
+    assert rows[0].status == "queued"
+    assert rows[0].payload["role_on_case"] == "forensic liaison"
+
+
+async def test_case_officer_assigned_for_unmapped_officer_is_dropped(client, emit, consumer):
+    await emit(
+        "CaseOfficerAssigned",
+        {
+            "case_id": str(uuid.uuid4()),
+            "officer_id": str(uuid.uuid4()),
+            "role_on_case": "support",
+            "previous_role": None,
+        },
+        service="case-service",
+    )
+    assert await consumer.process_available() == 0
+    assert await _notifications() == []
+
+
 async def test_account_locked_out_notifies_directly_by_user_id(client, emit, consumer):
     user_id = str(uuid.uuid4())
     await emit(

@@ -9,6 +9,8 @@ _TOPICS = {
     "ArrestRecorded": "case.arrest_recorded",
     "StatementRecorded": "case.statement_recorded",
     "CourtProceedingRecorded": "case.court_proceeding_recorded",
+    "CaseOfficerAssigned": "case.officer_assigned",
+    "CaseOfficerUnassigned": "case.officer_unassigned",
 }
 
 ALL_TOPICS = tuple(_TOPICS.values())

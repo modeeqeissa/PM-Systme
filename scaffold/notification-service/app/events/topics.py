@@ -13,6 +13,8 @@ _BASE_TOPICS = (
     "hr.leave_status_changed",
     "training.officer_certification_status_changed",
     "community.follow_up_action_status_changed",
+    # FR-CASE-07 — an officer assigned to (or re-roled on) a case is notified.
+    "case.officer_assigned",
     # FR-IAM-05's notification half (TODO.md TD-003's remaining item)
     "account.locked_out",
 )

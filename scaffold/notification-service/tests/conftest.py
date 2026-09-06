@@ -116,6 +116,7 @@ _BASE_TOPIC = {
     "LeaveStatusChanged": "hr.leave_status_changed",
     "OfficerCertificationStatusChanged": "training.officer_certification_status_changed",
     "FollowUpActionStatusChanged": "community.follow_up_action_status_changed",
+    "CaseOfficerAssigned": "case.officer_assigned",
     "AccountLockedOut": "account.locked_out",
 }
 

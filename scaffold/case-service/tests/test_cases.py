@@ -414,6 +414,146 @@ async def test_list_court_proceedings_requires_read(client, make_case, auth_none
     assert r.status_code == 403
 
 
+# --- POST/GET/DELETE /cases/{id}/officers (FR-CASE-07) --------------------
+# E2E-RO = Station Commander (case.read + case.approve) -> may assign officers.
+# E2E-RW = Patrol Officer (case.read + case.write, NO case.approve) -> may not.
+async def test_assign_case_officer(client, make_case, auth_ro):
+    case = await make_case(status="investigating")
+    officer_id = str(uuid.uuid4())
+    r = await client.post(
+        f"/api/v1/cases/{case.id}/officers",
+        json={"officer_id": officer_id, "role_on_case": "forensic liaison"},
+        headers=auth_ro,
+    )
+    assert r.status_code == 201, r.text
+    body = r.json()
+    assert body == {
+        "case_id": str(case.id),
+        "officer_id": officer_id,
+        "role_on_case": "forensic liaison",
+    }
+
+
+async def test_reassign_existing_officer_updates_role_and_returns_200(
+    client, make_case, auth_ro
+):
+    case = await make_case(status="investigating")
+    officer_id = str(uuid.uuid4())
+    first = await client.post(
+        f"/api/v1/cases/{case.id}/officers",
+        json={"officer_id": officer_id, "role_on_case": "support"},
+        headers=auth_ro,
+    )
+    assert first.status_code == 201
+    second = await client.post(
+        f"/api/v1/cases/{case.id}/officers",
+        json={"officer_id": officer_id, "role_on_case": "lead"},
+        headers=auth_ro,
+    )
+    assert second.status_code == 200, second.text
+    assert second.json()["role_on_case"] == "lead"
+
+    listing = await client.get(f"/api/v1/cases/{case.id}/officers", headers=auth_ro)
+    assert [o["role_on_case"] for o in listing.json()] == ["lead"]  # not duplicated
+
+
+async def test_assign_case_officer_unknown_case_404(client, auth_ro):
+    r = await client.post(
+        f"/api/v1/cases/{uuid.uuid4()}/officers",
+        json={"officer_id": str(uuid.uuid4()), "role_on_case": "support"},
+        headers=auth_ro,
+    )
+    assert r.status_code == 404
+
+
+async def test_assign_case_officer_requires_approve_not_write(client, make_case, auth_rw):
+    case = await make_case()
+    r = await client.post(
+        f"/api/v1/cases/{case.id}/officers",
+        json={"officer_id": str(uuid.uuid4()), "role_on_case": "support"},
+        headers=auth_rw,
+    )
+    assert r.status_code == 403
+
+
+async def test_assign_case_officer_rejects_blank_role(client, make_case, auth_ro):
+    case = await make_case()
+    r = await client.post(
+        f"/api/v1/cases/{case.id}/officers",
+        json={"officer_id": str(uuid.uuid4()), "role_on_case": ""},
+        headers=auth_ro,
+    )
+    assert r.status_code == 422
+
+
+async def test_list_case_officers(client, make_case, auth_ro):
+    case = await make_case(status="investigating")
+    for role in ("lead", "support"):
+        r = await client.post(
+            f"/api/v1/cases/{case.id}/officers",
+            json={"officer_id": str(uuid.uuid4()), "role_on_case": role},
+            headers=auth_ro,
+        )
+        assert r.status_code == 201, r.text
+
+    r = await client.get(f"/api/v1/cases/{case.id}/officers", headers=auth_ro)
+    assert r.status_code == 200
+    body = r.json()
+    assert len(body) == 2
+    assert {o["role_on_case"] for o in body} == {"lead", "support"}
+    assert all(o["case_id"] == str(case.id) for o in body)
+
+
+async def test_list_case_officers_unknown_case_404(client, auth_ro):
+    r = await client.get(f"/api/v1/cases/{uuid.uuid4()}/officers", headers=auth_ro)
+    assert r.status_code == 404
+
+
+async def test_list_case_officers_requires_read(client, make_case, auth_none):
+    case = await make_case()
+    r = await client.get(f"/api/v1/cases/{case.id}/officers", headers=auth_none)
+    assert r.status_code == 403
+
+
+async def test_unassign_case_officer(client, make_case, auth_ro):
+    case = await make_case(status="investigating")
+    officer_id = str(uuid.uuid4())
+    await client.post(
+        f"/api/v1/cases/{case.id}/officers",
+        json={"officer_id": officer_id, "role_on_case": "support"},
+        headers=auth_ro,
+    )
+    r = await client.delete(
+        f"/api/v1/cases/{case.id}/officers/{officer_id}", headers=auth_ro
+    )
+    assert r.status_code == 204
+    listing = await client.get(f"/api/v1/cases/{case.id}/officers", headers=auth_ro)
+    assert listing.json() == []
+
+
+async def test_unassign_case_officer_not_assigned_404(client, make_case, auth_ro):
+    case = await make_case()
+    r = await client.delete(
+        f"/api/v1/cases/{case.id}/officers/{uuid.uuid4()}", headers=auth_ro
+    )
+    assert r.status_code == 404
+
+
+async def test_unassign_case_officer_unknown_case_404(client, auth_ro):
+    r = await client.delete(
+        f"/api/v1/cases/{uuid.uuid4()}/officers/{uuid.uuid4()}", headers=auth_ro
+    )
+    assert r.status_code == 404
+
+
+async def test_unassign_case_officer_requires_approve(client, make_case, auth_rw):
+    case = await make_case()
+    r = await client.delete(
+        f"/api/v1/cases/{case.id}/officers/{uuid.uuid4()}", headers=auth_rw
+    )
+    assert r.status_code == 403
+
+
 # --- GET /cases (list, FR-CASE-03 + FR-IAM-04 scope) -----------------------
 def _sub(token: str) -> str:
     import jwt

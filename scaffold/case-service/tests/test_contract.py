@@ -72,6 +72,29 @@ def test_case_response_matches_contract():
     }
 
 
+def test_case_officer_response_matches_contract():
+    contract = _contract()
+    generated = app.openapi()
+    want = _resolve(contract, contract["components"]["schemas"]["CaseOfficer"])
+    got = generated["components"]["schemas"]["CaseOfficerOut"]
+    assert set(got["properties"]) == set(want["properties"])
+
+
+def test_post_case_officers_documents_200_and_201():
+    contract = _contract()
+    responses = contract["paths"]["/cases/{case_id}/officers"]["post"]["responses"]
+    assert {"200", "201", "403", "404"} <= set(responses)
+    for code in ("200", "201"):
+        schema = responses[code]["content"]["application/json"]["schema"]
+        assert schema["$ref"].split("/")[-1] == "CaseOfficer"
+
+
+def test_delete_case_officer_documents_204():
+    contract = _contract()
+    responses = contract["paths"]["/cases/{case_id}/officers/{officer_id}"]["delete"]["responses"]
+    assert {"204", "403", "404"} <= set(responses)
+
+
 def test_incident_create_required_fields_match_contract():
     contract = _contract()
     generated = app.openapi()
@@ -115,6 +138,9 @@ _PROTECTED = [
     ("/cases/{case_id}/statements", "post"),
     ("/cases/{case_id}/court-proceedings", "get"),
     ("/cases/{case_id}/court-proceedings", "post"),
+    ("/cases/{case_id}/officers", "get"),
+    ("/cases/{case_id}/officers", "post"),
+    ("/cases/{case_id}/officers/{officer_id}", "delete"),
 ]
 
 

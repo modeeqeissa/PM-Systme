@@ -8,17 +8,19 @@ the independent, hash-chained audit-log entry (CLAUDE.md rule 3 / FR-AUD-01).
 import datetime as dt
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.deps import get_session, require_permission
 from app.events import enqueue
-from app.models import Arrest, Case, CourtProceeding, Incident, Statement
+from app.models import Arrest, Case, CaseOfficer, CourtProceeding, Incident, Statement
 from app.schemas import (
     ArrestCreate,
     ArrestOut,
     CaseCreate,
+    CaseOfficerAssign,
+    CaseOfficerOut,
     CaseOut,
     CaseStatus,
     CaseStatusUpdate,
@@ -33,6 +35,15 @@ from app.services.case_status import can_transition
 # they lead (FR-IAM-04 data scoping, using lead_officer_id since cases carry no
 # station column — see openapi.yaml).
 _WIDE_SCOPE_PERMISSION = "case.approve"
+
+# FR-CASE-07: assigning/reassigning officers to a case is a command decision
+# (docs §2.3 — the Station Commander "oversees a station's caseload" and
+# "approves workflows"; a field officer holding only case.write does not staff
+# investigations). `case.approve` is this service's existing supervisory marker
+# (_WIDE_SCOPE_PERMISSION above), so the assign/unassign mutations reuse it
+# rather than inventing a new permission code — docs §4.1 (FR-IAM-01) enumerates
+# case actions as read/write/approve/export, so there is no `case.assign` to add.
+_ASSIGN_PERMISSION = "case.approve"
 
 router = APIRouter(prefix="/cases", tags=["cases"])
 
@@ -434,3 +445,155 @@ async def record_court_proceeding(
         },
     )
     return CourtProceedingOut.model_validate(proceeding)
+
+
+# --- Supporting officers on a case (FR-CASE-07) --------------------------
+@router.get(
+    "/{case_id}/officers",
+    response_model=list[CaseOfficerOut],
+    responses={
+        401: {"description": "Missing or invalid access token"},
+        403: {"description": "Caller lacks case.read"},
+        404: {"description": "No case with that id"},
+    },
+)
+async def list_case_officers(
+    case_id: uuid.UUID,
+    session: AsyncSession = Depends(get_session),
+    _: dict = Depends(require_permission("case.read")),
+) -> list[CaseOfficerOut]:
+    """List the supporting officers currently assigned to a case (FR-CASE-07)."""
+    case = await session.get(Case, case_id)
+    if case is None:
+        raise HTTPException(status_code=404, detail="No case with that id")
+
+    q = (
+        select(CaseOfficer)
+        .where(CaseOfficer.case_id == case_id)
+        .order_by(CaseOfficer.officer_id)
+    )
+    rows = (await session.scalars(q)).all()
+    return [CaseOfficerOut.model_validate(r) for r in rows]
+
+
+@router.post(
+    "/{case_id}/officers",
+    response_model=CaseOfficerOut,
+    status_code=201,
+    responses={
+        200: {"model": CaseOfficerOut, "description": "Existing assignment's role updated"},
+        401: {"description": "Missing or invalid access token"},
+        403: {"description": "Caller lacks case.approve"},
+        404: {"description": "No case with that id"},
+    },
+)
+async def assign_case_officer(
+    case_id: uuid.UUID,
+    payload: CaseOfficerAssign,
+    response: Response,
+    session: AsyncSession = Depends(get_session),
+    claims: dict = Depends(require_permission(_ASSIGN_PERMISSION)),
+) -> CaseOfficerOut:
+    """Assign — or, for an officer already on the case, reassign the role of —
+    a supporting officer (FR-CASE-07). Publishes a `CaseOfficerAssigned` event;
+    notification-service turns that into a notification for the affected officer.
+
+    ``officer_id`` is a logical reference to ``hr_db.officers.id`` (CLAUDE.md
+    rule 1) — it is not validated here, exactly as ``lead_officer_id`` on case
+    creation and ``officer_id`` on an arrest are not.
+    """
+    case = await session.get(Case, case_id)
+    if case is None:
+        raise HTTPException(status_code=404, detail="No case with that id")
+
+    existing = await session.get(
+        CaseOfficer, {"case_id": case_id, "officer_id": payload.officer_id}
+    )
+    previous_role = existing.role_on_case if existing else None
+    if existing is not None:
+        existing.role_on_case = payload.role_on_case
+        row = existing
+        response.status_code = 200
+    else:
+        row = CaseOfficer(
+            case_id=case_id,
+            officer_id=payload.officer_id,
+            role_on_case=payload.role_on_case,
+        )
+        session.add(row)
+
+    await session.flush()
+
+    actor_id, actor_role = _actor(claims)
+    enqueue(
+        session,
+        event_type="CaseOfficerAssigned",
+        aggregate_type="case_officer",
+        aggregate_id=case_id,
+        actor_id=actor_id,
+        actor_role=actor_role,
+        payload={
+            "case_id": str(case_id),
+            "officer_id": str(payload.officer_id),
+            "role_on_case": row.role_on_case,
+            "previous_role": previous_role,
+        },
+    )
+    return CaseOfficerOut.model_validate(row)
+
+
+@router.delete(
+    "/{case_id}/officers/{officer_id}",
+    status_code=204,
+    responses={
+        401: {"description": "Missing or invalid access token"},
+        403: {"description": "Caller lacks case.approve"},
+        404: {"description": "No case with that id, or officer not assigned to it"},
+    },
+)
+async def unassign_case_officer(
+    case_id: uuid.UUID,
+    officer_id: uuid.UUID,
+    session: AsyncSession = Depends(get_session),
+    claims: dict = Depends(require_permission(_ASSIGN_PERMISSION)),
+) -> None:
+    """Remove a supporting officer from a case (FR-CASE-07).
+
+    A hard delete of the join row: `case_officers` is a plain many-to-many
+    junction (docs §9.3.2, no status column) and carries none of the
+    evidentiary weight of `custody_events`. The assignment history stays
+    reconstructable from the `CaseOfficerAssigned` / `CaseOfficerUnassigned`
+    audit-log entries. FR-CASE-09 (no case deletion) is unaffected — the case
+    row and every arrest/statement/proceeding on it are untouched.
+    """
+    case = await session.get(Case, case_id)
+    if case is None:
+        raise HTTPException(status_code=404, detail="No case with that id")
+
+    row = await session.get(
+        CaseOfficer, {"case_id": case_id, "officer_id": officer_id}
+    )
+    if row is None:
+        raise HTTPException(
+            status_code=404, detail="Officer is not assigned to this case"
+        )
+
+    removed_role = row.role_on_case
+    await session.delete(row)
+    await session.flush()
+
+    actor_id, actor_role = _actor(claims)
+    enqueue(
+        session,
+        event_type="CaseOfficerUnassigned",
+        aggregate_type="case_officer",
+        aggregate_id=case_id,
+        actor_id=actor_id,
+        actor_role=actor_role,
+        payload={
+            "case_id": str(case_id),
+            "officer_id": str(officer_id),
+            "role_on_case": removed_role,
+        },
+    )
+    return None

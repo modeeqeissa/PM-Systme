@@ -218,6 +218,15 @@ export interface CourtProceeding extends CourtProceedingCreate {
   case_id: string;
 }
 
+export interface CaseOfficerAssign {
+  officer_id: string;
+  role_on_case: string;
+}
+
+export interface CaseOfficer extends CaseOfficerAssign {
+  case_id: string;
+}
+
 export const cases = {
   list: (params: { status?: string } = {}) => {
     const qs = new URLSearchParams(params as Record<string, string>).toString();
@@ -283,6 +292,32 @@ export const cases = {
         body: JSON.stringify(body),
         auth: true,
       },
+    ),
+
+  /** GET /cases/{id}/officers — supporting officers assigned to a case (FR-CASE-07). */
+  officers: (caseId: string) =>
+    request<CaseOfficer[]>("/api/case", `/api/v1/cases/${caseId}/officers`, {
+      auth: true,
+    }),
+
+  /** POST /cases/{id}/officers — assign (201) or re-role (200) a supporting
+   * officer (FR-CASE-07). Requires `case.approve`. Publishes
+   * `CaseOfficerAssigned`, which notification-service turns into a
+   * notification for the affected officer. */
+  assignOfficer: (caseId: string, body: CaseOfficerAssign) =>
+    request<CaseOfficer>("/api/case", `/api/v1/cases/${caseId}/officers`, {
+      method: "POST",
+      body: JSON.stringify(body),
+      auth: true,
+    }),
+
+  /** DELETE /cases/{id}/officers/{officerId} — unassign a supporting officer
+   * (FR-CASE-07). Requires `case.approve`. Publishes `CaseOfficerUnassigned`. */
+  unassignOfficer: (caseId: string, officerId: string) =>
+    request<void>(
+      "/api/case",
+      `/api/v1/cases/${caseId}/officers/${officerId}`,
+      { method: "DELETE", auth: true },
     ),
 };
 

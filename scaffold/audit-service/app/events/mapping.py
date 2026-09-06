@@ -10,6 +10,10 @@ EVENT_MAP: dict[str, tuple[str, str, str]] = {
     "ArrestRecorded": ("arrest", "create", "arrest_id"),
     "StatementRecorded": ("statement", "create", "statement_id"),
     "CourtProceedingRecorded": ("court_proceeding", "create", "court_proceeding_id"),
+    # FR-CASE-07 — case_officers has a composite PK, so the audit entry keys on
+    # case_id (officer_id + role_on_case ride along in metadata.payload).
+    "CaseOfficerAssigned": ("case_officer", "create", "case_id"),
+    "CaseOfficerUnassigned": ("case_officer", "delete", "case_id"),
     "EvidenceLogged": ("evidence_item", "create", "evidence_id"),
     "CustodyEventRecorded": ("custody_event", "create", "custody_event_id"),
     # a verification read that found tampering
