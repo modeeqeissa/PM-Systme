@@ -3,3 +3,7 @@ dist/
 *.local
 .vite/
 coverage/
+
+# dev-portal.sh local artifacts
+.dev-portal-pids/
+.dev-portal-secrets
