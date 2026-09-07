@@ -1,0 +1,58 @@
+# STANDARD namespace: default-deny, ingress only from the gateway.
+# If an approved direct service-to-service call path is added later, add a
+# scoped ingress rule here (all sync traffic normally goes via the gateway, §3.5).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: integration-gateway
+  namespace: pmp-integration-gateway
+  labels:
+    app.kubernetes.io/name: integration-gateway
+    app.kubernetes.io/part-of: pmp
+    pmp.gov/tier: standard
+spec:
+  podSelector:
+    matchLabels: { app.kubernetes.io/name: integration-gateway }
+  policyTypes: [Ingress, Egress]
+  ingress:
+    # Only the API gateway may reach this service (§3.5 — nothing else is public,
+    # no direct service-to-service calls).
+    - from:
+        - namespaceSelector: { matchLabels: { pmp.gov/role: gateway } }
+      ports:
+        - { protocol: TCP, port: 8009 }
+  egress:
+    # DNS
+    - to:
+        - namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: kube-system } }
+      ports:
+        - { protocol: UDP, port: 53 }
+        - { protocol: TCP, port: 53 }
+    # This service's own database
+    - to:
+        - namespaceSelector: { matchLabels: { pmp.gov/plane: data } }
+      ports:
+        - { protocol: TCP, port: 5432 }
+    - to:
+        - namespaceSelector: { matchLabels: { pmp.gov/plane: data } }
+      ports:
+        - { protocol: TCP, port: 9092 }   # Kafka
+    - to:
+        - namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: pmp-iam } }
+          podSelector: { matchLabels: { app.kubernetes.io/name: iam } }
+      ports:
+        - { protocol: TCP, port: 8001 }   # iam JWKS (FR-IAM-08)
+    # FR-INT-01..05 — this service is the ONLY one allowed to egress to external
+    # systems (CAD / NCDB / COURTS / JAIL). Replace with the real per-system
+    # CIDRs/hostnames; keep the list as tight as the partners allow. mTLS to
+    # each system is configured in integration_configs, not here.
+    - to:
+        - ipBlock: { cidr: 192.0.2.0/24 }   # REPLACE_ME — RFC 5737 doc range placeholder
+      ports:
+        - { protocol: TCP, port: 443 }
+    # If Postgres / Kafka run OUTSIDE the cluster (managed RDS / MSK / etc.),
+    # the namespaceSelector rules above match nothing — replace them with:
+    #  - to: [ ipBlock: { cidr: REPLACE_ME_DB_CIDR/32 } ]
+    #    ports: [ { protocol: TCP, port: 5432 } ]
+    #  - to: [ ipBlock: { cidr: REPLACE_ME_KAFKA_CIDR/32 } ]
+    #    ports: [ { protocol: TCP, port: 9092 } ]

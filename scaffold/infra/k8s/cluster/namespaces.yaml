@@ -1,0 +1,140 @@
+# One namespace per microservice (docs §3.6). `pmp.gov/tier: sensitive` marks
+# the evidence and hr namespaces, which get the stricter network posture and a
+# dedicated encryption-key Secret (§3.6 / NFR-SEC-05).
+#
+# Pod Security Admission is set to "restricted" everywhere — the Deployments are
+# already written to satisfy it (non-root, no privilege escalation, seccomp,
+# read-only rootfs, all caps dropped).
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: pmp-iam
+  labels:
+    app.kubernetes.io/part-of: pmp
+    pmp.gov/tier: standard
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/enforce-version: latest
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: pmp-case
+  labels:
+    app.kubernetes.io/part-of: pmp
+    pmp.gov/tier: standard
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/enforce-version: latest
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: pmp-evidence
+  labels:
+    app.kubernetes.io/part-of: pmp
+    pmp.gov/tier: sensitive
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/enforce-version: latest
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: pmp-community
+  labels:
+    app.kubernetes.io/part-of: pmp
+    pmp.gov/tier: standard
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/enforce-version: latest
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: pmp-training
+  labels:
+    app.kubernetes.io/part-of: pmp
+    pmp.gov/tier: standard
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/enforce-version: latest
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: pmp-hr
+  labels:
+    app.kubernetes.io/part-of: pmp
+    pmp.gov/tier: sensitive
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/enforce-version: latest
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: pmp-dashboard
+  labels:
+    app.kubernetes.io/part-of: pmp
+    pmp.gov/tier: standard
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/enforce-version: latest
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: pmp-notification
+  labels:
+    app.kubernetes.io/part-of: pmp
+    pmp.gov/tier: standard
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/enforce-version: latest
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: pmp-integration-gateway
+  labels:
+    app.kubernetes.io/part-of: pmp
+    pmp.gov/tier: standard
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/enforce-version: latest
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: pmp-audit
+  labels:
+    app.kubernetes.io/part-of: pmp
+    pmp.gov/tier: sensitive
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/enforce-version: latest
+---
+# The API gateway (§3.5 — TLS termination, JWT validation, rate limits) is a
+# SEPARATE deployment (Kong / Envoy Gateway / APISIX — not a PMP microservice).
+# Every service NetworkPolicy allows ingress only from a namespace carrying
+# `pmp.gov/role: gateway`; create that gateway here (or wherever it lives) with
+# this label.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: pmp-gateway
+  labels:
+    app.kubernetes.io/part-of: pmp
+    pmp.gov/role: gateway
+    pod-security.kubernetes.io/enforce: baseline
+    pod-security.kubernetes.io/enforce-version: latest
+---
+# The data plane (PostgreSQL — one DB per service — plus Kafka and the object
+# store for the evidence vault). Provided EXTERNALLY: an in-cluster operator
+# (CloudNativePG / Strimzi / MinIO) OR a managed service (RDS / MSK / S3).
+#   - in-cluster: keep this namespace, label it `pmp.gov/plane: data`, deploy
+#     the operators here; the service NetworkPolicies already allow egress to it.
+#   - managed / off-cluster: delete this namespace and switch the data-plane
+#     egress rules in each service to `ipBlock` CIDRs (each NetworkPolicy has a
+#     commented example; see README).
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: pmp-data
+  labels:
+    app.kubernetes.io/part-of: pmp
+    pmp.gov/plane: data
+    pod-security.kubernetes.io/enforce: baseline
+    pod-security.kubernetes.io/enforce-version: latest

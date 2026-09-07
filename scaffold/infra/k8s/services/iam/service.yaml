@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: iam
+  namespace: pmp-iam
+  labels:
+    app.kubernetes.io/name: iam
+    app.kubernetes.io/part-of: pmp
+spec:
+  type: ClusterIP          # never NodePort/LoadBalancer — only the gateway is public (§3.5)
+  selector:
+    app.kubernetes.io/name: iam
+  ports:
+    - name: http
+      port: 8001
+      targetPort: http

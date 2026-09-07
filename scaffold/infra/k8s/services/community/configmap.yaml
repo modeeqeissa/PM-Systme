@@ -1,0 +1,20 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: community-config
+  namespace: pmp-community
+  labels:
+    app.kubernetes.io/name: community
+    app.kubernetes.io/part-of: pmp
+data:
+  COMMUNITY_DB_HOST: postgres.pmp-data.svc.cluster.local
+  COMMUNITY_DB_PORT: "5432"
+  COMMUNITY_DB_NAME: community_db
+  COMMUNITY_DB_USER: community_service
+  COMMUNITY_IAM_JWKS_URL: http://iam.pmp-iam.svc.cluster.local:8001/api/v1/auth/jwks
+  EVENTS_KAFKA_BOOTSTRAP: kafka.pmp-data.svc.cluster.local:9092
+  EVENTS_TOPIC_PREFIX: ""
+  COMMUNITY_JWT_ISSUER: "pmp-iam-service"
+  COMMUNITY_JWKS_CACHE_TTL: "300"
+  COMMUNITY_RECOMPUTE_ENABLED: "1"
+  COMMUNITY_RECOMPUTE_POLL_SECONDS: "300"

@@ -1,0 +1,50 @@
+# SENSITIVE namespace (§3.6 / NFR-SEC-05): default-deny, ingress ONLY from the
+# gateway, egress ONLY to DNS + this service's own DB + iam JWKS + Kafka.
+# Do NOT add allow rules without a security review.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: audit
+  namespace: pmp-audit
+  labels:
+    app.kubernetes.io/name: audit
+    app.kubernetes.io/part-of: pmp
+    pmp.gov/tier: sensitive
+spec:
+  podSelector:
+    matchLabels: { app.kubernetes.io/name: audit }
+  policyTypes: [Ingress, Egress]
+  ingress:
+    # Only the API gateway may reach this service (§3.5 — nothing else is public,
+    # no direct service-to-service calls).
+    - from:
+        - namespaceSelector: { matchLabels: { pmp.gov/role: gateway } }
+      ports:
+        - { protocol: TCP, port: 8010 }
+  egress:
+    # DNS
+    - to:
+        - namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: kube-system } }
+      ports:
+        - { protocol: UDP, port: 53 }
+        - { protocol: TCP, port: 53 }
+    # This service's own database
+    - to:
+        - namespaceSelector: { matchLabels: { pmp.gov/plane: data } }
+      ports:
+        - { protocol: TCP, port: 5432 }
+    - to:
+        - namespaceSelector: { matchLabels: { pmp.gov/plane: data } }
+      ports:
+        - { protocol: TCP, port: 9092 }   # Kafka
+    - to:
+        - namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: pmp-iam } }
+          podSelector: { matchLabels: { app.kubernetes.io/name: iam } }
+      ports:
+        - { protocol: TCP, port: 8001 }   # iam JWKS (FR-IAM-08)
+    # If Postgres / Kafka run OUTSIDE the cluster (managed RDS / MSK / etc.),
+    # the namespaceSelector rules above match nothing — replace them with:
+    #  - to: [ ipBlock: { cidr: REPLACE_ME_DB_CIDR/32 } ]
+    #    ports: [ { protocol: TCP, port: 5432 } ]
+    #  - to: [ ipBlock: { cidr: REPLACE_ME_KAFKA_CIDR/32 } ]
+    #    ports: [ { protocol: TCP, port: 9092 } ]

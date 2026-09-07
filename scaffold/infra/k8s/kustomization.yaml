@@ -1,0 +1,17 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Applies the whole platform. `kubectl kustomize infra/k8s` to render,
+# `kubectl apply --dry-run=client -k infra/k8s` to validate.
+resources:
+  - cluster
+  - services/iam
+  - services/case
+  - services/evidence
+  - services/community
+  - services/training
+  - services/hr
+  - services/dashboard
+  - services/notification
+  - services/integration-gateway
+  - services/audit

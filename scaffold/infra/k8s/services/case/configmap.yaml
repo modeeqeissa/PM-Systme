@@ -1,0 +1,18 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: case-config
+  namespace: pmp-case
+  labels:
+    app.kubernetes.io/name: case
+    app.kubernetes.io/part-of: pmp
+data:
+  CASE_DB_HOST: postgres.pmp-data.svc.cluster.local
+  CASE_DB_PORT: "5432"
+  CASE_DB_NAME: case_db
+  CASE_DB_USER: case_service
+  CASE_IAM_JWKS_URL: http://iam.pmp-iam.svc.cluster.local:8001/api/v1/auth/jwks
+  EVENTS_KAFKA_BOOTSTRAP: kafka.pmp-data.svc.cluster.local:9092
+  EVENTS_TOPIC_PREFIX: ""
+  CASE_JWT_ISSUER: "pmp-iam-service"
+  CASE_JWKS_CACHE_TTL: "300"

@@ -1,0 +1,50 @@
+# STANDARD namespace: default-deny, ingress only from the gateway.
+# If an approved direct service-to-service call path is added later, add a
+# scoped ingress rule here (all sync traffic normally goes via the gateway, §3.5).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: community
+  namespace: pmp-community
+  labels:
+    app.kubernetes.io/name: community
+    app.kubernetes.io/part-of: pmp
+    pmp.gov/tier: standard
+spec:
+  podSelector:
+    matchLabels: { app.kubernetes.io/name: community }
+  policyTypes: [Ingress, Egress]
+  ingress:
+    # Only the API gateway may reach this service (§3.5 — nothing else is public,
+    # no direct service-to-service calls).
+    - from:
+        - namespaceSelector: { matchLabels: { pmp.gov/role: gateway } }
+      ports:
+        - { protocol: TCP, port: 8004 }
+  egress:
+    # DNS
+    - to:
+        - namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: kube-system } }
+      ports:
+        - { protocol: UDP, port: 53 }
+        - { protocol: TCP, port: 53 }
+    # This service's own database
+    - to:
+        - namespaceSelector: { matchLabels: { pmp.gov/plane: data } }
+      ports:
+        - { protocol: TCP, port: 5432 }
+    - to:
+        - namespaceSelector: { matchLabels: { pmp.gov/plane: data } }
+      ports:
+        - { protocol: TCP, port: 9092 }   # Kafka
+    - to:
+        - namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: pmp-iam } }
+          podSelector: { matchLabels: { app.kubernetes.io/name: iam } }
+      ports:
+        - { protocol: TCP, port: 8001 }   # iam JWKS (FR-IAM-08)
+    # If Postgres / Kafka run OUTSIDE the cluster (managed RDS / MSK / etc.),
+    # the namespaceSelector rules above match nothing — replace them with:
+    #  - to: [ ipBlock: { cidr: REPLACE_ME_DB_CIDR/32 } ]
+    #    ports: [ { protocol: TCP, port: 5432 } ]
+    #  - to: [ ipBlock: { cidr: REPLACE_ME_KAFKA_CIDR/32 } ]
+    #    ports: [ { protocol: TCP, port: 9092 } ]

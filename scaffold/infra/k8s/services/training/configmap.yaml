@@ -1,0 +1,21 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: training-config
+  namespace: pmp-training
+  labels:
+    app.kubernetes.io/name: training
+    app.kubernetes.io/part-of: pmp
+data:
+  TRAINING_DB_HOST: postgres.pmp-data.svc.cluster.local
+  TRAINING_DB_PORT: "5432"
+  TRAINING_DB_NAME: training_db
+  TRAINING_DB_USER: training_service
+  TRAINING_IAM_JWKS_URL: http://iam.pmp-iam.svc.cluster.local:8001/api/v1/auth/jwks
+  EVENTS_KAFKA_BOOTSTRAP: kafka.pmp-data.svc.cluster.local:9092
+  EVENTS_TOPIC_PREFIX: ""
+  TRAINING_JWT_ISSUER: "pmp-iam-service"
+  TRAINING_JWKS_CACHE_TTL: "300"
+  TRAINING_RECOMPUTE_ENABLED: "1"
+  TRAINING_RECOMPUTE_POLL_SECONDS: "300"
+  TRAINING_EXPIRY_LEAD_DAYS: "30"

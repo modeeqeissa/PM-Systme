@@ -1,0 +1,59 @@
+# Baseline default-deny for every PMP service namespace (§3.6). NetworkPolicies
+# are additive: this denies ALL ingress and egress for every pod in the
+# namespace, and each service's own NetworkPolicy (services/<svc>/networkpolicy.yaml)
+# adds back only the flows it needs. Any pod without a more specific policy
+# (debug pods, one-off Jobs) is fully isolated.
+#
+# The gateway (pmp-gateway) and data-plane (pmp-data) namespaces are deliberately
+# NOT locked down here — the gateway needs broad ingress from the internet-facing
+# LB, and the data plane's isolation is the operator's / cloud provider's concern.
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: { name: default-deny-all, namespace: pmp-iam, labels: { app.kubernetes.io/part-of: pmp } }
+spec: { podSelector: {}, policyTypes: [Ingress, Egress] }
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: { name: default-deny-all, namespace: pmp-case, labels: { app.kubernetes.io/part-of: pmp } }
+spec: { podSelector: {}, policyTypes: [Ingress, Egress] }
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: { name: default-deny-all, namespace: pmp-evidence, labels: { app.kubernetes.io/part-of: pmp } }
+spec: { podSelector: {}, policyTypes: [Ingress, Egress] }
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: { name: default-deny-all, namespace: pmp-community, labels: { app.kubernetes.io/part-of: pmp } }
+spec: { podSelector: {}, policyTypes: [Ingress, Egress] }
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: { name: default-deny-all, namespace: pmp-training, labels: { app.kubernetes.io/part-of: pmp } }
+spec: { podSelector: {}, policyTypes: [Ingress, Egress] }
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: { name: default-deny-all, namespace: pmp-hr, labels: { app.kubernetes.io/part-of: pmp } }
+spec: { podSelector: {}, policyTypes: [Ingress, Egress] }
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: { name: default-deny-all, namespace: pmp-dashboard, labels: { app.kubernetes.io/part-of: pmp } }
+spec: { podSelector: {}, policyTypes: [Ingress, Egress] }
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: { name: default-deny-all, namespace: pmp-notification, labels: { app.kubernetes.io/part-of: pmp } }
+spec: { podSelector: {}, policyTypes: [Ingress, Egress] }
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: { name: default-deny-all, namespace: pmp-integration-gateway, labels: { app.kubernetes.io/part-of: pmp } }
+spec: { podSelector: {}, policyTypes: [Ingress, Egress] }
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: { name: default-deny-all, namespace: pmp-audit, labels: { app.kubernetes.io/part-of: pmp } }
+spec: { podSelector: {}, policyTypes: [Ingress, Egress] }

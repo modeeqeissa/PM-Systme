@@ -1,0 +1,33 @@
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: audit
+  namespace: pmp-audit
+  labels:
+    app.kubernetes.io/name: audit
+    app.kubernetes.io/part-of: pmp
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: audit
+  minReplicas: 2           # PLACEHOLDER
+  maxReplicas: 6           # PLACEHOLDER
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+    # NFR-SCALE-01 also wants queue-depth scaling. Needs a custom/external
+    # metrics adapter (KEDA or prometheus-adapter). Example once installed:
+    # - type: External
+    #   external:
+    #     metric:
+    #       name: kafka_consumergroup_lag
+    #       selector: { matchLabels: { consumergroup: audit-service } }
+    #     target: { type: AverageValue, averageValue: "1000" }
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 300

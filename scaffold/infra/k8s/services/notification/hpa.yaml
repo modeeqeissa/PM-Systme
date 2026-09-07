@@ -1,0 +1,33 @@
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: notification
+  namespace: pmp-notification
+  labels:
+    app.kubernetes.io/name: notification
+    app.kubernetes.io/part-of: pmp
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: notification
+  minReplicas: 2           # PLACEHOLDER
+  maxReplicas: 6           # PLACEHOLDER
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+    # NFR-SCALE-01 also wants queue-depth scaling. Needs a custom/external
+    # metrics adapter (KEDA or prometheus-adapter). Example once installed:
+    # - type: External
+    #   external:
+    #     metric:
+    #       name: kafka_consumergroup_lag
+    #       selector: { matchLabels: { consumergroup: notification-service } }
+    #     target: { type: AverageValue, averageValue: "1000" }
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 300
