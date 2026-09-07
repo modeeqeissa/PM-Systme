@@ -769,20 +769,14 @@ export const audit = {
 export interface IntegrationConfig {
   id: number;
   system_name: string;
-  base_url: string;
   enabled: boolean;
-  auth_type: string;
-  updated_at: string;
 }
 export interface ExternalSystemLog {
   id: number;
   system_name: string;
   direction: "outbound" | "inbound";
-  status_code: number | null;
-  correlation_id: string | null;
-  created_at: string;
-  request_summary?: string | null;
-  response_summary?: string | null;
+  correlation_id: string;
+  response_status: number | null;
 }
 export const integration = {
   configs: () =>
