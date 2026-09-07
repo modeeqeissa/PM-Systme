@@ -32,10 +32,30 @@ export function RequirePermission({
           ))}
           ).
         </Alert>
-        <Link to="/cases" className="mt-4 inline-block text-sm text-slate-500 underline">
+        <Link to="/cases" className="mt-4 inline-block text-sm text-ink-faint underline">
           ← Back to cases
         </Link>
       </Card>
     </div>
+  );
+}
+
+/**
+ * Inline (non-route) version — for a Command Center tab-panel whose own
+ * permission the caller lacks. Same "API is the real authority, this only
+ * decides what to show" contract as RequirePermission.
+ */
+export function PermissionNotice({ anyOf }: { anyOf: string[] }) {
+  return (
+    <Alert variant="error">
+      This panel needs one of:{" "}
+      {anyOf.map((c, i) => (
+        <span key={c}>
+          {i > 0 && ", "}
+          <code>{c}</code>
+        </span>
+      ))}
+      . Your role holds none of them.
+    </Alert>
   );
 }

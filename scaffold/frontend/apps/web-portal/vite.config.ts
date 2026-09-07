@@ -13,6 +13,9 @@ const EVIDENCE = process.env.PMP_EVIDENCE_URL ?? "http://localhost:8003";
 const COMMUNITY = process.env.PMP_COMMUNITY_URL ?? "http://localhost:8004";
 const TRAINING = process.env.PMP_TRAINING_URL ?? "http://localhost:8005";
 const HR = process.env.PMP_HR_URL ?? "http://localhost:8006";
+const NOTIFICATION = process.env.PMP_NOTIFICATION_URL ?? "http://localhost:8008";
+const INTEGRATION = process.env.PMP_INTEGRATION_URL ?? "http://localhost:8009";
+const AUDIT = process.env.PMP_AUDIT_URL ?? "http://localhost:8010";
 // 5173 (Vite's default) is often taken; override with PMP_PORT if 5180 clashes too.
 const PORT = Number(process.env.PMP_PORT ?? 5180);
 
@@ -35,6 +38,9 @@ export default defineConfig({
       "/api/community": { target: COMMUNITY, changeOrigin: true, rewrite: (p) => p.replace(/^\/api\/community/, "") },
       "/api/training": { target: TRAINING, changeOrigin: true, rewrite: (p) => p.replace(/^\/api\/training/, "") },
       "/api/hr": { target: HR, changeOrigin: true, rewrite: (p) => p.replace(/^\/api\/hr/, "") },
+      "/api/notification": { target: NOTIFICATION, changeOrigin: true, rewrite: (p) => p.replace(/^\/api\/notification/, "") },
+      "/api/integration": { target: INTEGRATION, changeOrigin: true, rewrite: (p) => p.replace(/^\/api\/integration/, "") },
+      "/api/audit": { target: AUDIT, changeOrigin: true, rewrite: (p) => p.replace(/^\/api\/audit/, "") },
     },
   },
   test: {

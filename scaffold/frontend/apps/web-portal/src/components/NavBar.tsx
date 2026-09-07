@@ -2,6 +2,7 @@ import { NavLink, useNavigate } from "react-router-dom";
 import { Button } from "@pmp/ui";
 import { clearToken, currentClaims } from "../lib/auth";
 import { hasAnyPerm } from "../lib/rbac";
+import { COMMAND_CENTER_PERMS } from "../pages/command-center/tabs";
 
 /**
  * Shared top navigation. Every entry is gated on the permission that its
@@ -21,12 +22,17 @@ const ITEMS: { to: string; label: string; anyOf: string[] }[] = [
   { to: "/community/meetings", label: "Community", anyOf: ["community.read"] },
   { to: "/community/concerns", label: "Concerns", anyOf: ["community.read"] },
   { to: "/community/follow-ups", label: "Follow-ups", anyOf: ["community.read"] },
+  // Command Center: shown when the caller holds any permission a panel needs
+  // (see COMMAND_CENTER_PERMS). Until a gated panel exists that list is empty,
+  // and the entry is visible to any authenticated user (System Health needs
+  // no permission). Each panel still re-checks its own code.
+  { to: "/command-center", label: "Command Center", anyOf: COMMAND_CENTER_PERMS },
 ];
 
 export function NavBar() {
   const navigate = useNavigate();
   const claims = currentClaims();
-  const visible = ITEMS.filter((i) => hasAnyPerm(i.anyOf));
+  const visible = ITEMS.filter((i) => i.anyOf.length === 0 || hasAnyPerm(i.anyOf));
 
   return (
     <nav className="mb-6 border-b border-hair bg-surface/60 py-3 backdrop-blur-panel">

@@ -15,6 +15,7 @@ import { MeetingsPage } from "./pages/community/MeetingsPage";
 import { ConcernsPage } from "./pages/community/ConcernsPage";
 import { ConcernDetailPage } from "./pages/community/ConcernDetailPage";
 import { FollowUpsPage } from "./pages/community/FollowUpsPage";
+import { CommandCenterPage } from "./pages/command-center/CommandCenterPage";
 import { RequireAuth } from "./routes/RequireAuth";
 import { RequirePermission } from "./routes/RequirePermission";
 
@@ -30,6 +31,7 @@ export function App() {
       <Route path="/cases/:caseId" element={<Protected><CaseDetailPage /></Protected>} />
       <Route path="/incidents/new" element={<Protected><IncidentPage /></Protected>} />
       <Route path="/dashboard" element={<Protected><DashboardPage /></Protected>} />
+      <Route path="/command-center" element={<Protected><CommandCenterPage /></Protected>} />
 
       <Route
         path="/hr/officers"

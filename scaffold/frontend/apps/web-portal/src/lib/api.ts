@@ -726,3 +726,112 @@ export const community = {
       request<RecomputeResult>("/api/community", "/api/v1/follow-up-actions/recompute-status", json({})),
   },
 };
+
+// ====================================================================
+// Command Center — read + gated admin across audit / iam / integration.
+// Every path below is an existing service endpoint; each is gated by the
+// service on the same permission code the panel re-checks client-side.
+// ====================================================================
+
+// --- audit-service (GET /audit — audit.read) -------------------------
+export interface AuditEntry {
+  id: number;
+  service_name: string;
+  actor_id: string | null;
+  actor_role: string | null;
+  entity_type: string;
+  entity_id: string;
+  action: string;
+  timestamp: string;
+  payload: Record<string, unknown> | null;
+}
+export interface AuditQuery {
+  actor_id?: string;
+  entity_type?: string;
+  entity_id?: string;
+  action?: string;
+  service_name?: string;
+  from?: string;
+  to?: string;
+  limit?: number;
+  offset?: number;
+}
+export const audit = {
+  query: (params: AuditQuery = {}) =>
+    request<AuditEntry[]>("/api/audit", `/api/v1/audit${qs(params as Record<string, string | number | undefined>)}`, {
+      auth: true,
+    }),
+};
+
+// --- integration-gateway (integration.read / integration.write) ------
+export interface IntegrationConfig {
+  id: number;
+  system_name: string;
+  base_url: string;
+  enabled: boolean;
+  auth_type: string;
+  updated_at: string;
+}
+export interface ExternalSystemLog {
+  id: number;
+  system_name: string;
+  direction: "outbound" | "inbound";
+  status_code: number | null;
+  correlation_id: string | null;
+  created_at: string;
+  request_summary?: string | null;
+  response_summary?: string | null;
+}
+export const integration = {
+  configs: () =>
+    request<IntegrationConfig[]>("/api/integration", "/api/v1/integration-configs", { auth: true }),
+  setEnabled: (id: number, enabled: boolean) =>
+    request<IntegrationConfig>("/api/integration", `/api/v1/integration-configs/${id}`, patch({ enabled })),
+  logs: (params: { system_name?: string; direction?: "outbound" | "inbound" } = {}) =>
+    request<ExternalSystemLog[]>("/api/integration", `/api/v1/external-system-logs${qs(params)}`, { auth: true }),
+};
+
+// --- iam-service admin (iam.user.* / iam.role.*) --------------------
+export interface AdminRole {
+  id: number;
+  name: string;
+  description: string | null;
+  permissions: string[];
+}
+export interface AdminUser {
+  id: string;
+  badge_number: string;
+  email: string | null;
+  full_name: string;
+  station_id: string;
+  status: "active" | "suspended" | "deactivated";
+  failed_login_count: number;
+  mfa_enrolled: boolean;
+  roles: AdminRole[];
+  created_at: string;
+  updated_at: string;
+}
+export interface AdminUserCreate {
+  badge_number: string;
+  email?: string | null;
+  password: string;
+  full_name: string;
+  station_id: string;
+  role_ids: number[];
+}
+export const iamAdmin = {
+  users: (params: { q?: string; status?: string; limit?: number; offset?: number } = {}) =>
+    request<AdminUser[]>("/api/iam", `/api/v1/users${qs(params)}`, { auth: true }),
+  createUser: (body: AdminUserCreate) =>
+    request<AdminUser>("/api/iam", "/api/v1/users", json(body)),
+  setStatus: (id: string, status: "active" | "suspended" | "deactivated") =>
+    request<AdminUser>("/api/iam", `/api/v1/users/${id}`, patch({ status })),
+  setRoles: (id: string, role_ids: number[]) =>
+    request<{ id: string; roles: string[] }>("/api/iam", `/api/v1/users/${id}/roles`, {
+      method: "PUT",
+      body: JSON.stringify({ role_ids }),
+      auth: true,
+    }),
+  roles: () => request<AdminRole[]>("/api/iam", "/api/v1/roles", { auth: true }),
+  permissions: () => request<{ id: number; code: string }[]>("/api/iam", "/api/v1/permissions", { auth: true }),
+};
