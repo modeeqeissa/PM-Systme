@@ -82,8 +82,8 @@ export function LoginPage() {
   return (
     <div className="mx-auto flex min-h-screen max-w-md flex-col justify-center px-4">
       <Card>
-        <h1 className="mb-1 text-lg font-semibold text-slate-900">PMP Command Portal</h1>
-        <p className="mb-6 text-sm text-slate-500">Sign in with your badge number.</p>
+        <h1 className="mb-1 text-lg font-semibold text-ink">PMP Command Portal</h1>
+        <p className="mb-6 text-sm text-ink-faint">Sign in with your badge number.</p>
 
         {error && (
           <div className="mb-4">
@@ -121,10 +121,10 @@ export function LoginPage() {
               This account has no authenticator yet. Add this secret to your TOTP app,
               then enter the current code.
             </Alert>
-            <div className="rounded-md bg-slate-100 p-3 font-mono text-xs break-all text-slate-700">
+            <div className="rounded-md bg-surface-2 p-3 font-mono text-xs break-all text-ink-muted">
               {enrollment.secret}
             </div>
-            <p className="text-xs text-slate-500 break-all">{enrollment.uri}</p>
+            <p className="text-xs text-ink-faint break-all">{enrollment.uri}</p>
             <Button onClick={() => setStep("totp")} variant="secondary">
               I've added it — enter code
             </Button>
@@ -147,7 +147,7 @@ export function LoginPage() {
             </Button>
             <button
               type="button"
-              className="text-xs text-slate-500 underline"
+              className="text-xs text-ink-faint underline"
               onClick={() => {
                 setStep("credentials");
                 setCode("");

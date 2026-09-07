@@ -68,7 +68,7 @@ export function CaseDetailPage() {
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-8">
-      <Link to="/cases" className="mb-4 inline-block text-sm text-slate-500 underline">
+      <Link to="/cases" className="mb-4 inline-block text-sm text-ink-faint underline">
         ← Back to cases
       </Link>
 
@@ -92,20 +92,20 @@ export function CaseDetailPage() {
           <Card className="mb-6">
             <div className="flex items-start justify-between">
               <div>
-                <h1 className="text-xl font-semibold text-slate-900">
+                <h1 className="text-xl font-semibold text-ink">
                   {query.data.case_number}
                 </h1>
-                <p className="mt-1 text-sm text-slate-500">
+                <p className="mt-1 text-sm text-ink-faint">
                   Lead officer:{" "}
                   <span className="font-mono text-xs">{query.data.lead_officer_id}</span>
                 </p>
-                <p className="text-sm text-slate-500">
+                <p className="text-sm text-ink-faint">
                   Opened {new Date(query.data.opened_at).toLocaleString()}
                   {query.data.closed_at &&
                     ` · Closed ${new Date(query.data.closed_at).toLocaleString()}`}
                 </p>
               </div>
-              <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-700">
+              <span className="rounded-full bg-surface-2 px-3 py-1 text-xs font-medium text-ink-muted">
                 {STATUS_LABEL[query.data.status] ?? query.data.status}
               </span>
             </div>
@@ -203,8 +203,8 @@ function AssignedOfficersSection({ caseId }: { caseId: string }) {
 
   return (
     <Card className="mb-6">
-      <h2 className="text-lg font-semibold text-slate-900">Assigned officers</h2>
-      <p className="mb-4 text-sm text-slate-500">
+      <h2 className="text-lg font-semibold text-ink">Assigned officers</h2>
+      <p className="mb-4 text-sm text-ink-faint">
         FR-CASE-07 — assigns a supporting officer to this case; publishes a{" "}
         <code>CaseOfficerAssigned</code> event that notifies the officer.
         Requires the <code>case.approve</code> permission.
@@ -254,7 +254,7 @@ function AssignedOfficersSection({ caseId }: { caseId: string }) {
         </div>
       </form>
 
-      <h3 className="mb-2 mt-6 text-xs font-medium uppercase tracking-wide text-slate-500">
+      <h3 className="mb-2 mt-6 text-xs font-medium uppercase tracking-wide text-ink-faint">
         Currently assigned
       </h3>
       {officersQuery.isLoading && <Spinner label="Loading assigned officers…" />}
@@ -264,18 +264,18 @@ function AssignedOfficersSection({ caseId }: { caseId: string }) {
         </Alert>
       )}
       {officersQuery.data && officersQuery.data.length === 0 && (
-        <p className="text-sm text-slate-500">No supporting officers assigned yet.</p>
+        <p className="text-sm text-ink-faint">No supporting officers assigned yet.</p>
       )}
       {officersQuery.data && officersQuery.data.length > 0 && (
         <ul className="flex flex-col gap-3">
           {officersQuery.data.map((o: CaseOfficer) => (
             <li
               key={o.officer_id}
-              className="flex items-center justify-between border-b border-slate-100 pb-2 text-sm last:border-0"
+              className="flex items-center justify-between border-b border-hair pb-2 text-sm last:border-0"
             >
               <span>
                 <span className="font-mono text-xs">{o.officer_id}</span>
-                <span className="ml-2 rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-700">
+                <span className="ml-2 rounded-full bg-surface-2 px-2 py-0.5 text-xs font-medium text-ink-muted">
                   {o.role_on_case}
                 </span>
               </span>
@@ -357,8 +357,8 @@ function ArrestsSection({ caseId }: { caseId: string }) {
 
   return (
     <Card className="mb-6">
-      <h2 className="text-lg font-semibold text-slate-900">Record arrest</h2>
-      <p className="mb-4 text-sm text-slate-500">
+      <h2 className="text-lg font-semibold text-ink">Record arrest</h2>
+      <p className="mb-4 text-sm text-ink-faint">
         FR-CASE-04 — records an arrest against this case; publishes an{" "}
         <code>ArrestRecorded</code> event that feeds the dashboard's{" "}
         <code>arrests_recorded</code> KPI.
@@ -400,7 +400,7 @@ function ArrestsSection({ caseId }: { caseId: string }) {
           required
         />
         <div className="flex flex-col gap-1">
-          <label htmlFor="arrest-date" className="text-sm font-medium text-slate-700">
+          <label htmlFor="arrest-date" className="text-sm font-medium text-ink-muted">
             Arrest date
           </label>
           <input
@@ -409,7 +409,7 @@ function ArrestsSection({ caseId }: { caseId: string }) {
             value={arrestDate}
             onChange={(e) => setArrestDate(e.target.value)}
             required
-            className="rounded-md border border-slate-300 px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+            className="rounded-md border border-hair px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-accent-command/50"
           />
         </div>
         <TextInput
@@ -420,7 +420,7 @@ function ArrestsSection({ caseId }: { caseId: string }) {
           placeholder="optional"
         />
         <div className="flex flex-col gap-1">
-          <label htmlFor="legal-basis" className="text-sm font-medium text-slate-700">
+          <label htmlFor="legal-basis" className="text-sm font-medium text-ink-muted">
             Legal basis
           </label>
           <textarea
@@ -430,13 +430,13 @@ function ArrestsSection({ caseId }: { caseId: string }) {
             rows={2}
             placeholder="optional"
             className={
-              "rounded-md border px-3 py-2 text-sm text-slate-900 shadow-sm " +
-              "focus:outline-none focus:ring-2 focus:ring-slate-400 " +
-              (fieldErr.legal_basis ? "border-red-400" : "border-slate-300")
+              "rounded-md border px-3 py-2 text-sm text-ink shadow-sm " +
+              "focus:outline-none focus:ring-2 focus:ring-accent-command/50 " +
+              (fieldErr.legal_basis ? "border-bad/30" : "border-hair")
             }
           />
           {fieldErr.legal_basis && (
-            <p className="text-xs text-red-600">{fieldErr.legal_basis}</p>
+            <p className="text-xs text-bad">{fieldErr.legal_basis}</p>
           )}
         </div>
         <div>
@@ -446,7 +446,7 @@ function ArrestsSection({ caseId }: { caseId: string }) {
         </div>
       </form>
 
-      <h3 className="mb-2 mt-6 text-xs font-medium uppercase tracking-wide text-slate-500">
+      <h3 className="mb-2 mt-6 text-xs font-medium uppercase tracking-wide text-ink-faint">
         Arrests
       </h3>
       {arrestsQuery.isLoading && <Spinner label="Loading arrests…" />}
@@ -456,20 +456,20 @@ function ArrestsSection({ caseId }: { caseId: string }) {
         </Alert>
       )}
       {arrestsQuery.data && arrestsQuery.data.length === 0 && (
-        <p className="text-sm text-slate-500">No arrests recorded yet.</p>
+        <p className="text-sm text-ink-faint">No arrests recorded yet.</p>
       )}
       {arrestsQuery.data && arrestsQuery.data.length > 0 && (
         <ul className="flex flex-col gap-3">
           {arrestsQuery.data.map((a) => (
-            <li key={a.id} className="border-b border-slate-100 pb-2 text-sm last:border-0">
-              <div className="text-slate-900">
+            <li key={a.id} className="border-b border-hair pb-2 text-sm last:border-0">
+              <div className="text-ink">
                 Suspect <span className="font-mono text-xs">{a.suspect_id}</span>
               </div>
-              <div className="text-slate-500">
+              <div className="text-ink-faint">
                 {new Date(a.arrest_date).toLocaleString()}
                 {a.location && ` · ${a.location}`}
               </div>
-              {a.legal_basis && <div className="text-slate-600">{a.legal_basis}</div>}
+              {a.legal_basis && <div className="text-ink-muted">{a.legal_basis}</div>}
             </li>
           ))}
         </ul>
@@ -535,8 +535,8 @@ function StatementsSection({ caseId }: { caseId: string }) {
 
   return (
     <Card className="mb-6">
-      <h2 className="text-lg font-semibold text-slate-900">Record statement</h2>
-      <p className="mb-4 text-sm text-slate-500">
+      <h2 className="text-lg font-semibold text-ink">Record statement</h2>
+      <p className="mb-4 text-sm text-ink-faint">
         FR-CASE-05 — records a witness, suspect, or victim statement against this case.
       </p>
 
@@ -568,14 +568,14 @@ function StatementsSection({ caseId }: { caseId: string }) {
 
       <form onSubmit={submit} className="flex flex-col gap-4">
         <div className="flex flex-col gap-1">
-          <label htmlFor="statement-party-type" className="text-sm font-medium text-slate-700">
+          <label htmlFor="statement-party-type" className="text-sm font-medium text-ink-muted">
             Party type
           </label>
           <select
             id="statement-party-type"
             value={partyType}
             onChange={(e) => setPartyType(e.target.value as PartyType)}
-            className="rounded-md border border-slate-300 px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+            className="rounded-md border border-hair px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-accent-command/50"
           >
             <option value="witness">Witness</option>
             <option value="suspect">Suspect</option>
@@ -583,7 +583,7 @@ function StatementsSection({ caseId }: { caseId: string }) {
           </select>
         </div>
         <div className="flex flex-col gap-1">
-          <label htmlFor="statement-text" className="text-sm font-medium text-slate-700">
+          <label htmlFor="statement-text" className="text-sm font-medium text-ink-muted">
             Statement
           </label>
           <textarea
@@ -593,13 +593,13 @@ function StatementsSection({ caseId }: { caseId: string }) {
             rows={4}
             required
             className={
-              "rounded-md border px-3 py-2 text-sm text-slate-900 shadow-sm " +
-              "focus:outline-none focus:ring-2 focus:ring-slate-400 " +
-              (fieldErr.statement_text ? "border-red-400" : "border-slate-300")
+              "rounded-md border px-3 py-2 text-sm text-ink shadow-sm " +
+              "focus:outline-none focus:ring-2 focus:ring-accent-command/50 " +
+              (fieldErr.statement_text ? "border-bad/30" : "border-hair")
             }
           />
           {fieldErr.statement_text && (
-            <p className="text-xs text-red-600">{fieldErr.statement_text}</p>
+            <p className="text-xs text-bad">{fieldErr.statement_text}</p>
           )}
         </div>
         <div>
@@ -609,7 +609,7 @@ function StatementsSection({ caseId }: { caseId: string }) {
         </div>
       </form>
 
-      <h3 className="mb-2 mt-6 text-xs font-medium uppercase tracking-wide text-slate-500">
+      <h3 className="mb-2 mt-6 text-xs font-medium uppercase tracking-wide text-ink-faint">
         Statements
       </h3>
       {statementsQuery.isLoading && <Spinner label="Loading statements…" />}
@@ -619,22 +619,22 @@ function StatementsSection({ caseId }: { caseId: string }) {
         </Alert>
       )}
       {statementsQuery.data && statementsQuery.data.length === 0 && (
-        <p className="text-sm text-slate-500">No statements recorded yet.</p>
+        <p className="text-sm text-ink-faint">No statements recorded yet.</p>
       )}
       {statementsQuery.data && statementsQuery.data.length > 0 && (
         <ul className="flex flex-col gap-3">
           {statementsQuery.data.map((s) => (
-            <li key={s.id} className="border-b border-slate-100 pb-2 text-sm last:border-0">
-              <div className="text-slate-900">
+            <li key={s.id} className="border-b border-hair pb-2 text-sm last:border-0">
+              <div className="text-ink">
                 {PARTY_TYPE_LABEL[s.party_type]}{" "}
-                <span className="text-slate-500">
+                <span className="text-ink-faint">
                   — recorded by{" "}
                   <span className="font-mono text-xs">{s.recorded_by}</span>
                   {" · "}
                   {new Date(s.recorded_at).toLocaleString()}
                 </span>
               </div>
-              <div className="text-slate-600">{s.statement_text}</div>
+              <div className="text-ink-muted">{s.statement_text}</div>
             </li>
           ))}
         </ul>
@@ -708,8 +708,8 @@ function CourtProceedingsSection({ caseId }: { caseId: string }) {
 
   return (
     <Card className="mb-6">
-      <h2 className="text-lg font-semibold text-slate-900">Record court proceeding</h2>
-      <p className="mb-4 text-sm text-slate-500">
+      <h2 className="text-lg font-semibold text-ink">Record court proceeding</h2>
+      <p className="mb-4 text-sm text-ink-faint">
         FR-CASE-06 — records a hearing against this case.
       </p>
 
@@ -741,7 +741,7 @@ function CourtProceedingsSection({ caseId }: { caseId: string }) {
 
       <form onSubmit={submit} className="flex flex-col gap-4">
         <div className="flex flex-col gap-1">
-          <label htmlFor="hearing-date" className="text-sm font-medium text-slate-700">
+          <label htmlFor="hearing-date" className="text-sm font-medium text-ink-muted">
             Hearing date
           </label>
           <input
@@ -750,7 +750,7 @@ function CourtProceedingsSection({ caseId }: { caseId: string }) {
             value={hearingDate}
             onChange={(e) => setHearingDate(e.target.value)}
             required
-            className="rounded-md border border-slate-300 px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+            className="rounded-md border border-hair px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-accent-command/50"
           />
         </div>
         <TextInput
@@ -768,7 +768,7 @@ function CourtProceedingsSection({ caseId }: { caseId: string }) {
           placeholder="optional — once decided"
         />
         <div className="flex flex-col gap-1">
-          <label htmlFor="proceeding-notes" className="text-sm font-medium text-slate-700">
+          <label htmlFor="proceeding-notes" className="text-sm font-medium text-ink-muted">
             Notes
           </label>
           <textarea
@@ -778,12 +778,12 @@ function CourtProceedingsSection({ caseId }: { caseId: string }) {
             rows={3}
             placeholder="optional"
             className={
-              "rounded-md border px-3 py-2 text-sm text-slate-900 shadow-sm " +
-              "focus:outline-none focus:ring-2 focus:ring-slate-400 " +
-              (fieldErr.notes ? "border-red-400" : "border-slate-300")
+              "rounded-md border px-3 py-2 text-sm text-ink shadow-sm " +
+              "focus:outline-none focus:ring-2 focus:ring-accent-command/50 " +
+              (fieldErr.notes ? "border-bad/30" : "border-hair")
             }
           />
-          {fieldErr.notes && <p className="text-xs text-red-600">{fieldErr.notes}</p>}
+          {fieldErr.notes && <p className="text-xs text-bad">{fieldErr.notes}</p>}
         </div>
         <div>
           <Button type="submit" loading={busy}>
@@ -792,7 +792,7 @@ function CourtProceedingsSection({ caseId }: { caseId: string }) {
         </div>
       </form>
 
-      <h3 className="mb-2 mt-6 text-xs font-medium uppercase tracking-wide text-slate-500">
+      <h3 className="mb-2 mt-6 text-xs font-medium uppercase tracking-wide text-ink-faint">
         Court proceedings
       </h3>
       {proceedingsQuery.isLoading && <Spinner label="Loading court proceedings…" />}
@@ -802,13 +802,13 @@ function CourtProceedingsSection({ caseId }: { caseId: string }) {
         </Alert>
       )}
       {proceedingsQuery.data && proceedingsQuery.data.length === 0 && (
-        <p className="text-sm text-slate-500">No court proceedings recorded yet.</p>
+        <p className="text-sm text-ink-faint">No court proceedings recorded yet.</p>
       )}
       {proceedingsQuery.data && proceedingsQuery.data.length > 0 && (
         <ul className="flex flex-col gap-3">
           {proceedingsQuery.data.map((p) => (
-            <li key={p.id} className="border-b border-slate-100 pb-2 text-sm last:border-0">
-              <div className="text-slate-900">
+            <li key={p.id} className="border-b border-hair pb-2 text-sm last:border-0">
+              <div className="text-ink">
                 {new Date(p.hearing_date).toLocaleString()}
                 {p.court_name && (
                   <>
@@ -818,11 +818,11 @@ function CourtProceedingsSection({ caseId }: { caseId: string }) {
                 )}
               </div>
               {p.verdict && (
-                <div className="text-slate-600">
+                <div className="text-ink-muted">
                   Verdict: <span className="font-medium">{p.verdict}</span>
                 </div>
               )}
-              {p.notes && <div className="text-slate-500">{p.notes}</div>}
+              {p.notes && <div className="text-ink-faint">{p.notes}</div>}
             </li>
           ))}
         </ul>
@@ -888,8 +888,8 @@ function AddEvidenceForm({
 
   return (
     <Card>
-      <h2 className="text-lg font-semibold text-slate-900">Add evidence</h2>
-      <p className="mb-4 text-sm text-slate-500">
+      <h2 className="text-lg font-semibold text-ink">Add evidence</h2>
+      <p className="mb-4 text-sm text-ink-faint">
         FR-EVID-01/02 — a digital file is SHA-256 hashed and stored encrypted; a{" "}
         <code>collected</code> custody event is recorded automatically.
       </p>
@@ -931,7 +931,7 @@ function AddEvidenceForm({
           required
         />
         <div className="flex flex-col gap-1">
-          <label htmlFor="ev-desc" className="text-sm font-medium text-slate-700">
+          <label htmlFor="ev-desc" className="text-sm font-medium text-ink-muted">
             Description
           </label>
           <textarea
@@ -941,28 +941,28 @@ function AddEvidenceForm({
             rows={3}
             required
             className={
-              "rounded-md border px-3 py-2 text-sm text-slate-900 shadow-sm " +
-              "focus:outline-none focus:ring-2 focus:ring-slate-400 " +
-              (fieldErr.description ? "border-red-400" : "border-slate-300")
+              "rounded-md border px-3 py-2 text-sm text-ink shadow-sm " +
+              "focus:outline-none focus:ring-2 focus:ring-accent-command/50 " +
+              (fieldErr.description ? "border-bad/30" : "border-hair")
             }
           />
           {fieldErr.description && (
-            <p className="text-xs text-red-600">{fieldErr.description}</p>
+            <p className="text-xs text-bad">{fieldErr.description}</p>
           )}
         </div>
         <div className="flex flex-col gap-1">
-          <label htmlFor="ev-file" className="text-sm font-medium text-slate-700">
+          <label htmlFor="ev-file" className="text-sm font-medium text-ink-muted">
             File (optional — omit for a physical item)
           </label>
           <input
             id="ev-file"
             ref={fileRef}
             type="file"
-            className="text-sm text-slate-700 file:mr-3 file:rounded-md file:border-0 file:bg-slate-100 file:px-3 file:py-2 file:text-sm file:font-medium hover:file:bg-slate-200"
+            className="text-sm text-ink-muted file:mr-3 file:rounded-md file:border-0 file:bg-surface-2 file:px-3 file:py-2 file:text-sm file:font-medium hover:file:bg-surface-2"
           />
         </div>
         <div className="flex flex-col gap-1">
-          <label htmlFor="ev-collected-at" className="text-sm font-medium text-slate-700">
+          <label htmlFor="ev-collected-at" className="text-sm font-medium text-ink-muted">
             Collected at
           </label>
           <input
@@ -971,7 +971,7 @@ function AddEvidenceForm({
             value={collectedAt}
             onChange={(e) => setCollectedAt(e.target.value)}
             required
-            className="rounded-md border border-slate-300 px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+            className="rounded-md border border-hair px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-accent-command/50"
           />
         </div>
         <div>
@@ -1019,19 +1019,19 @@ function EvidenceCard({ item }: { item: EvidenceItem }) {
     <Card>
       <div className="mb-3 flex items-start justify-between">
         <div>
-          <h3 className="font-medium text-slate-900">{item.item_type}</h3>
-          <p className="text-sm text-slate-600">{item.description}</p>
+          <h3 className="font-medium text-ink">{item.item_type}</h3>
+          <p className="text-sm text-ink-muted">{item.description}</p>
         </div>
-        <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-700">
+        <span className="rounded-full bg-surface-2 px-2 py-0.5 text-xs font-medium text-ink-muted">
           {item.status}
         </span>
       </div>
 
       <dl className="mb-4 grid grid-cols-[7rem_1fr] gap-y-1 text-xs">
-        <dt className="text-slate-500">Evidence id</dt>
-        <dd className="font-mono text-slate-700">{item.id}</dd>
-        <dt className="text-slate-500">SHA-256</dt>
-        <dd className="font-mono break-all text-slate-700">
+        <dt className="text-ink-faint">Evidence id</dt>
+        <dd className="font-mono text-ink-muted">{item.id}</dd>
+        <dt className="text-ink-faint">SHA-256</dt>
+        <dd className="font-mono break-all text-ink-muted">
           {item.sha256_hash ?? "— (no digital file)"}
         </dd>
       </dl>
@@ -1042,12 +1042,12 @@ function EvidenceCard({ item }: { item: EvidenceItem }) {
             Verify integrity
           </Button>
           {verifyProblem?.kind === "no-file" && (
-            <p className="mt-2 text-sm text-amber-700">
+            <p className="mt-2 text-sm text-warn">
               No stored file to verify (409) — was it removed from the vault?
             </p>
           )}
           {verifyProblem && verifyProblem.kind === "forbidden" && (
-            <p className="mt-2 text-sm text-red-600">
+            <p className="mt-2 text-sm text-bad">
               Needs the <code>evidence.vault.read</code> permission.
             </p>
           )}
@@ -1067,7 +1067,7 @@ function EvidenceCard({ item }: { item: EvidenceItem }) {
         </div>
       )}
 
-      <h4 className="mb-2 text-xs font-medium uppercase tracking-wide text-slate-500">
+      <h4 className="mb-2 text-xs font-medium uppercase tracking-wide text-ink-faint">
         Chain of custody
       </h4>
       {custodyQuery.isLoading && <Spinner label="Loading chain…" />}
@@ -1077,21 +1077,21 @@ function EvidenceCard({ item }: { item: EvidenceItem }) {
         </Alert>
       )}
       {custodyQuery.data && (
-        <ol className="flex flex-col gap-2 border-l-2 border-slate-200 pl-4">
+        <ol className="flex flex-col gap-2 border-l-2 border-hair pl-4">
           {custodyQuery.data.map((ev: CustodyEvent) => (
             <li key={ev.id} className="text-sm">
-              <span className="font-medium text-slate-900">{ev.action}</span>{" "}
-              <span className="text-slate-500">
+              <span className="font-medium text-ink">{ev.action}</span>{" "}
+              <span className="text-ink-faint">
                 — {new Date(ev.occurred_at).toLocaleString()}
               </span>
               {ev.to_officer && (
-                <span className="text-slate-500">
+                <span className="text-ink-faint">
                   {" "}
                   · to <span className="font-mono text-xs">{ev.to_officer.slice(0, 8)}…</span>
                 </span>
               )}
               {ev.acknowledgement && (
-                <span className="ml-1 rounded-full bg-emerald-100 px-2 py-0.5 text-xs text-emerald-700">
+                <span className="ml-1 rounded-full bg-ok/10 px-2 py-0.5 text-xs text-ok">
                   acknowledged
                 </span>
               )}

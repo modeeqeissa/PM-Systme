@@ -141,7 +141,7 @@ describe("DashboardPage", () => {
     expect(within(card).getByText("Pending transfer ack")).toBeInTheDocument();
     const mismatchCount = within(card).getByText("2");
     expect(mismatchCount).toBeInTheDocument();
-    expect(mismatchCount).toHaveClass("text-rose-600");
+    expect(mismatchCount).toHaveClass("text-bad");
   });
 
   it("shows a zero hash-mismatch count without the warning color", async () => {
@@ -151,7 +151,7 @@ describe("DashboardPage", () => {
     const label = screen.getByText("Hash mismatches");
     const mismatchCount = label.previousElementSibling!;
     expect(mismatchCount).toHaveTextContent("0");
-    expect(mismatchCount).not.toHaveClass("text-rose-600");
+    expect(mismatchCount).not.toHaveClass("text-bad");
   });
 
   it("explains a 403 (missing dashboard.view)", async () => {

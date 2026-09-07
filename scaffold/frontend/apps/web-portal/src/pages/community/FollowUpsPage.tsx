@@ -14,9 +14,9 @@ const TABS: { key: FollowUpStatus | "all"; label: string }[] = [
   { key: "all", label: "All" },
 ];
 const TONE: Record<string, string> = {
-  pending: "bg-amber-100 text-amber-800",
-  overdue: "bg-rose-100 text-rose-700",
-  completed: "bg-emerald-100 text-emerald-700",
+  pending: "bg-warn/10 text-warn",
+  overdue: "bg-bad/10 text-bad",
+  completed: "bg-ok/10 text-ok",
 };
 
 export function FollowUpsPage() {
@@ -65,8 +65,8 @@ export function FollowUpsPage() {
       <div className="mx-auto max-w-3xl px-4 pb-10">
         <div className="flex items-start justify-between">
           <div>
-            <h1 className="text-xl font-semibold text-slate-900">Follow-up actions</h1>
-            <p className="mb-4 text-sm text-slate-500">
+            <h1 className="text-xl font-semibold text-ink">Follow-up actions</h1>
+            <p className="mb-4 text-sm text-ink-faint">
               FR-COMM-03/04 — the global queue. "Recompute overdue" flags every
               pending action past its due date; each flagged row notifies its
               assigned officer.
@@ -101,7 +101,7 @@ export function FollowUpsPage() {
               onClick={() => setTab(t.key)}
               className={
                 "rounded-full px-3 py-1 " +
-                (tab === t.key ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-600")
+                (tab === t.key ? "bg-surface-3 text-white" : "bg-surface-2 text-ink-muted")
               }
             >
               {t.label}
@@ -123,20 +123,20 @@ export function FollowUpsPage() {
             </div>
           )}
           {query.data && query.data.length === 0 && (
-            <p className="p-6 text-sm text-slate-500">Nothing in this bucket.</p>
+            <p className="p-6 text-sm text-ink-faint">Nothing in this bucket.</p>
           )}
           {query.data && query.data.length > 0 && (
-            <ul className="divide-y divide-slate-100 text-sm">
+            <ul className="divide-y divide-hair text-sm">
               {query.data.map((fu) => (
                 <li key={fu.id} className="flex items-start justify-between px-6 py-3">
                   <div>
                     <Link
                       to={`/community/concerns/${fu.concern_id}`}
-                      className="text-slate-900 underline decoration-slate-300 hover:decoration-slate-900"
+                      className="text-ink underline decoration-hair hover:decoration-accent-command"
                     >
                       {fu.description}
                     </Link>
-                    <p className="text-slate-500">
+                    <p className="text-ink-faint">
                       assigned <span className="font-mono text-xs">{fu.assigned_to.slice(0, 8)}…</span> · due {fu.due_date}
                     </p>
                   </div>

@@ -68,8 +68,8 @@ export function OfficerDirectoryPage() {
     <div>
       <NavBar />
       <div className="mx-auto max-w-5xl px-4 pb-10">
-        <h1 className="text-xl font-semibold text-slate-900">Officer directory</h1>
-        <p className="mb-6 text-sm text-slate-500">
+        <h1 className="text-xl font-semibold text-ink">Officer directory</h1>
+        <p className="mb-6 text-sm text-ink-faint">
           FR-HR-01 — the officer master roster. Filter by unit or status; search
           the current page by badge or rank.
         </p>
@@ -77,14 +77,14 @@ export function OfficerDirectoryPage() {
         <Card className="mb-6">
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
             <div className="flex flex-col gap-1">
-              <label htmlFor="dir-status" className="text-sm font-medium text-slate-700">
+              <label htmlFor="dir-status" className="text-sm font-medium text-ink-muted">
                 Status
               </label>
               <select
                 id="dir-status"
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value as OfficerStatus | "")}
-                className="rounded-md border border-slate-300 px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+                className="rounded-md border border-hair px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-accent-command/50"
               >
                 <option value="">Any status</option>
                 {STATUSES.map((s) => (
@@ -95,7 +95,7 @@ export function OfficerDirectoryPage() {
               </select>
             </div>
             <div className="flex flex-col gap-1">
-              <label htmlFor="dir-unit" className="text-sm font-medium text-slate-700">
+              <label htmlFor="dir-unit" className="text-sm font-medium text-ink-muted">
                 Unit
               </label>
               {unitsQuery.data && unitsQuery.data.length > 0 ? (
@@ -103,7 +103,7 @@ export function OfficerDirectoryPage() {
                   id="dir-unit"
                   value={unitFilter}
                   onChange={(e) => setUnitFilter(e.target.value)}
-                  className="rounded-md border border-slate-300 px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+                  className="rounded-md border border-hair px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-accent-command/50"
                 >
                   <option value="">Any unit</option>
                   {unitsQuery.data.map((u) => (
@@ -118,7 +118,7 @@ export function OfficerDirectoryPage() {
                   value={unitFilter}
                   onChange={(e) => setUnitFilter(e.target.value)}
                   placeholder="unit id (uuid)"
-                  className="rounded-md border border-slate-300 px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+                  className="rounded-md border border-hair px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-accent-command/50"
                 />
               )}
             </div>
@@ -147,11 +147,11 @@ export function OfficerDirectoryPage() {
             </div>
           )}
           {officersQuery.data && rows.length === 0 && (
-            <p className="p-6 text-sm text-slate-500">No officers match.</p>
+            <p className="p-6 text-sm text-ink-faint">No officers match.</p>
           )}
           {rows.length > 0 && (
             <table className="w-full text-left text-sm">
-              <thead className="border-b border-slate-200 text-xs uppercase tracking-wide text-slate-500">
+              <thead className="border-b border-hair text-xs uppercase tracking-wide text-ink-faint">
                 <tr>
                   <th className="px-6 py-3 font-medium">Badge</th>
                   <th className="px-6 py-3 font-medium">Rank</th>
@@ -161,11 +161,11 @@ export function OfficerDirectoryPage() {
               </thead>
               <tbody>
                 {rows.map((o) => (
-                  <tr key={o.id} className="border-b border-slate-100 last:border-0">
+                  <tr key={o.id} className="border-b border-hair last:border-0">
                     <td className="px-6 py-3 font-medium">
                       <Link
                         to={`/hr/officers/${o.id}`}
-                        className="text-slate-900 underline decoration-slate-300 hover:decoration-slate-900"
+                        className="text-ink underline decoration-hair hover:decoration-accent-command"
                       >
                         {o.badge_number}
                       </Link>
@@ -173,7 +173,7 @@ export function OfficerDirectoryPage() {
                     <td className="px-6 py-3">{o.rank}</td>
                     <td className="px-6 py-3">{unitName(o.unit_id)}</td>
                     <td className="px-6 py-3">
-                      <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-700">
+                      <span className="rounded-full bg-surface-2 px-2 py-0.5 text-xs font-medium text-ink-muted">
                         {STATUS_LABEL[o.status]}
                       </span>
                     </td>
@@ -236,14 +236,14 @@ function NewOfficerForm({ unitId }: { unitId: string }) {
   return (
     <Card className="mb-6">
       <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold text-slate-900">New officer</h2>
+        <h2 className="text-lg font-semibold text-ink">New officer</h2>
         <Button variant="secondary" onClick={() => setOpen((o) => !o)}>
           {open ? "Cancel" : "Add officer"}
         </Button>
       </div>
       {open && (
         <form onSubmit={submit} className="mt-4 flex flex-col gap-4">
-          <p className="text-sm text-slate-500">
+          <p className="text-sm text-ink-faint">
             FR-HR-01/02 — creates the profile and opens the first assignment at
             the unit below.
           </p>
@@ -264,7 +264,7 @@ function NewOfficerForm({ unitId }: { unitId: string }) {
           <TextInput label="Rank" value={form.rank} onChange={set("rank")} error={fe.rank} placeholder="e.g. Sergeant" required />
           <TextInput label="Unit id" value={form.unit_id} onChange={set("unit_id")} error={fe.unit_id} placeholder="uuid" required />
           <div className="flex flex-col gap-1">
-            <label htmlFor="new-off-hire" className="text-sm font-medium text-slate-700">
+            <label htmlFor="new-off-hire" className="text-sm font-medium text-ink-muted">
               Hire date
             </label>
             <input
@@ -273,9 +273,9 @@ function NewOfficerForm({ unitId }: { unitId: string }) {
               value={form.hire_date}
               onChange={set("hire_date")}
               required
-              className="rounded-md border border-slate-300 px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+              className="rounded-md border border-hair px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-accent-command/50"
             />
-            {fe.hire_date && <p className="text-xs text-red-600">{fe.hire_date}</p>}
+            {fe.hire_date && <p className="text-xs text-bad">{fe.hire_date}</p>}
           </div>
           <div>
             <Button type="submit" loading={busy}>

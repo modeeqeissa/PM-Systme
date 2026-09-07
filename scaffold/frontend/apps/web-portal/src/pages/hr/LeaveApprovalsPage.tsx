@@ -27,8 +27,8 @@ export function LeaveApprovalsPage() {
     <div>
       <NavBar />
       <div className="mx-auto max-w-3xl px-4 pb-10">
-        <h1 className="text-xl font-semibold text-slate-900">Leave approvals</h1>
-        <p className="mb-6 text-sm text-slate-500">
+        <h1 className="text-xl font-semibold text-ink">Leave approvals</h1>
+        <p className="mb-6 text-sm text-ink-faint">
           FR-HR-05 — leave requests routed to supervisors/commanders.
         </p>
 
@@ -39,7 +39,7 @@ export function LeaveApprovalsPage() {
               onClick={() => setTab(s)}
               className={
                 "rounded-full px-3 py-1 capitalize " +
-                (tab === s ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-600")
+                (tab === s ? "bg-surface-3 text-white" : "bg-surface-2 text-ink-muted")
               }
             >
               {s}
@@ -59,7 +59,7 @@ export function LeaveApprovalsPage() {
         )}
         {query.data && query.data.length === 0 && (
           <Card>
-            <p className="text-sm text-slate-500">No {tab} leave requests.</p>
+            <p className="text-sm text-ink-faint">No {tab} leave requests.</p>
           </Card>
         )}
         {query.data && query.data.length > 0 && (
@@ -107,21 +107,21 @@ function LeaveRow({ leave, canApprove }: { leave: LeaveRequest; canApprove: bool
     <Card>
       <div className="flex items-start justify-between text-sm">
         <div>
-          <div className="text-slate-900">
+          <div className="text-ink">
             Officer <span className="font-mono text-xs">{leave.officer_id.slice(0, 8)}…</span> ·{" "}
             <span className="capitalize">{leave.leave_type}</span>
           </div>
-          <div className="text-slate-500">
+          <div className="text-ink-faint">
             {leave.start_date} → {leave.end_date}
           </div>
         </div>
-        <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800">
+        <span className="rounded-full bg-warn/10 px-2 py-0.5 text-xs font-medium text-warn">
           {leave.status}
         </span>
       </div>
 
       {canApprove && (
-        <div className="mt-3 border-t border-slate-100 pt-3">
+        <div className="mt-3 border-t border-hair pt-3">
           {!open ? (
             <Button variant="secondary" onClick={() => setOpen(true)}>
               Review

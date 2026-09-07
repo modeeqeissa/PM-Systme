@@ -62,13 +62,13 @@ export function DashboardPage() {
     <div className="mx-auto max-w-3xl px-4 py-8">
       <div className="mb-6 flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-semibold text-slate-900">Station dashboard</h1>
-          <p className="text-sm text-slate-500">
+          <h1 className="text-xl font-semibold text-ink">Station dashboard</h1>
+          <p className="text-sm text-ink-faint">
             Read models from dashboard-service (FR-DASH-01/02/03) — refreshed by the
             domain-event stream, not on demand.
           </p>
         </div>
-        <Link to="/cases" className="text-sm text-slate-500 underline">
+        <Link to="/cases" className="text-sm text-ink-faint underline">
           Cases
         </Link>
       </div>
@@ -88,7 +88,7 @@ export function DashboardPage() {
             hint="Defaults to your station; blank = force-wide."
           />
           <div className="flex flex-col gap-1">
-            <label htmlFor="from" className="text-sm font-medium text-slate-700">
+            <label htmlFor="from" className="text-sm font-medium text-ink-muted">
               From
             </label>
             <input
@@ -96,11 +96,11 @@ export function DashboardPage() {
               type="date"
               value={from}
               onChange={(e) => setFrom(e.target.value)}
-              className="rounded-md border border-slate-300 px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+              className="rounded-md border border-hair px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-accent-command/50"
             />
           </div>
           <div className="flex flex-col gap-1">
-            <label htmlFor="to" className="text-sm font-medium text-slate-700">
+            <label htmlFor="to" className="text-sm font-medium text-ink-muted">
               To
             </label>
             <input
@@ -108,7 +108,7 @@ export function DashboardPage() {
               type="date"
               value={to}
               onChange={(e) => setTo(e.target.value)}
-              className="rounded-md border border-slate-300 px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+              className="rounded-md border border-hair px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-accent-command/50"
             />
           </div>
           <div className="flex items-end">
@@ -140,53 +140,53 @@ export function DashboardPage() {
       {snap && (
         <div className="flex flex-col gap-6">
           <Card>
-            <h2 className="mb-1 text-sm font-medium uppercase tracking-wide text-slate-500">
+            <h2 className="mb-1 text-sm font-medium uppercase tracking-wide text-ink-faint">
               Cases
             </h2>
-            <p className="mb-4 text-xs text-slate-500">
+            <p className="mb-4 text-xs text-ink-faint">
               {snap.station_id ? `Station ${snap.station_id}` : "Force-wide (all stations)"}
               {" · "}
               {applied.from} → {applied.to}
             </p>
             <div className="flex gap-10">
               <div>
-                <div className="text-3xl font-semibold text-slate-900">
+                <div className="text-3xl font-semibold text-ink">
                   {snap.cases.opened}
                 </div>
-                <div className="text-sm text-slate-500">Open</div>
+                <div className="text-sm text-ink-faint">Open</div>
               </div>
               <div>
-                <div className="text-3xl font-semibold text-slate-900">
+                <div className="text-3xl font-semibold text-ink">
                   {snap.cases.closed}
                 </div>
-                <div className="text-sm text-slate-500">Closed</div>
+                <div className="text-sm text-ink-faint">Closed</div>
               </div>
               <div>
-                <div className="text-3xl font-semibold text-slate-900">
+                <div className="text-3xl font-semibold text-ink">
                   {snap.cases.arrests_recorded}
                 </div>
-                <div className="text-sm text-slate-500">Arrests recorded</div>
+                <div className="text-sm text-ink-faint">Arrests recorded</div>
               </div>
               <div>
-                <div className="text-3xl font-semibold text-slate-900">
+                <div className="text-3xl font-semibold text-ink">
                   {snap.cases.avg_case_age_days ?? "—"}
                 </div>
-                <div className="text-sm text-slate-500">Avg case age (days)</div>
+                <div className="text-sm text-ink-faint">Avg case age (days)</div>
               </div>
             </div>
           </Card>
 
           <Card>
-            <h2 className="mb-1 text-sm font-medium uppercase tracking-wide text-slate-500">
+            <h2 className="mb-1 text-sm font-medium uppercase tracking-wide text-ink-faint">
               Crime trend by type
             </h2>
-            <p className="mb-4 text-xs text-slate-500">
+            <p className="mb-4 text-xs text-ink-faint">
               {applied.from === defaults.from && applied.to === defaults.to
                 ? monthLabel(defaults.from)
                 : `${applied.from} → ${applied.to}`}
             </p>
             {trendRows.length === 0 ? (
-              <p className="text-sm text-slate-500">No incidents recorded for this window.</p>
+              <p className="text-sm text-ink-faint">No incidents recorded for this window.</p>
             ) : (
               <ul className="flex flex-col gap-2">
                 {trendRows.map((b) => (
@@ -194,10 +194,10 @@ export function DashboardPage() {
                     key={`${b.month}:${b.incident_type ?? "_"}`}
                     className="flex items-center justify-between text-sm"
                   >
-                    <span className="text-slate-800">
+                    <span className="text-ink">
                       {b.incident_type ?? "(unspecified)"}
                     </span>
-                    <span className="font-mono font-medium text-slate-900">{b.count}</span>
+                    <span className="font-mono font-medium text-ink">{b.count}</span>
                   </li>
                 ))}
               </ul>
@@ -205,54 +205,54 @@ export function DashboardPage() {
           </Card>
 
           <Card>
-            <h2 className="mb-1 text-sm font-medium uppercase tracking-wide text-slate-500">
+            <h2 className="mb-1 text-sm font-medium uppercase tracking-wide text-ink-faint">
               Evidence integrity
             </h2>
-            <p className="mb-4 text-xs text-slate-500">
+            <p className="mb-4 text-xs text-ink-faint">
               mv_evidence_integrity — force-wide (no station key on this projection).
             </p>
             <div className="flex gap-10">
               <div>
-                <div className="text-3xl font-semibold text-slate-900">
+                <div className="text-3xl font-semibold text-ink">
                   {snap.evidence_integrity.evidence_logged}
                 </div>
-                <div className="text-sm text-slate-500">Evidence logged</div>
+                <div className="text-sm text-ink-faint">Evidence logged</div>
               </div>
               <div>
-                <div className="text-3xl font-semibold text-slate-900">
+                <div className="text-3xl font-semibold text-ink">
                   {snap.evidence_integrity.pending_transfer_ack}
                 </div>
-                <div className="text-sm text-slate-500">Pending transfer ack</div>
+                <div className="text-sm text-ink-faint">Pending transfer ack</div>
               </div>
               <div>
                 <div
                   className={`text-3xl font-semibold ${
                     snap.evidence_integrity.hash_mismatches > 0
-                      ? "text-rose-600"
-                      : "text-slate-900"
+                      ? "text-bad"
+                      : "text-ink"
                   }`}
                 >
                   {snap.evidence_integrity.hash_mismatches}
                 </div>
-                <div className="text-sm text-slate-500">Hash mismatches</div>
+                <div className="text-sm text-ink-faint">Hash mismatches</div>
               </div>
             </div>
           </Card>
 
           <Card>
-            <h2 className="mb-1 text-sm font-medium uppercase tracking-wide text-slate-500">
+            <h2 className="mb-1 text-sm font-medium uppercase tracking-wide text-ink-faint">
               Unit readiness
             </h2>
-            <p className="mb-4 text-xs text-slate-500">
+            <p className="mb-4 text-xs text-ink-faint">
               mv_unit_readiness (FR-DASH-02) — certification compliance and current leave
               per unit, from hr-service / training-service events.
             </p>
             {snap.unit_readiness.length === 0 ? (
-              <p className="text-sm text-slate-500">No units projected yet.</p>
+              <p className="text-sm text-ink-faint">No units projected yet.</p>
             ) : (
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="text-left text-xs uppercase tracking-wide text-slate-400">
+                  <tr className="text-left text-xs uppercase tracking-wide text-ink-faint">
                     <th className="pb-2 font-medium">Unit</th>
                     <th className="pb-2 text-right font-medium">Officers</th>
                     <th className="pb-2 text-right font-medium">Certified</th>
@@ -265,21 +265,21 @@ export function DashboardPage() {
                       (a.unit_name ?? a.unit_id).localeCompare(b.unit_name ?? b.unit_id),
                     )
                     .map((u) => (
-                      <tr key={u.unit_id} className="border-t border-slate-100">
-                        <td className="py-2 text-slate-800">
+                      <tr key={u.unit_id} className="border-t border-hair">
+                        <td className="py-2 text-ink">
                           {u.unit_name ?? u.unit_id.slice(0, 8)}
                         </td>
-                        <td className="py-2 text-right font-mono text-slate-900">
+                        <td className="py-2 text-right font-mono text-ink">
                           {u.total_officers}
                         </td>
-                        <td className="py-2 text-right font-mono text-slate-900">
+                        <td className="py-2 text-right font-mono text-ink">
                           {u.certified_officer_pct === null
                             ? "—"
                             : `${u.certified_officer_pct.toFixed(0)}%`}
                         </td>
                         <td
                           className={`py-2 text-right font-mono ${
-                            u.on_leave_count > 0 ? "text-amber-600" : "text-slate-900"
+                            u.on_leave_count > 0 ? "text-warn" : "text-ink"
                           }`}
                         >
                           {u.on_leave_count}

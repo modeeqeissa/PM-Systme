@@ -15,11 +15,11 @@ const STATUS_LABEL: Record<Case["status"], string> = {
 };
 
 const STATUS_STYLE: Record<Case["status"], string> = {
-  open: "bg-blue-100 text-blue-800",
-  investigating: "bg-amber-100 text-amber-800",
-  referred_prosecution: "bg-purple-100 text-purple-800",
-  closed: "bg-slate-200 text-slate-700",
-  suspended: "bg-rose-100 text-rose-800",
+  open: "bg-accent-command/10 text-accent-command",
+  investigating: "bg-warn/10 text-warn",
+  referred_prosecution: "bg-accent-training/10 text-accent-training",
+  closed: "bg-surface-2 text-ink-muted",
+  suspended: "bg-bad/10 text-bad",
 };
 
 export function CasesPage() {
@@ -49,9 +49,9 @@ export function CasesPage() {
       <div className="mx-auto max-w-4xl px-4 pb-8">
       <div className="mb-6 flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-semibold text-slate-900">Cases</h1>
+          <h1 className="text-xl font-semibold text-ink">Cases</h1>
           {claims && (
-            <p className="text-sm text-slate-500">
+            <p className="text-sm text-ink-faint">
               Signed in as <span className="font-medium">{claims.badge_number}</span>
               {claims.roles.length > 0 && <> · {claims.roles.join(", ")}</>}
             </p>
@@ -60,7 +60,7 @@ export function CasesPage() {
         <div className="flex items-center gap-3">
           <Link
             to="/incidents/new"
-            className="inline-flex items-center justify-center rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-slate-700"
+            className="inline-flex items-center justify-center rounded-md bg-accent-command px-4 py-2 text-sm font-medium text-white transition-colors hover:brightness-110"
           >
             File incident
           </Link>
@@ -85,7 +85,7 @@ export function CasesPage() {
         )}
 
         {query.data && query.data.length === 0 && (
-          <div className="p-6 text-sm text-slate-500">
+          <div className="p-6 text-sm text-ink-faint">
             No cases visible to you. Cases you lead (or all cases, with a supervisory
             role) will appear here.
           </div>
@@ -93,7 +93,7 @@ export function CasesPage() {
 
         {query.data && query.data.length > 0 && (
           <table className="w-full text-left text-sm">
-            <thead className="border-b border-slate-200 text-xs uppercase tracking-wide text-slate-500">
+            <thead className="border-b border-hair text-xs uppercase tracking-wide text-ink-faint">
               <tr>
                 <th className="px-6 py-3 font-medium">Case number</th>
                 <th className="px-6 py-3 font-medium">Status</th>
@@ -102,11 +102,11 @@ export function CasesPage() {
             </thead>
             <tbody>
               {query.data.map((c) => (
-                <tr key={c.id} className="border-b border-slate-100 last:border-0">
+                <tr key={c.id} className="border-b border-hair last:border-0">
                   <td className="px-6 py-3 font-medium">
                     <Link
                       to={`/cases/${c.id}`}
-                      className="text-slate-900 underline decoration-slate-300 hover:decoration-slate-900"
+                      className="text-ink underline decoration-hair hover:decoration-accent-command"
                     >
                       {c.case_number}
                     </Link>
@@ -118,7 +118,7 @@ export function CasesPage() {
                       {STATUS_LABEL[c.status]}
                     </span>
                   </td>
-                  <td className="px-6 py-3 font-mono text-xs text-slate-600">
+                  <td className="px-6 py-3 font-mono text-xs text-ink-muted">
                     {leadOfficer(c)}
                   </td>
                 </tr>

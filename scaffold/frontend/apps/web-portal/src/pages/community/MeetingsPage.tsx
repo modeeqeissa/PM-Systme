@@ -28,8 +28,8 @@ export function MeetingsPage() {
     <div>
       <NavBar />
       <div className="mx-auto max-w-3xl px-4 pb-10">
-        <h1 className="text-xl font-semibold text-slate-900">Community meetings</h1>
-        <p className="mb-6 text-sm text-slate-500">
+        <h1 className="text-xl font-semibold text-ink">Community meetings</h1>
+        <p className="mb-6 text-sm text-ink-faint">
           FR-COMM-01 — logged community engagement sessions, with an attendee summary.
         </p>
 
@@ -47,7 +47,7 @@ export function MeetingsPage() {
         )}
         {query.data && query.data.length === 0 && (
           <Card>
-            <p className="text-sm text-slate-500">No meetings logged yet.</p>
+            <p className="text-sm text-ink-faint">No meetings logged yet.</p>
           </Card>
         )}
         <div className="flex flex-col gap-4">
@@ -55,16 +55,16 @@ export function MeetingsPage() {
             <Card key={m.id}>
               <div className="flex items-start justify-between">
                 <div>
-                  <h3 className="font-medium text-slate-900">{m.location}</h3>
-                  <p className="text-sm text-slate-500">
+                  <h3 className="font-medium text-ink">{m.location}</h3>
+                  <p className="text-sm text-ink-faint">
                     {m.meeting_date} · facilitator{" "}
                     <span className="font-mono text-xs">{m.facilitator_id.slice(0, 8)}…</span>
                   </p>
                 </div>
-                <span className="font-mono text-xs text-slate-400">{m.station_id.slice(0, 8)}…</span>
+                <span className="font-mono text-xs text-ink-faint">{m.station_id.slice(0, 8)}…</span>
               </div>
               {m.attendee_summary && (
-                <p className="mt-2 text-sm text-slate-600">{m.attendee_summary}</p>
+                <p className="mt-2 text-sm text-ink-muted">{m.attendee_summary}</p>
               )}
             </Card>
           ))}
@@ -123,7 +123,7 @@ function NewMeetingForm() {
   return (
     <Card className="mb-6">
       <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold text-slate-900">Log meeting</h2>
+        <h2 className="text-lg font-semibold text-ink">Log meeting</h2>
         <Button variant="secondary" onClick={() => setOpen((o) => !o)}>
           {open ? "Cancel" : "Log meeting"}
         </Button>
@@ -139,7 +139,7 @@ function NewMeetingForm() {
           <TextInput label="Station id" value={form.station_id} onChange={set("station_id")} error={fe.station_id} placeholder="uuid" required />
           <TextInput label="Facilitator id" value={form.facilitator_id} onChange={set("facilitator_id")} error={fe.facilitator_id} placeholder="uuid" required />
           <div className="flex flex-col gap-1">
-            <label htmlFor="mtg-date" className="text-sm font-medium text-slate-700">
+            <label htmlFor="mtg-date" className="text-sm font-medium text-ink-muted">
               Meeting date
             </label>
             <input
@@ -148,13 +148,13 @@ function NewMeetingForm() {
               value={form.meeting_date}
               onChange={set("meeting_date")}
               required
-              className="rounded-md border border-slate-300 px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+              className="rounded-md border border-hair px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-accent-command/50"
             />
-            {fe.meeting_date && <p className="text-xs text-red-600">{fe.meeting_date}</p>}
+            {fe.meeting_date && <p className="text-xs text-bad">{fe.meeting_date}</p>}
           </div>
           <TextInput label="Location" value={form.location} onChange={set("location")} error={fe.location} required />
           <div className="flex flex-col gap-1">
-            <label htmlFor="mtg-att" className="text-sm font-medium text-slate-700">
+            <label htmlFor="mtg-att" className="text-sm font-medium text-ink-muted">
               Attendee summary
             </label>
             <textarea
@@ -163,7 +163,7 @@ function NewMeetingForm() {
               onChange={set("attendee_summary")}
               rows={3}
               placeholder="optional — who attended, roughly how many"
-              className="rounded-md border border-slate-300 px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+              className="rounded-md border border-hair px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-accent-command/50"
             />
           </div>
           <div>

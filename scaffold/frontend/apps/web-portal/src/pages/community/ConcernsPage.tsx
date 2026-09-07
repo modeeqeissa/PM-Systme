@@ -10,9 +10,9 @@ import { classify, fieldErrors, ProblemAlert, type Problem } from "../../lib/pro
 
 const STATUSES: ConcernStatus[] = ["open", "in_progress", "resolved"];
 const STATUS_TONE: Record<ConcernStatus, string> = {
-  open: "bg-amber-100 text-amber-800",
-  in_progress: "bg-blue-100 text-blue-800",
-  resolved: "bg-emerald-100 text-emerald-700",
+  open: "bg-warn/10 text-warn",
+  in_progress: "bg-accent-command/10 text-accent-command",
+  resolved: "bg-ok/10 text-ok",
 };
 
 export function ConcernsPage() {
@@ -40,22 +40,22 @@ export function ConcernsPage() {
     <div>
       <NavBar />
       <div className="mx-auto max-w-3xl px-4 pb-10">
-        <h1 className="text-xl font-semibold text-slate-900">Community concerns</h1>
-        <p className="mb-6 text-sm text-slate-500">
+        <h1 className="text-xl font-semibold text-ink">Community concerns</h1>
+        <p className="mb-6 text-sm text-ink-faint">
           FR-COMM-02 — issues raised by the community, optionally tied to a meeting.
         </p>
 
         <Card className="mb-6">
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="flex flex-col gap-1">
-              <label htmlFor="cn-status" className="text-sm font-medium text-slate-700">
+              <label htmlFor="cn-status" className="text-sm font-medium text-ink-muted">
                 Status
               </label>
               <select
                 id="cn-status"
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value as ConcernStatus | "")}
-                className="rounded-md border border-slate-300 px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+                className="rounded-md border border-hair px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-accent-command/50"
               >
                 <option value="">Any status</option>
                 {STATUSES.map((s) => (
@@ -88,7 +88,7 @@ export function ConcernsPage() {
         )}
         {query.data && query.data.length === 0 && (
           <Card>
-            <p className="text-sm text-slate-500">No concerns match.</p>
+            <p className="text-sm text-ink-faint">No concerns match.</p>
           </Card>
         )}
         <div className="flex flex-col gap-4">
@@ -130,13 +130,13 @@ function ConcernRow({ concern, canWrite }: { concern: Concern; canWrite: boolean
         <div>
           <Link
             to={`/community/concerns/${concern.id}`}
-            className="font-medium text-slate-900 underline decoration-slate-300 hover:decoration-slate-900"
+            className="font-medium text-ink underline decoration-hair hover:decoration-accent-command"
           >
             {concern.category}
           </Link>
-          <p className="mt-1 text-sm text-slate-600">{concern.description}</p>
+          <p className="mt-1 text-sm text-ink-muted">{concern.description}</p>
           {concern.raised_by && (
-            <p className="text-xs text-slate-500">raised by {concern.raised_by}</p>
+            <p className="text-xs text-ink-faint">raised by {concern.raised_by}</p>
           )}
         </div>
         <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_TONE[concern.status]}`}>
@@ -144,14 +144,14 @@ function ConcernRow({ concern, canWrite }: { concern: Concern; canWrite: boolean
         </span>
       </div>
       {canWrite && (
-        <div className="mt-3 flex items-center gap-2 border-t border-slate-100 pt-3 text-sm">
-          <span className="text-slate-500">Set status:</span>
+        <div className="mt-3 flex items-center gap-2 border-t border-hair pt-3 text-sm">
+          <span className="text-ink-faint">Set status:</span>
           {STATUSES.filter((s) => s !== concern.status).map((s) => (
             <button
               key={s}
               disabled={busy}
               onClick={() => setStatus(s)}
-              className="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-600 hover:bg-slate-200 disabled:opacity-50"
+              className="rounded-full bg-surface-2 px-2 py-0.5 text-xs text-ink-muted hover:bg-surface-2 disabled:opacity-50"
             >
               {s.replace("_", " ")}
             </button>
@@ -206,7 +206,7 @@ function NewConcernForm() {
   return (
     <Card className="mb-6">
       <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold text-slate-900">Log concern</h2>
+        <h2 className="text-lg font-semibold text-ink">Log concern</h2>
         <Button variant="secondary" onClick={() => setOpen((o) => !o)}>
           {open ? "Cancel" : "Log concern"}
         </Button>
@@ -221,7 +221,7 @@ function NewConcernForm() {
           {done && <Alert variant="info">Concern logged.</Alert>}
           <TextInput label="Category" value={form.category} onChange={set("category")} error={fe.category} placeholder="e.g. traffic, noise" required />
           <div className="flex flex-col gap-1">
-            <label htmlFor="cn-desc" className="text-sm font-medium text-slate-700">
+            <label htmlFor="cn-desc" className="text-sm font-medium text-ink-muted">
               Description
             </label>
             <textarea
@@ -231,11 +231,11 @@ function NewConcernForm() {
               rows={3}
               required
               className={
-                "rounded-md border px-3 py-2 text-sm text-slate-900 shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-400 " +
-                (fe.description ? "border-red-400" : "border-slate-300")
+                "rounded-md border px-3 py-2 text-sm text-ink shadow-sm focus:outline-none focus:ring-2 focus:ring-accent-command/50 " +
+                (fe.description ? "border-bad/30" : "border-hair")
               }
             />
-            {fe.description && <p className="text-xs text-red-600">{fe.description}</p>}
+            {fe.description && <p className="text-xs text-bad">{fe.description}</p>}
           </div>
           <TextInput label="Raised by" value={form.raised_by} onChange={set("raised_by")} error={fe.raised_by} placeholder="optional — community member's name" />
           <TextInput label="Meeting id" value={form.meeting_id} onChange={set("meeting_id")} error={fe.meeting_id} placeholder="optional — link to a meeting (uuid)" />

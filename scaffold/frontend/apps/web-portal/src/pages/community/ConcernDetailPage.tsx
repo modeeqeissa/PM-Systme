@@ -14,9 +14,9 @@ import { hasPerm } from "../../lib/rbac";
 import { classify, fieldErrors, ProblemAlert, type Problem } from "../../lib/problem";
 
 const FU_TONE: Record<string, string> = {
-  pending: "bg-amber-100 text-amber-800",
-  overdue: "bg-rose-100 text-rose-700",
-  completed: "bg-emerald-100 text-emerald-700",
+  pending: "bg-warn/10 text-warn",
+  overdue: "bg-bad/10 text-bad",
+  completed: "bg-ok/10 text-ok",
 };
 
 export function ConcernDetailPage() {
@@ -44,7 +44,7 @@ export function ConcernDetailPage() {
     <div>
       <NavBar />
       <div className="mx-auto max-w-3xl px-4 pb-10">
-        <Link to="/community/concerns" className="mb-4 inline-block text-sm text-slate-500 underline">
+        <Link to="/community/concerns" className="mb-4 inline-block text-sm text-ink-faint underline">
           ← Back to concerns
         </Link>
 
@@ -66,8 +66,8 @@ export function ConcernDetailPage() {
           <>
             <ConcernCard concern={concernQuery.data} canWrite={canWrite} />
             <Card>
-              <h2 className="text-lg font-semibold text-slate-900">Follow-up actions</h2>
-              <p className="mb-4 text-sm text-slate-500">
+              <h2 className="text-lg font-semibold text-ink">Follow-up actions</h2>
+              <p className="mb-4 text-sm text-ink-faint">
                 FR-COMM-03 — assigned tasks against this concern. "Overdue" is set
                 only by the recompute sweep (see the Follow-ups queue).
               </p>
@@ -79,7 +79,7 @@ export function ConcernDetailPage() {
                 <Alert variant="error">Needs <code>community.read</code>.</Alert>
               )}
               {fuQuery.data && fuQuery.data.length === 0 && (
-                <p className="text-sm text-slate-500">No follow-up actions yet.</p>
+                <p className="text-sm text-ink-faint">No follow-up actions yet.</p>
               )}
               <ul className="flex flex-col gap-3">
                 {(fuQuery.data ?? []).map((fu) => (
@@ -121,22 +121,22 @@ function ConcernCard({ concern, canWrite }: { concern: Concern; canWrite: boolea
     <Card className="mb-6">
       <div className="flex items-start justify-between">
         <div>
-          <h1 className="text-xl font-semibold text-slate-900">{concern.category}</h1>
-          <p className="mt-1 text-sm text-slate-600">{concern.description}</p>
-          {concern.raised_by && <p className="text-xs text-slate-500">raised by {concern.raised_by}</p>}
+          <h1 className="text-xl font-semibold text-ink">{concern.category}</h1>
+          <p className="mt-1 text-sm text-ink-muted">{concern.description}</p>
+          {concern.raised_by && <p className="text-xs text-ink-faint">raised by {concern.raised_by}</p>}
           {concern.meeting_id && (
-            <p className="text-xs text-slate-500">
+            <p className="text-xs text-ink-faint">
               from meeting <span className="font-mono">{concern.meeting_id.slice(0, 8)}…</span>
             </p>
           )}
         </div>
-        <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-700">
+        <span className="rounded-full bg-surface-2 px-3 py-1 text-xs font-medium text-ink-muted">
           {concern.status.replace("_", " ")}
         </span>
       </div>
       {canWrite && (
-        <div className="mt-3 flex items-center gap-2 border-t border-slate-100 pt-3 text-sm">
-          <span className="text-slate-500">Set status:</span>
+        <div className="mt-3 flex items-center gap-2 border-t border-hair pt-3 text-sm">
+          <span className="text-ink-faint">Set status:</span>
           {(["open", "in_progress", "resolved"] as const)
             .filter((s) => s !== concern.status)
             .map((s) => (
@@ -144,7 +144,7 @@ function ConcernCard({ concern, canWrite }: { concern: Concern; canWrite: boolea
                 key={s}
                 disabled={busy}
                 onClick={() => setStatus(s)}
-                className="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-600 hover:bg-slate-200 disabled:opacity-50"
+                className="rounded-full bg-surface-2 px-2 py-0.5 text-xs text-ink-muted hover:bg-surface-2 disabled:opacity-50"
               >
                 {s.replace("_", " ")}
               </button>
@@ -190,11 +190,11 @@ function FollowUpRow({
   }
 
   return (
-    <li className="border-b border-slate-100 pb-3 text-sm last:border-0">
+    <li className="border-b border-hair pb-3 text-sm last:border-0">
       <div className="flex items-start justify-between">
         <div>
-          <p className="text-slate-900">{action.description}</p>
-          <p className="text-slate-500">
+          <p className="text-ink">{action.description}</p>
+          <p className="text-ink-faint">
             assigned <span className="font-mono text-xs">{action.assigned_to.slice(0, 8)}…</span> · due {action.due_date}
           </p>
         </div>
@@ -207,7 +207,7 @@ function FollowUpRow({
           <button
             disabled={busy}
             onClick={() => setStatus("completed")}
-            className="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-600 hover:bg-slate-200 disabled:opacity-50"
+            className="rounded-full bg-surface-2 px-2 py-0.5 text-xs text-ink-muted hover:bg-surface-2 disabled:opacity-50"
           >
             mark completed
           </button>
@@ -215,7 +215,7 @@ function FollowUpRow({
             <button
               disabled={busy}
               onClick={() => setStatus("pending")}
-              className="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-600 hover:bg-slate-200 disabled:opacity-50"
+              className="rounded-full bg-surface-2 px-2 py-0.5 text-xs text-ink-muted hover:bg-surface-2 disabled:opacity-50"
             >
               back to pending
             </button>
@@ -269,7 +269,7 @@ function NewFollowUpForm({ concernId }: { concernId: string }) {
   return (
     <div className="mb-4">
       <div className="flex items-center justify-between">
-        <h3 className="text-sm font-medium text-slate-700">Assign follow-up action</h3>
+        <h3 className="text-sm font-medium text-ink-muted">Assign follow-up action</h3>
         <Button variant="secondary" onClick={() => setOpen((o) => !o)}>
           {open ? "Cancel" : "Assign action"}
         </Button>
@@ -281,7 +281,7 @@ function NewFollowUpForm({ concernId }: { concernId: string }) {
           <TextInput label="Description" value={form.description} onChange={set("description")} error={fe.description} required />
           <TextInput label="Assigned to (officer id)" value={form.assigned_to} onChange={set("assigned_to")} error={fe.assigned_to} placeholder="uuid" required />
           <div className="flex flex-col gap-1">
-            <label htmlFor="fu-due" className="text-sm font-medium text-slate-700">
+            <label htmlFor="fu-due" className="text-sm font-medium text-ink-muted">
               Due date
             </label>
             <input
@@ -290,9 +290,9 @@ function NewFollowUpForm({ concernId }: { concernId: string }) {
               value={form.due_date}
               onChange={set("due_date")}
               required
-              className="rounded-md border border-slate-300 px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+              className="rounded-md border border-hair px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-accent-command/50"
             />
-            {fe.due_date && <p className="text-xs text-red-600">{fe.due_date}</p>}
+            {fe.due_date && <p className="text-xs text-bad">{fe.due_date}</p>}
           </div>
           <div>
             <Button type="submit" loading={busy}>

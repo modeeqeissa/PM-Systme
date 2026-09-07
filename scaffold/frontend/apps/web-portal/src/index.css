@@ -1,7 +1,21 @@
+@import "../../../packages/ui/src/theme.css";
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 body {
-  @apply bg-slate-50 text-slate-900 antialiased;
+  @apply bg-bg text-ink antialiased;
+  font-family: theme("fontFamily.sans");
+}
+
+/* subtle radial lift on the near-black ground, like the reference shell */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background:
+    radial-gradient(900px 500px at 15% -10%, rgba(59, 130, 246, 0.06), transparent 60%),
+    radial-gradient(1100px 600px at 100% 0%, rgba(167, 139, 250, 0.05), transparent 55%);
 }

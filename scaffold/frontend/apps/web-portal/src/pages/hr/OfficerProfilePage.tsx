@@ -40,7 +40,7 @@ export function OfficerProfilePage() {
     <div>
       <NavBar />
       <div className="mx-auto max-w-3xl px-4 pb-10">
-        <Link to="/hr/officers" className="mb-4 inline-block text-sm text-slate-500 underline">
+        <Link to="/hr/officers" className="mb-4 inline-block text-sm text-ink-faint underline">
           ← Back to directory
         </Link>
 
@@ -121,26 +121,26 @@ function OfficerHeader({ officer }: { officer: Officer }) {
     <Card className="mb-6">
       <div className="flex items-start justify-between">
         <div>
-          <h1 className="text-xl font-semibold text-slate-900">{officer.badge_number}</h1>
-          <p className="mt-1 text-sm text-slate-500">
+          <h1 className="text-xl font-semibold text-ink">{officer.badge_number}</h1>
+          <p className="mt-1 text-sm text-ink-faint">
             {officer.rank} · unit <span className="font-mono text-xs">{officer.unit_id.slice(0, 8)}…</span>
           </p>
-          <p className="text-sm text-slate-500">
+          <p className="text-sm text-ink-faint">
             Hired {officer.hire_date}
             {officer.supervisor_id && (
               <> · supervisor <span className="font-mono text-xs">{officer.supervisor_id.slice(0, 8)}…</span></>
             )}
           </p>
         </div>
-        <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-700">
+        <span className="rounded-full bg-surface-2 px-3 py-1 text-xs font-medium text-ink-muted">
           {STATUS_LABEL[officer.status]}
         </span>
       </div>
 
       {canWrite && (
-        <div className="mt-4 border-t border-slate-100 pt-4">
+        <div className="mt-4 border-t border-hair pt-4">
           <div className="flex items-center justify-between">
-            <h2 className="text-sm font-medium text-slate-700">Correct profile</h2>
+            <h2 className="text-sm font-medium text-ink-muted">Correct profile</h2>
             <Button variant="secondary" onClick={() => setEditing((v) => !v)}>
               {editing ? "Cancel" : "Edit"}
             </Button>
@@ -152,7 +152,7 @@ function OfficerHeader({ officer }: { officer: Officer }) {
           )}
           {editing && (
             <form onSubmit={submit} className="mt-3 flex flex-col gap-3">
-              <p className="text-xs text-slate-500">
+              <p className="text-xs text-ink-faint">
                 Rank and unit aren't editable here — they're owned by the
                 promotion (FR-HR-04) and transfer-approval (FR-HR-03) workflows.
               </p>
@@ -168,7 +168,7 @@ function OfficerHeader({ officer }: { officer: Officer }) {
                 error={fe.badge_number}
               />
               <div className="flex flex-col gap-1">
-                <label htmlFor="edit-hire" className="text-sm font-medium text-slate-700">
+                <label htmlFor="edit-hire" className="text-sm font-medium text-ink-muted">
                   Hire date
                 </label>
                 <input
@@ -176,18 +176,18 @@ function OfficerHeader({ officer }: { officer: Officer }) {
                   type="date"
                   value={form.hire_date}
                   onChange={(e) => setForm((f) => ({ ...f, hire_date: e.target.value }))}
-                  className="rounded-md border border-slate-300 px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+                  className="rounded-md border border-hair px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-accent-command/50"
                 />
               </div>
               <div className="flex flex-col gap-1">
-                <label htmlFor="edit-status" className="text-sm font-medium text-slate-700">
+                <label htmlFor="edit-status" className="text-sm font-medium text-ink-muted">
                   Status
                 </label>
                 <select
                   id="edit-status"
                   value={form.status}
                   onChange={(e) => setForm((f) => ({ ...f, status: e.target.value as OfficerStatus }))}
-                  className="rounded-md border border-slate-300 px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+                  className="rounded-md border border-hair px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-accent-command/50"
                 >
                   {(Object.keys(STATUS_LABEL) as OfficerStatus[]).map((s) => (
                     <option key={s} value={s}>
@@ -228,8 +228,8 @@ function CardShell({
 }) {
   return (
     <Card className="mb-6">
-      <h2 className="text-lg font-semibold text-slate-900">{title}</h2>
-      <p className="mb-4 text-sm text-slate-500">{fr}</p>
+      <h2 className="text-lg font-semibold text-ink">{title}</h2>
+      <p className="mb-4 text-sm text-ink-faint">{fr}</p>
       {children}
     </Card>
   );
@@ -244,7 +244,7 @@ function ListState({ q, noun }: { q: ReturnType<typeof useList>; noun: string })
   if (q.error instanceof ApiError && q.error.status === 403)
     return <Alert variant="error">Your role can't view {noun}.</Alert>;
   if (q.data && (q.data as unknown[]).length === 0)
-    return <p className="text-sm text-slate-500">No {noun} yet.</p>;
+    return <p className="text-sm text-ink-faint">No {noun} yet.</p>;
   return null;
 }
 
@@ -285,9 +285,9 @@ function AssignmentsCard({ officerId }: { officerId: string }) {
       {q.data && q.data.length > 0 && (
         <ul className="flex flex-col gap-2 text-sm">
           {q.data.map((a) => (
-            <li key={a.id} className="border-b border-slate-100 pb-2 last:border-0">
+            <li key={a.id} className="border-b border-hair pb-2 last:border-0">
               <span className="font-mono text-xs">{a.unit_id.slice(0, 8)}…</span>{" "}
-              <span className="text-slate-500">
+              <span className="text-ink-faint">
                 {a.start_date} → {a.end_date ?? "current"}
               </span>
             </li>
@@ -330,10 +330,10 @@ function TransfersCard({ officerId }: { officerId: string }) {
       {q.data && q.data.length > 0 && (
         <ul className="flex flex-col gap-2 text-sm">
           {q.data.map((t) => (
-            <li key={t.id} className="border-b border-slate-100 pb-2 last:border-0">
+            <li key={t.id} className="border-b border-hair pb-2 last:border-0">
               → <span className="font-mono text-xs">{t.to_unit_id.slice(0, 8)}…</span>{" "}
               <StatusPill status={t.status} />
-              {t.effective_date && <span className="text-slate-500"> · effective {t.effective_date}</span>}
+              {t.effective_date && <span className="text-ink-faint"> · effective {t.effective_date}</span>}
             </li>
           ))}
         </ul>
@@ -382,9 +382,9 @@ function LeaveCard({ officerId }: { officerId: string }) {
       {q.data && q.data.length > 0 && (
         <ul className="flex flex-col gap-2 text-sm">
           {q.data.map((l) => (
-            <li key={l.id} className="border-b border-slate-100 pb-2 last:border-0">
+            <li key={l.id} className="border-b border-hair pb-2 last:border-0">
               <span className="capitalize">{l.leave_type}</span>{" "}
-              <span className="text-slate-500">
+              <span className="text-ink-faint">
                 {l.start_date} → {l.end_date}
               </span>{" "}
               <StatusPill status={l.status} />
@@ -426,7 +426,7 @@ function PromotionsCard({ officerId, currentRank }: { officerId: string; current
         >
           {(fe) => (
             <>
-              <p className="text-xs text-slate-500">Current rank: {currentRank}</p>
+              <p className="text-xs text-ink-faint">Current rank: {currentRank}</p>
               <TextInput label="New rank" value={form.new_rank} onChange={(e) => setForm((f) => ({ ...f, new_rank: e.target.value }))} error={fe.new_rank} required />
               <DateField id="promo-eff" label="Effective date" value={form.effective_date} onChange={(v) => setForm((f) => ({ ...f, effective_date: v }))} error={fe.effective_date} />
               <TextInput label="Approved by (officer id)" value={form.approved_by} onChange={(e) => setForm((f) => ({ ...f, approved_by: e.target.value }))} error={fe.approved_by} placeholder="uuid" required />
@@ -438,9 +438,9 @@ function PromotionsCard({ officerId, currentRank }: { officerId: string; current
       {q.data && q.data.length > 0 && (
         <ul className="flex flex-col gap-2 text-sm">
           {q.data.map((p) => (
-            <li key={p.id} className="border-b border-slate-100 pb-2 last:border-0">
+            <li key={p.id} className="border-b border-hair pb-2 last:border-0">
               {p.previous_rank} → <span className="font-medium">{p.new_rank}</span>{" "}
-              <span className="text-slate-500">· effective {p.effective_date}</span>
+              <span className="text-ink-faint">· effective {p.effective_date}</span>
             </li>
           ))}
         </ul>
@@ -491,9 +491,9 @@ function PerformanceCard({ officerId }: { officerId: string }) {
       {q.data && q.data.length > 0 && (
         <ul className="flex flex-col gap-2 text-sm">
           {q.data.map((r) => (
-            <li key={r.id} className="border-b border-slate-100 pb-2 last:border-0">
+            <li key={r.id} className="border-b border-hair pb-2 last:border-0">
               <span className="font-medium">{r.period}</span> — score {r.score}
-              {r.comments && <div className="text-slate-600">{r.comments}</div>}
+              {r.comments && <div className="text-ink-muted">{r.comments}</div>}
             </li>
           ))}
         </ul>
@@ -542,9 +542,9 @@ function DisciplineCard({ officerId }: { officerId: string }) {
       {q.data && q.data.length > 0 && (
         <ul className="flex flex-col gap-2 text-sm">
           {q.data.map((d) => (
-            <li key={d.id} className="border-b border-slate-100 pb-2 last:border-0">
-              <span className="text-slate-500">{d.incident_date}</span> — {d.description}
-              {d.outcome && <div className="text-slate-600">Outcome: {d.outcome}</div>}
+            <li key={d.id} className="border-b border-hair pb-2 last:border-0">
+              <span className="text-ink-faint">{d.incident_date}</span> — {d.description}
+              {d.outcome && <div className="text-ink-muted">Outcome: {d.outcome}</div>}
             </li>
           ))}
         </ul>
@@ -556,10 +556,10 @@ function DisciplineCard({ officerId }: { officerId: string }) {
 function StatusPill({ status }: { status: string }) {
   const tone =
     status === "approved"
-      ? "bg-emerald-100 text-emerald-700"
+      ? "bg-ok/10 text-ok"
       : status === "rejected"
-        ? "bg-rose-100 text-rose-700"
-        : "bg-amber-100 text-amber-800";
+        ? "bg-bad/10 text-bad"
+        : "bg-warn/10 text-warn";
   return <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${tone}`}>{status}</span>;
 }
 
@@ -578,7 +578,7 @@ function DateField({
 }) {
   return (
     <div className="flex flex-col gap-1">
-      <label htmlFor={id} className="text-sm font-medium text-slate-700">
+      <label htmlFor={id} className="text-sm font-medium text-ink-muted">
         {label}
       </label>
       <input
@@ -587,9 +587,9 @@ function DateField({
         value={value}
         onChange={(e) => onChange(e.target.value)}
         required
-        className="rounded-md border border-slate-300 px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+        className="rounded-md border border-hair px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-accent-command/50"
       />
-      {error && <p className="text-xs text-red-600">{error}</p>}
+      {error && <p className="text-xs text-bad">{error}</p>}
     </div>
   );
 }

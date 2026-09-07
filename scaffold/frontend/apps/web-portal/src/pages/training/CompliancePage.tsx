@@ -14,9 +14,9 @@ const TABS: { key: CertStatus | "all"; label: string }[] = [
   { key: "all", label: "All" },
 ];
 const TONE: Record<string, string> = {
-  active: "bg-emerald-100 text-emerald-700",
-  expiring_soon: "bg-amber-100 text-amber-800",
-  expired: "bg-rose-100 text-rose-700",
+  active: "bg-ok/10 text-ok",
+  expiring_soon: "bg-warn/10 text-warn",
+  expired: "bg-bad/10 text-bad",
 };
 
 export function CompliancePage() {
@@ -64,8 +64,8 @@ export function CompliancePage() {
       <div className="mx-auto max-w-3xl px-4 pb-10">
         <div className="flex items-start justify-between">
           <div>
-            <h1 className="text-xl font-semibold text-slate-900">Certification compliance</h1>
-            <p className="mb-4 text-sm text-slate-500">
+            <h1 className="text-xl font-semibold text-ink">Certification compliance</h1>
+            <p className="mb-4 text-sm text-ink-faint">
               FR-TRAIN-03/04 — issued certifications by expiry status. Statuses are
               recomputed on a background sweep; run it on demand below.
             </p>
@@ -99,7 +99,7 @@ export function CompliancePage() {
               onClick={() => setTab(t.key)}
               className={
                 "rounded-full px-3 py-1 " +
-                (tab === t.key ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-600")
+                (tab === t.key ? "bg-surface-3 text-white" : "bg-surface-2 text-ink-muted")
               }
             >
               {t.label}
@@ -121,15 +121,15 @@ export function CompliancePage() {
             </div>
           )}
           {query.data && query.data.length === 0 && (
-            <p className="p-6 text-sm text-slate-500">Nothing in this bucket.</p>
+            <p className="p-6 text-sm text-ink-faint">Nothing in this bucket.</p>
           )}
           {query.data && query.data.length > 0 && (
-            <ul className="divide-y divide-slate-100 text-sm">
+            <ul className="divide-y divide-hair text-sm">
               {query.data.map((oc) => (
                 <li key={oc.id} className="flex items-center justify-between px-6 py-3">
                   <span className="font-mono text-xs">{oc.officer_id}</span>
                   <span>
-                    <span className="text-slate-500">issued {oc.issued_date} · exp {oc.expires_date} </span>
+                    <span className="text-ink-faint">issued {oc.issued_date} · exp {oc.expires_date} </span>
                     <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${TONE[oc.status]}`}>
                       {oc.status}
                     </span>

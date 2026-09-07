@@ -37,8 +37,8 @@ export function CourseCatalogPage() {
     <div>
       <NavBar />
       <div className="mx-auto max-w-3xl px-4 pb-10">
-        <h1 className="text-xl font-semibold text-slate-900">Course catalog</h1>
-        <p className="mb-6 text-sm text-slate-500">
+        <h1 className="text-xl font-semibold text-ink">Course catalog</h1>
+        <p className="mb-6 text-sm text-ink-faint">
           FR-TRAIN-01 — courses and the certifications each one issues on completion.
         </p>
 
@@ -56,7 +56,7 @@ export function CourseCatalogPage() {
         )}
         {coursesQuery.data && coursesQuery.data.length === 0 && (
           <Card>
-            <p className="text-sm text-slate-500">No courses in the catalog yet.</p>
+            <p className="text-sm text-ink-faint">No courses in the catalog yet.</p>
           </Card>
         )}
         <div className="flex flex-col gap-4">
@@ -112,7 +112,7 @@ function NewCourseForm() {
   return (
     <Card className="mb-6">
       <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold text-slate-900">Add course</h2>
+        <h2 className="text-lg font-semibold text-ink">Add course</h2>
         <Button variant="secondary" onClick={() => setOpen((o) => !o)}>
           {open ? "Cancel" : "Add course"}
         </Button>
@@ -135,7 +135,7 @@ function NewCourseForm() {
             error={fe.validity_months}
             required
           />
-          <label className="flex items-center gap-2 text-sm text-slate-700">
+          <label className="flex items-center gap-2 text-sm text-ink-muted">
             <input
               type="checkbox"
               checked={form.mandatory}
@@ -198,8 +198,8 @@ function CourseCard({
     <Card>
       <div className="flex items-start justify-between">
         <div>
-          <h3 className="font-medium text-slate-900">{course.title}</h3>
-          <p className="text-sm text-slate-500">
+          <h3 className="font-medium text-ink">{course.title}</h3>
+          <p className="text-sm text-ink-faint">
             valid {course.validity_months} months
             {course.mandatory && " · mandatory"}
           </p>
@@ -230,7 +230,7 @@ function CourseCard({
 
       {editing && (
         <form
-          className="mt-3 flex flex-col gap-3 border-t border-slate-100 pt-3"
+          className="mt-3 flex flex-col gap-3 border-t border-hair pt-3"
           onSubmit={(e) => {
             e.preventDefault();
             run(() =>
@@ -251,7 +251,7 @@ function CourseCard({
             onChange={(e) => setForm((f) => ({ ...f, validity_months: e.target.value }))}
             error={fe.validity_months}
           />
-          <label className="flex items-center gap-2 text-sm text-slate-700">
+          <label className="flex items-center gap-2 text-sm text-ink-muted">
             <input type="checkbox" checked={form.mandatory} onChange={(e) => setForm((f) => ({ ...f, mandatory: e.target.checked }))} />
             Mandatory
           </label>
@@ -263,18 +263,18 @@ function CourseCard({
         </form>
       )}
 
-      <div className="mt-3 border-t border-slate-100 pt-3">
-        <h4 className="mb-2 text-xs font-medium uppercase tracking-wide text-slate-500">
+      <div className="mt-3 border-t border-hair pt-3">
+        <h4 className="mb-2 text-xs font-medium uppercase tracking-wide text-ink-faint">
           Certifications
         </h4>
-        {certs.length === 0 && <p className="text-sm text-slate-500">None defined.</p>}
+        {certs.length === 0 && <p className="text-sm text-ink-faint">None defined.</p>}
         <ul className="flex flex-col gap-1 text-sm">
           {certs.map((c) => (
             <li key={c.id} className="flex items-center justify-between">
               <span>Certification #{c.id}</span>
               {canWrite && (
                 <button
-                  className="text-xs text-slate-500 underline hover:text-rose-600"
+                  className="text-xs text-ink-faint underline hover:text-bad"
                   onClick={() => run(() => training.certifications.remove(c.id))}
                 >
                   remove

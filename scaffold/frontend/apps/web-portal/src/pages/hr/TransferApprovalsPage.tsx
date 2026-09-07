@@ -27,8 +27,8 @@ export function TransferApprovalsPage() {
     <div>
       <NavBar />
       <div className="mx-auto max-w-3xl px-4 pb-10">
-        <h1 className="text-xl font-semibold text-slate-900">Transfer approvals</h1>
-        <p className="mb-6 text-sm text-slate-500">
+        <h1 className="text-xl font-semibold text-ink">Transfer approvals</h1>
+        <p className="mb-6 text-sm text-ink-faint">
           FR-HR-03 — every transfer request routed to commanders. Approving one
           updates the officer's unit and assignment record.
         </p>
@@ -40,7 +40,7 @@ export function TransferApprovalsPage() {
               onClick={() => setTab(s)}
               className={
                 "rounded-full px-3 py-1 capitalize " +
-                (tab === s ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-600")
+                (tab === s ? "bg-surface-3 text-white" : "bg-surface-2 text-ink-muted")
               }
             >
               {s}
@@ -60,7 +60,7 @@ export function TransferApprovalsPage() {
         )}
         {query.data && query.data.length === 0 && (
           <Card>
-            <p className="text-sm text-slate-500">No {tab} transfers.</p>
+            <p className="text-sm text-ink-faint">No {tab} transfers.</p>
           </Card>
         )}
         {query.data && query.data.length > 0 && (
@@ -110,22 +110,22 @@ function TransferRow({ transfer, canApprove }: { transfer: Transfer; canApprove:
     <Card>
       <div className="flex items-start justify-between text-sm">
         <div>
-          <div className="text-slate-900">
+          <div className="text-ink">
             Officer <span className="font-mono text-xs">{transfer.officer_id.slice(0, 8)}…</span>
           </div>
-          <div className="text-slate-500">
+          <div className="text-ink-faint">
             {transfer.from_unit_id ? `${transfer.from_unit_id.slice(0, 8)}…` : "—"} →{" "}
             <span className="font-mono text-xs">{transfer.to_unit_id.slice(0, 8)}…</span>
             {" · "}requested {new Date(transfer.requested_at).toLocaleDateString()}
           </div>
         </div>
-        <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800">
+        <span className="rounded-full bg-warn/10 px-2 py-0.5 text-xs font-medium text-warn">
           {transfer.status}
         </span>
       </div>
 
       {canApprove && (
-        <div className="mt-3 border-t border-slate-100 pt-3">
+        <div className="mt-3 border-t border-hair pt-3">
           {!open ? (
             <Button variant="secondary" onClick={() => setOpen(true)}>
               Review
@@ -145,7 +145,7 @@ function TransferRow({ transfer, canApprove }: { transfer: Transfer; canApprove:
                 placeholder="required to approve"
               />
               <div className="flex flex-col gap-1">
-                <label htmlFor={`eff-${transfer.id}`} className="text-sm font-medium text-slate-700">
+                <label htmlFor={`eff-${transfer.id}`} className="text-sm font-medium text-ink-muted">
                   Effective date
                 </label>
                 <input
@@ -153,9 +153,9 @@ function TransferRow({ transfer, canApprove }: { transfer: Transfer; canApprove:
                   type="date"
                   value={effectiveDate}
                   onChange={(e) => setEffectiveDate(e.target.value)}
-                  className="rounded-md border border-slate-300 px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+                  className="rounded-md border border-hair px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-accent-command/50"
                 />
-                {fe.effective_date && <p className="text-xs text-red-600">{fe.effective_date}</p>}
+                {fe.effective_date && <p className="text-xs text-bad">{fe.effective_date}</p>}
               </div>
               <div className="flex gap-2">
                 <Button onClick={() => decide("approved")} loading={busy === "approved"}>

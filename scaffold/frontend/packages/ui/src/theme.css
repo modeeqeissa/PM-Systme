@@ -1,0 +1,62 @@
+/* =========================================================================
+   PMP design system — shared tokens + motion.
+   Imported once per app (web-portal always; field-pwa for the base palette).
+   Colour values are mirrored in tailwind-preset.cjs so they are reachable
+   both as CSS vars (raw CSS below) and as Tailwind utilities (bg-surface …).
+   Reference: the approved "Integrated System" dark shell — near-black ground,
+   frosted panels, one accent per functional area, pulsing live-status dots.
+   ========================================================================= */
+
+:root {
+  /* ground + surfaces */
+  --pmp-bg: #0b0f19;
+  --pmp-surface: #131824;
+  --pmp-surface-2: #1a2130;
+  --pmp-surface-3: #212a3b;
+  --pmp-border: #262d3d;
+  --pmp-border-soft: #1e2431;
+
+  /* text */
+  --pmp-ink: #e8ecf6;
+  --pmp-ink-muted: #9aa6c0;
+  --pmp-ink-faint: #667192;
+
+  /* one accent per functional area (blue / indigo / cyan / emerald / amber / purple) */
+  --pmp-accent-command: #3b82f6;   /* command center       */
+  --pmp-accent-hr: #818cf8;        /* human resources      */
+  --pmp-accent-dashboard: #38bdf8; /* dashboards / KPIs    */
+  --pmp-accent-community: #34d399; /* community policing   */
+  --pmp-accent-cases: #e0a340;     /* case / evidence work */
+  --pmp-accent-training: #a78bfa;  /* training & knowledge */
+
+  /* semantic status */
+  --pmp-ok: #34d399;
+  --pmp-warn: #fbbf24;
+  --pmp-bad: #f87171;
+
+  --pmp-radius: 12px;
+  color-scheme: dark;
+}
+
+/* ---- live status dot: a coloured core with an expanding ring ---- */
+@keyframes pmp-pulse {
+  0%   { box-shadow: 0 0 0 0 var(--pmp-pulse-ring, rgba(52, 211, 153, 0.55)); }
+  70%  { box-shadow: 0 0 0 7px rgba(0, 0, 0, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(0, 0, 0, 0); }
+}
+
+/* ---- animated dashed connector for flow / topology views ---- */
+@keyframes pmp-dash {
+  to { stroke-dashoffset: -16; }
+}
+
+/* ---- ticker / live-feed marquee ---- */
+@keyframes pmp-ticker {
+  from { transform: translateX(0); }
+  to   { transform: translateX(-50%); }
+}
+
+/* thin dark scrollbars to match the shell */
+.pmp-scroll::-webkit-scrollbar { width: 8px; height: 8px; }
+.pmp-scroll::-webkit-scrollbar-track { background: transparent; }
+.pmp-scroll::-webkit-scrollbar-thumb { background: var(--pmp-surface-3); border-radius: 5px; }

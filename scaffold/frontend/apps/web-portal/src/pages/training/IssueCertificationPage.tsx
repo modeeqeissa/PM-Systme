@@ -15,9 +15,9 @@ import { hasPerm } from "../../lib/rbac";
 import { classify, fieldErrors, ProblemAlert, type Problem } from "../../lib/problem";
 
 const STATUS_TONE: Record<string, string> = {
-  active: "bg-emerald-100 text-emerald-700",
-  expiring_soon: "bg-amber-100 text-amber-800",
-  expired: "bg-rose-100 text-rose-700",
+  active: "bg-ok/10 text-ok",
+  expiring_soon: "bg-warn/10 text-warn",
+  expired: "bg-bad/10 text-bad",
 };
 
 export function IssueCertificationPage() {
@@ -78,8 +78,8 @@ export function IssueCertificationPage() {
     <div>
       <NavBar />
       <div className="mx-auto max-w-3xl px-4 pb-10">
-        <h1 className="text-xl font-semibold text-slate-900">Issue certification</h1>
-        <p className="mb-6 text-sm text-slate-500">
+        <h1 className="text-xl font-semibold text-ink">Issue certification</h1>
+        <p className="mb-6 text-sm text-ink-faint">
           FR-TRAIN-02 — issue a certification to an officer. The expiry date and
           status are computed by the server from the course's validity window.
         </p>
@@ -111,7 +111,7 @@ export function IssueCertificationPage() {
                 required
               />
               <div className="flex flex-col gap-1">
-                <label htmlFor="issue-cert" className="text-sm font-medium text-slate-700">
+                <label htmlFor="issue-cert" className="text-sm font-medium text-ink-muted">
                   Certification
                 </label>
                 {certsQuery.data && certsQuery.data.length > 0 ? (
@@ -120,7 +120,7 @@ export function IssueCertificationPage() {
                     value={form.certification_id}
                     onChange={(e) => setForm((f) => ({ ...f, certification_id: e.target.value }))}
                     required
-                    className="rounded-md border border-slate-300 px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+                    className="rounded-md border border-hair px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-accent-command/50"
                   >
                     <option value="">Select…</option>
                     {certsQuery.data.map((c: Certification) => (
@@ -137,13 +137,13 @@ export function IssueCertificationPage() {
                     onChange={(e) => setForm((f) => ({ ...f, certification_id: e.target.value }))}
                     required
                     placeholder="certification id"
-                    className="rounded-md border border-slate-300 px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+                    className="rounded-md border border-hair px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-accent-command/50"
                   />
                 )}
-                {fe.certification_id && <p className="text-xs text-red-600">{fe.certification_id}</p>}
+                {fe.certification_id && <p className="text-xs text-bad">{fe.certification_id}</p>}
               </div>
               <div className="flex flex-col gap-1">
-                <label htmlFor="issue-date" className="text-sm font-medium text-slate-700">
+                <label htmlFor="issue-date" className="text-sm font-medium text-ink-muted">
                   Issued date (optional — defaults to today)
                 </label>
                 <input
@@ -151,7 +151,7 @@ export function IssueCertificationPage() {
                   type="date"
                   value={form.issued_date}
                   onChange={(e) => setForm((f) => ({ ...f, issued_date: e.target.value }))}
-                  className="rounded-md border border-slate-300 px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+                  className="rounded-md border border-hair px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-accent-command/50"
                 />
               </div>
               <div>
@@ -168,7 +168,7 @@ export function IssueCertificationPage() {
         )}
 
         <Card className="p-0">
-          <h2 className="border-b border-slate-100 px-6 py-3 text-sm font-medium text-slate-700">
+          <h2 className="border-b border-hair px-6 py-3 text-sm font-medium text-ink-muted">
             Recently issued
           </h2>
           {recentQuery.isLoading && (
@@ -177,10 +177,10 @@ export function IssueCertificationPage() {
             </div>
           )}
           {recentQuery.data && recentQuery.data.length === 0 && (
-            <p className="p-6 text-sm text-slate-500">Nothing issued yet.</p>
+            <p className="p-6 text-sm text-ink-faint">Nothing issued yet.</p>
           )}
           {recentQuery.data && recentQuery.data.length > 0 && (
-            <ul className="divide-y divide-slate-100 text-sm">
+            <ul className="divide-y divide-hair text-sm">
               {recentQuery.data.slice(0, 25).map((oc) => (
                 <li key={oc.id} className="flex items-center justify-between px-6 py-3">
                   <span>
@@ -188,7 +188,7 @@ export function IssueCertificationPage() {
                     {courseTitle(oc.certification_id)}
                   </span>
                   <span>
-                    <span className="text-slate-500">exp {oc.expires_date} </span>
+                    <span className="text-ink-faint">exp {oc.expires_date} </span>
                     <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_TONE[oc.status]}`}>
                       {oc.status}
                     </span>

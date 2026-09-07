@@ -123,16 +123,16 @@ export function IncidentPage() {
             </Alert>
           </div>
           <dl className="grid grid-cols-[8rem_1fr] gap-y-2 text-sm">
-            <dt className="text-slate-500">Incident id</dt>
-            <dd className="font-mono text-xs text-slate-700">{inc.id}</dd>
-            <dt className="text-slate-500">Type</dt>
-            <dd className="text-slate-900">{inc.incident_type}</dd>
-            <dt className="text-slate-500">Description</dt>
-            <dd className="text-slate-900">{inc.description}</dd>
-            <dt className="text-slate-500">Station</dt>
-            <dd className="font-mono text-xs text-slate-700">{inc.station_id}</dd>
-            <dt className="text-slate-500">Reported at</dt>
-            <dd className="text-slate-900">{new Date(inc.reported_at).toLocaleString()}</dd>
+            <dt className="text-ink-faint">Incident id</dt>
+            <dd className="font-mono text-xs text-ink-muted">{inc.id}</dd>
+            <dt className="text-ink-faint">Type</dt>
+            <dd className="text-ink">{inc.incident_type}</dd>
+            <dt className="text-ink-faint">Description</dt>
+            <dd className="text-ink">{inc.description}</dd>
+            <dt className="text-ink-faint">Station</dt>
+            <dd className="font-mono text-xs text-ink-muted">{inc.station_id}</dd>
+            <dt className="text-ink-faint">Reported at</dt>
+            <dd className="text-ink">{new Date(inc.reported_at).toLocaleString()}</dd>
           </dl>
 
           {escalateErr && (
@@ -158,7 +158,7 @@ export function IncidentPage() {
             </Button>
             <Link
               to="/cases"
-              className="inline-flex items-center text-sm text-slate-500 underline"
+              className="inline-flex items-center text-sm text-ink-faint underline"
             >
               Back to cases
             </Link>
@@ -172,8 +172,8 @@ export function IncidentPage() {
   return (
     <Shell>
       <Card>
-        <h1 className="text-lg font-semibold text-slate-900">File an incident</h1>
-        <p className="mb-6 text-sm text-slate-500">
+        <h1 className="text-lg font-semibold text-ink">File an incident</h1>
+        <p className="mb-6 text-sm text-ink-faint">
           Filing as <span className="font-medium">{claims?.badge_number}</span> — FR-CASE-01.
         </p>
 
@@ -217,7 +217,7 @@ export function IncidentPage() {
             required
           />
           <div className="flex flex-col gap-1">
-            <label htmlFor="desc" className="text-sm font-medium text-slate-700">
+            <label htmlFor="desc" className="text-sm font-medium text-ink-muted">
               Description
             </label>
             <textarea
@@ -227,13 +227,13 @@ export function IncidentPage() {
               rows={4}
               required
               className={
-                "rounded-md border px-3 py-2 text-sm text-slate-900 shadow-sm " +
-                "focus:outline-none focus:ring-2 focus:ring-slate-400 " +
-                (fieldErr.description ? "border-red-400" : "border-slate-300")
+                "rounded-md border px-3 py-2 text-sm text-ink shadow-sm " +
+                "focus:outline-none focus:ring-2 focus:ring-accent-command/50 " +
+                (fieldErr.description ? "border-bad/30" : "border-hair")
               }
             />
             {fieldErr.description && (
-              <p className="text-xs text-red-600">{fieldErr.description}</p>
+              <p className="text-xs text-bad">{fieldErr.description}</p>
             )}
           </div>
           <TextInput
@@ -245,7 +245,7 @@ export function IncidentPage() {
             required
           />
           <div className="flex flex-col gap-1">
-            <label htmlFor="reported_at" className="text-sm font-medium text-slate-700">
+            <label htmlFor="reported_at" className="text-sm font-medium text-ink-muted">
               Reported at
             </label>
             <input
@@ -255,13 +255,13 @@ export function IncidentPage() {
               onChange={(e) => setReportedAt(e.target.value)}
               required
               className={
-                "rounded-md border px-3 py-2 text-sm text-slate-900 shadow-sm " +
-                "focus:outline-none focus:ring-2 focus:ring-slate-400 " +
-                (fieldErr.reported_at ? "border-red-400" : "border-slate-300")
+                "rounded-md border px-3 py-2 text-sm text-ink shadow-sm " +
+                "focus:outline-none focus:ring-2 focus:ring-accent-command/50 " +
+                (fieldErr.reported_at ? "border-bad/30" : "border-hair")
               }
             />
             {fieldErr.reported_at && (
-              <p className="text-xs text-red-600">{fieldErr.reported_at}</p>
+              <p className="text-xs text-bad">{fieldErr.reported_at}</p>
             )}
           </div>
 
@@ -269,7 +269,7 @@ export function IncidentPage() {
             <Button type="submit" loading={busy}>
               File incident
             </Button>
-            <Link to="/cases" className="text-sm text-slate-500 underline">
+            <Link to="/cases" className="text-sm text-ink-faint underline">
               Cancel
             </Link>
           </div>

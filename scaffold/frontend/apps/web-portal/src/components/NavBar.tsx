@@ -29,7 +29,7 @@ export function NavBar() {
   const visible = ITEMS.filter((i) => hasAnyPerm(i.anyOf));
 
   return (
-    <nav className="mb-6 border-b border-slate-200 pb-3">
+    <nav className="mb-6 border-b border-hair bg-surface/60 py-3 backdrop-blur-panel">
       <div className="mx-auto flex max-w-5xl flex-wrap items-center gap-x-5 gap-y-2 px-4 text-sm">
         {visible.map((i) => (
           <NavLink
@@ -37,14 +37,14 @@ export function NavBar() {
             to={i.to}
             className={({ isActive }) =>
               isActive
-                ? "font-medium text-slate-900 underline decoration-slate-900"
-                : "text-slate-500 hover:text-slate-900"
+                ? "font-medium text-ink underline decoration-accent-command"
+                : "text-ink-faint hover:text-ink"
             }
           >
             {i.label}
           </NavLink>
         ))}
-        <span className="ml-auto flex items-center gap-3 text-slate-500">
+        <span className="ml-auto flex items-center gap-3 text-ink-faint">
           {claims && <span className="font-medium">{claims.badge_number}</span>}
           <Button
             variant="secondary"

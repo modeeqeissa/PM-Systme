@@ -58,7 +58,7 @@ export function AddForm({
   return (
     <div className="mb-4">
       <div className="flex items-center justify-between">
-        <h3 className="text-sm font-medium text-slate-700">{title}</h3>
+        <h3 className="text-sm font-medium text-ink-muted">{title}</h3>
         <Button variant="secondary" onClick={() => setOpen((o) => !o)}>
           {open ? "Cancel" : openLabel}
         </Button>

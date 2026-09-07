@@ -1,20 +1,24 @@
 import type { ReactNode } from "react";
 
+type Variant = "error" | "info" | "success" | "warn";
+
+const styles: Record<Variant, string> = {
+  error: "border-bad/30 bg-bad/10 text-bad",
+  info: "border-hair bg-surface-2 text-ink-muted",
+  success: "border-ok/30 bg-ok/10 text-ok",
+  warn: "border-warn/30 bg-warn/10 text-warn",
+};
+
 interface Props {
-  variant?: "error" | "info";
+  variant?: Variant;
   children: ReactNode;
 }
-
-const styles = {
-  error: "border-red-300 bg-red-50 text-red-800",
-  info: "border-slate-300 bg-slate-50 text-slate-700",
-};
 
 export function Alert({ variant = "info", children }: Props) {
   return (
     <div
       role={variant === "error" ? "alert" : "status"}
-      className={`rounded-md border px-3 py-2 text-sm ${styles[variant]}`}
+      className={`rounded-lg border px-3 py-2 text-sm ${styles[variant]}`}
     >
       {children}
     </div>
