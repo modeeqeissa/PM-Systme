@@ -1,21 +1,23 @@
 /**
  * The offline-sync engine.
  *
- * Filing an incident ALWAYS writes to the IndexedDB outbox first, then tries to
- * flush — so a write is never lost to a crash or a dead network. A flush:
- *   1. ensures a usable access token, refreshing it via the rotating refresh
- *      token if it has expired (this is the "reconnect-to-refresh" story);
- *   2. POSTs each queued incident to case-service with its stable
- *      Idempotency-Key — a 201 or a 200 (server already had the key) both
- *      clear the row; a 4xx validation error marks it `rejected` (won't retry
- *      forever); a network failure leaves it `queued`;
- *   3. refreshes the local case cache.
+ * Every field write (incident, statement, arrest, evidence) is persisted to the
+ * IndexedDB outbox FIRST — never lost to a crash or a dead network — then a
+ * flush is attempted:
+ *   1. ensure a usable access token, refreshing it via the rotating refresh
+ *      token if expired (reconnect-to-refresh);
+ *   2. POST each queued item to its endpoint with its stable Idempotency-Key —
+ *      201 or 200 (server already had the key) both clear the row; a 4xx
+ *      validation error marks it `rejected`; a network failure leaves it
+ *      `queued`;
+ *   3. refresh the local case cache.
  *
- * Runs on: app start, the `online` event, a 30s interval, and right after
- * fileIncident().
+ * Runs on app start, the `online` event, a 30s interval, and a page's explicit
+ * syncNow().
  */
 import { newIdempotencyKey } from "@pmp/core";
-import { ApiError, cases, iam, incidents, type IncidentInput } from "./api";
+import { bytesToBase64 } from "./b64";
+import { ApiError, cases, iam, submitOutboxItem } from "./api";
 import {
   accessTokenUsable,
   getAccessToken,
@@ -24,13 +26,16 @@ import {
   updateTokens,
 } from "./auth";
 import {
-  enqueueIncident,
+  enqueue,
+  outboxAll,
   outboxQueued,
+  OutboxQuotaError,
   pendingCount,
   putCases,
   setLastSync,
   updateOutbox,
-  type OutboxIncident,
+  type OutboxItem,
+  type OutboxKind,
 } from "./db";
 
 export interface SyncResult {
@@ -44,23 +49,81 @@ export interface SyncResult {
   error?: string;
 }
 
-/**
- * Persist an incident to the outbox and return its local row id. Does NOT
- * flush — the caller decides (the page awaits syncNow() for immediate
- * feedback; the online-event / interval sweeps catch it otherwise). Keeping
- * these separate means the write is durably saved before any network attempt.
- */
-export async function fileIncident(body: IncidentInput): Promise<string> {
-  const row: OutboxIncident = {
+interface FileArgs {
+  kind: OutboxKind;
+  body: Record<string, unknown>;
+  caseId?: string;
+  file?: File;
+}
+
+/** Blob.arrayBuffer() with a FileReader fallback (jsdom / older WebView). */
+function readArrayBuffer(f: Blob): Promise<ArrayBuffer> {
+  if (typeof f.arrayBuffer === "function") return f.arrayBuffer();
+  return new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(r.result as ArrayBuffer);
+    r.onerror = () => reject(r.error);
+    r.readAsArrayBuffer(f);
+  });
+}
+
+/** Persist a field write to the outbox. Returns the local row id. Does NOT flush. */
+export async function queueWrite(args: FileArgs): Promise<string> {
+  const row: OutboxItem = {
     id: newIdempotencyKey(),
     key: newIdempotencyKey(),
-    body,
+    kind: args.kind,
+    caseId: args.caseId,
+    body: args.body,
     state: "queued",
     attempts: 0,
     createdAt: Date.now(),
   };
-  await enqueueIncident(row);
+  if (args.file) {
+    // read the whole file into memory once and base64-encode it for storage
+    // (see lib/b64.ts). Fine for field photos/PDFs; a video would need a
+    // streamed approach — flagged for a later slice.
+    row.fileB64 = bytesToBase64(await readArrayBuffer(args.file));
+    row.fileType = args.file.type;
+    row.fileName = args.file.name;
+  }
+  await enqueue(row); // throws OutboxQuotaError if the device is full
   return row.id;
+}
+
+export const fileIncident = (body: Record<string, unknown>) => queueWrite({ kind: "incident", body });
+export const fileStatement = (caseId: string, body: Record<string, unknown>) =>
+  queueWrite({ kind: "statement", caseId, body });
+export const fileArrest = (caseId: string, body: Record<string, unknown>) =>
+  queueWrite({ kind: "arrest", caseId, body });
+export const fileEvidence = (caseId: string, body: Record<string, unknown>, file: File | undefined) =>
+  queueWrite({ kind: "evidence", caseId, body, file });
+
+export type WriteOutcome =
+  | { kind: "synced" }
+  | { kind: "queued" }
+  | { kind: "rejected"; detail?: string }
+  | { kind: "reauth" }
+  | { kind: "quota" };
+
+/**
+ * Queue one field write, then attempt an immediate flush and report what
+ * happened to that specific row — the shared path behind every "file X" form.
+ */
+export async function runQueuedWrite(enqueueFn: () => Promise<string>): Promise<WriteOutcome> {
+  let localId: string;
+  try {
+    localId = await enqueueFn();
+  } catch (e) {
+    if (e instanceof OutboxQuotaError) return { kind: "quota" };
+    throw e;
+  }
+  const r = await syncNow();
+  if (r.needsReauth) return { kind: "reauth" };
+  const row = (await outboxAll()).find((o) => o.id === localId);
+  if (row?.state === "synced") return { kind: "synced" };
+  if (row?.state === "rejected") return { kind: "rejected", detail: row.lastError };
+  return { kind: "queued" };
 }
 
 async function ensureAccessToken(): Promise<{
@@ -81,7 +144,6 @@ async function ensureAccessToken(): Promise<{
     if (e instanceof ApiError && e.offline) {
       return { token: null, refreshed: false, needsReauth: false };
     }
-    // server rejected the refresh token (expired or rotated away) -> re-login
     return { token: null, refreshed: false, needsReauth: true };
   }
 }
@@ -122,19 +184,21 @@ async function _sync(): Promise<SyncResult> {
     return r;
   }
   if (token == null) {
-    r.online = false; // refresh call itself failed to reach the server
+    r.online = false;
     r.stillQueued = await pendingCount();
     return r;
   }
 
   for (const row of await outboxQueued()) {
     try {
-      const { incident } = await incidents.create(row.body, row.key, token);
+      const { remoteId } = await submitOutboxItem(row, token);
       await updateOutbox(row.id, {
         state: "synced",
-        remoteId: incident.id,
+        remoteId,
         attempts: row.attempts + 1,
         lastError: undefined,
+        // drop the file bytes once they're on the server — reclaim the space
+        fileB64: undefined,
       });
       r.synced += 1;
     } catch (e) {
@@ -182,7 +246,6 @@ async function _sync(): Promise<SyncResult> {
 
 let _wired = false;
 
-/** Wire the `online` event + a periodic sweep. Idempotent. */
 export function startBackgroundSync(): void {
   if (_wired || typeof window === "undefined") return;
   _wired = true;

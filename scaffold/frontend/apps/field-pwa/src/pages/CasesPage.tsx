@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Alert, Button, Card } from "@pmp/ui";
 import { accessClaims, clearTokens } from "../lib/auth";
-import { getCases, getLastSync, outboxAll, type CachedCase, type OutboxIncident } from "../lib/db";
+import { getCases, getLastSync, outboxAll, type CachedCase, type OutboxItem } from "../lib/db";
 import { useOnline } from "../lib/net";
 import { syncNow } from "../lib/sync";
 
@@ -20,7 +20,7 @@ export function CasesPage() {
   const claims = accessClaims();
 
   const [cases, setCases] = useState<CachedCase[] | null>(null);
-  const [outbox, setOutbox] = useState<OutboxIncident[]>([]);
+  const [outbox, setOutbox] = useState<OutboxItem[]>([]);
   const [lastSync, setLastSync] = useState<number | null>(null);
   const [syncing, setSyncing] = useState(false);
   const [note, setNote] = useState<string | null>(null);
@@ -54,7 +54,7 @@ export function CasesPage() {
       if (!silent) {
         if (!r.online) setNote("Still offline — nothing synced.");
         else if (r.synced > 0)
-          setNote(`Synced ${r.synced} queued incident${r.synced === 1 ? "" : "s"}.`);
+          setNote(`Synced ${r.synced} queued record${r.synced === 1 ? "" : "s"}.`);
         else setNote("Up to date.");
       }
     } finally {
@@ -87,7 +87,7 @@ export function CasesPage() {
       {!online && (
         <div className="mb-3">
           <Alert variant="error">
-            Offline — showing the last synced data. New incidents queue on this
+            Offline — showing the last synced data. New records queue on this
             device and sync automatically when you reconnect.
           </Alert>
         </div>
@@ -114,13 +114,21 @@ export function CasesPage() {
         <Card className="mb-3">
           {pending.length > 0 && (
             <p className="text-sm text-amber-800">
-              {pending.length} incident{pending.length === 1 ? "" : "s"} queued on
-              this device, waiting to sync.
+              Queued on this device, waiting to sync:{" "}
+              {Object.entries(
+                pending.reduce<Record<string, number>>((acc, o) => {
+                  acc[o.kind] = (acc[o.kind] ?? 0) + 1;
+                  return acc;
+                }, {}),
+              )
+                .map(([k, n]) => `${n} ${k}${n === 1 ? "" : "s"}`)
+                .join(", ")}
+              .
             </p>
           )}
           {rejected.map((o) => (
             <p key={o.id} className="mt-1 text-sm text-rose-700">
-              An incident was rejected by the server ({o.lastError}). It will not
+              A {o.kind} was rejected by the server ({o.lastError}). It will not
               retry — re-file it.
             </p>
           ))}
@@ -146,17 +154,22 @@ export function CasesPage() {
         <ul className="flex flex-col gap-2">
           {cases.map((c) => (
             <li key={c.id}>
-              <Card>
-                <div className="flex items-center justify-between">
-                  <span className="font-medium text-slate-900">{c.case_number}</span>
-                  <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-700">
-                    {STATUS_LABEL[c.status] ?? c.status}
-                  </span>
-                </div>
-                <p className="mt-1 text-xs text-slate-500">
-                  Opened {new Date(c.opened_at).toLocaleDateString()}
-                </p>
-              </Card>
+              <Link to={`/case/${c.id}`} className="block">
+                <Card>
+                  <div className="flex items-center justify-between">
+                    <span className="font-medium text-slate-900 underline decoration-slate-300">
+                      {c.case_number}
+                    </span>
+                    <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-700">
+                      {STATUS_LABEL[c.status] ?? c.status}
+                    </span>
+                  </div>
+                  <p className="mt-1 text-xs text-slate-500">
+                    Opened {new Date(c.opened_at).toLocaleDateString()} · tap to
+                    record statement / arrest / evidence
+                  </p>
+                </Card>
+              </Link>
             </li>
           ))}
         </ul>

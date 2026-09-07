@@ -1,14 +1,17 @@
 /**
- * Thin fetch wrappers for iam-service and case-service.
+ * Thin fetch wrappers for iam-service, case-service and evidence-service.
  *
  * Vite proxies same-origin paths in dev:
- *   /api/iam/*  -> iam-service  (:8001)
- *   /api/case/* -> case-service (:8002)
+ *   /api/iam/*      -> iam-service      (:8001)
+ *   /api/case/*     -> case-service     (:8002)
+ *   /api/evidence/* -> evidence-service (:8003)
  *
  * A failed fetch (TypeError — offline, DNS, connection refused) is surfaced as
- * `ApiError` with `offline: true`, so callers can distinguish "can't reach the
- * server" from "server said no".
+ * `ApiError` with `offline: true`, distinct from "server said no".
  */
+import { base64ToArrayBuffer } from "./b64";
+import type { OutboxItem } from "./db";
+
 export class ApiError extends Error {
   constructor(
     public status: number,
@@ -30,21 +33,6 @@ export interface TokenPair {
   expires_in: number;
 }
 
-export interface IncidentInput {
-  reported_by: string;
-  incident_type: string;
-  description: string;
-  station_id: string;
-  reported_at: string; // ISO 8601
-}
-
-export interface Incident extends IncidentInput {
-  id: string;
-  created_at: string;
-  latitude: number | null;
-  longitude: number | null;
-}
-
 export interface CaseRow {
   id: string;
   case_number: string;
@@ -62,7 +50,10 @@ async function raw<T>(
 ): Promise<{ status: number; data: T }> {
   const { token, headers, ...rest } = init;
   const h = new Headers(headers);
-  if (rest.body && !h.has("Content-Type")) h.set("Content-Type", "application/json");
+  // Don't set Content-Type for FormData — the browser adds the multipart boundary.
+  if (rest.body && typeof rest.body === "string" && !h.has("Content-Type")) {
+    h.set("Content-Type", "application/json");
+  }
   if (token) h.set("Authorization", `Bearer ${token}`);
 
   let res: Response;
@@ -100,12 +91,6 @@ export const iam = {
       body: JSON.stringify({ badge_number, password }),
     }).then((r) => r.data),
 
-  enrollMfa: (mfaToken: string) =>
-    raw<{ secret: string; otpauth_uri: string }>("/api/iam", "/api/v1/auth/mfa/enroll", {
-      method: "POST",
-      headers: { Authorization: `Bearer ${mfaToken}` },
-    }).then((r) => r.data),
-
   verifyMfa: (mfa_token: string, code: string) =>
     raw<TokenPair>("/api/iam", "/api/v1/auth/mfa/verify", {
       method: "POST",
@@ -124,16 +109,51 @@ export const cases = {
     raw<CaseRow[]>("/api/case", "/api/v1/cases", { token }).then((r) => r.data),
 };
 
-export const incidents = {
-  /**
-   * POST /incidents with the caller-owned Idempotency-Key. 201 = created,
-   * 200 = the server already had this key (a replay) — both return the record.
-   */
-  create: (body: IncidentInput, idempotencyKey: string, token: string) =>
-    raw<Incident>("/api/case", "/api/v1/incidents", {
+/**
+ * Send one queued outbox item to its endpoint with its stable Idempotency-Key.
+ * 201 (created) and 200 (server already had the key — a replay) both count as
+ * success and return the server-assigned id.
+ */
+export async function submitOutboxItem(
+  item: OutboxItem,
+  token: string,
+): Promise<{ remoteId: string }> {
+  const key = item.key;
+
+  if (item.kind === "incident") {
+    const r = await raw<{ id: string }>("/api/case", "/api/v1/incidents", {
       method: "POST",
-      body: JSON.stringify(body),
-      headers: { "Idempotency-Key": idempotencyKey },
+      body: JSON.stringify(item.body),
+      headers: { "Idempotency-Key": key },
       token,
-    }).then((r) => ({ incident: r.data, replayed: r.status === 200 })),
-};
+    });
+    return { remoteId: r.data.id };
+  }
+
+  if (item.kind === "statement" || item.kind === "arrest") {
+    const seg = item.kind === "statement" ? "statements" : "arrests";
+    const r = await raw<{ id: string }>(
+      "/api/case",
+      `/api/v1/cases/${item.caseId}/${seg}`,
+      { method: "POST", body: JSON.stringify(item.body), headers: { "Idempotency-Key": key }, token },
+    );
+    return { remoteId: r.data.id };
+  }
+
+  // evidence — multipart; the file is rebuilt from the stored base64 string
+  const fd = new FormData();
+  for (const [k, v] of Object.entries(item.body)) fd.append(k, String(v));
+  if (item.fileB64) {
+    const blob = new Blob([base64ToArrayBuffer(item.fileB64)], {
+      type: item.fileType || "application/octet-stream",
+    });
+    fd.append("file", blob, item.fileName ?? "evidence.bin");
+  }
+  const r = await raw<{ id: string }>("/api/evidence", "/api/v1/evidence", {
+    method: "POST",
+    body: fd,
+    headers: { "Idempotency-Key": key },
+    token,
+  });
+  return { remoteId: r.data.id };
+}

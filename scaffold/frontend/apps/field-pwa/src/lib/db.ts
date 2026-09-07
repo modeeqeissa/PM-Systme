@@ -1,14 +1,13 @@
 /**
- * IndexedDB — the field PWA's local store. Two jobs:
- *   1. `cases`  — a read cache of the officer's cases, refreshed on every sync,
- *      rendered as-is when offline.
- *   2. `outbox` — incidents filed while offline (or whose POST failed). Each row
- *      keeps the SAME idempotency key for every replay, so case-service dedupes
- *      a retry into the original record.
- *   3. `meta`   — small key/value (last successful sync time).
+ * IndexedDB — the field PWA's local store.
+ *   1. `cases`  — a read cache of the officer's cases (refreshed each sync).
+ *   2. `outbox` — field writes queued offline (or whose POST failed). Every
+ *      row keeps ONE idempotency key across every replay so the server dedupes
+ *      a retry into the original record. An `evidence` row also carries the
+ *      file itself as a Blob until it syncs.
+ *   3. `meta`   — last successful sync time.
  */
 import { openDB, type DBSchema, type IDBPDatabase } from "idb";
-import type { IncidentInput } from "./api";
 
 export interface CachedCase {
   id: string;
@@ -20,25 +19,38 @@ export interface CachedCase {
   closed_at: string | null;
 }
 
+export type OutboxKind = "incident" | "statement" | "arrest" | "evidence";
 export type OutboxState = "queued" | "synced" | "rejected";
 
-export interface OutboxIncident {
+export interface OutboxItem {
   /** local id (uuid) — the row key */
   id: string;
-  /** the Idempotency-Key sent to case-service; stable across every retry */
+  kind: OutboxKind;
+  /** the Idempotency-Key sent to the server; stable across every retry */
   key: string;
-  body: IncidentInput;
+  /** case_id for statement / arrest / evidence; unused for incident */
+  caseId?: string;
+  /** JSON body (incident/statement/arrest) or the non-file evidence fields */
+  body: Record<string, unknown>;
+  /**
+   * evidence only — the file's bytes, held here until sync, base64-encoded
+   * (see lib/b64.ts for why a string and not a Blob/ArrayBuffer). The Blob is
+   * reconstructed at submit time.
+   */
+  fileB64?: string;
+  fileType?: string;
+  fileName?: string;
   state: OutboxState;
   attempts: number;
   createdAt: number;
   lastError?: string;
-  /** server incident id once synced (201) or matched (200 replay) */
+  /** server-assigned id once synced (201) or matched (200 replay) */
   remoteId?: string;
 }
 
 interface FieldDB extends DBSchema {
   cases: { key: string; value: CachedCase };
-  outbox: { key: string; value: OutboxIncident; indexes: { by_state: OutboxState } };
+  outbox: { key: string; value: OutboxItem; indexes: { by_state: OutboxState } };
   meta: { key: string; value: unknown };
 }
 
@@ -81,29 +93,43 @@ export async function getCases(): Promise<CachedCase[]> {
   return all.sort((a, b) => (a.opened_at < b.opened_at ? 1 : -1));
 }
 
+export async function getCase(id: string): Promise<CachedCase | undefined> {
+  return (await db()).get("cases", id);
+}
+
 // --- outbox ----------------------------------------------------------
-export async function enqueueIncident(row: OutboxIncident): Promise<void> {
-  const d = await db();
-  await d.put("outbox", row);
+export class OutboxQuotaError extends Error {
+  constructor() {
+    super("device storage is full — the item was NOT queued");
+    this.name = "OutboxQuotaError";
+  }
 }
 
-export async function outboxAll(): Promise<OutboxIncident[]> {
+export async function enqueue(item: OutboxItem): Promise<void> {
   const d = await db();
-  const all = await d.getAll("outbox");
-  return all.sort((a, b) => a.createdAt - b.createdAt);
+  try {
+    await d.put("outbox", item);
+  } catch (e) {
+    if (e instanceof DOMException && (e.name === "QuotaExceededError" || e.code === 22)) {
+      throw new OutboxQuotaError();
+    }
+    throw e;
+  }
 }
 
-export async function outboxQueued(): Promise<OutboxIncident[]> {
+export async function outboxAll(): Promise<OutboxItem[]> {
+  const d = await db();
+  return (await d.getAll("outbox")).sort((a, b) => a.createdAt - b.createdAt);
+}
+
+export async function outboxQueued(): Promise<OutboxItem[]> {
   const d = await db();
   return (await d.getAllFromIndex("outbox", "by_state", "queued")).sort(
     (a, b) => a.createdAt - b.createdAt,
   );
 }
 
-export async function updateOutbox(
-  id: string,
-  patch: Partial<OutboxIncident>,
-): Promise<void> {
+export async function updateOutbox(id: string, patch: Partial<OutboxItem>): Promise<void> {
   const d = await db();
   const cur = await d.get("outbox", id);
   if (cur == null) return;
@@ -116,11 +142,24 @@ export async function pendingCount(): Promise<number> {
 
 // --- meta ----------------------------------------------------------
 export async function setLastSync(ts: number): Promise<void> {
-  const d = await db();
-  await d.put("meta", ts, "lastSyncAt");
+  await (await db()).put("meta", ts, "lastSyncAt");
 }
 
 export async function getLastSync(): Promise<number | null> {
-  const d = await db();
-  return ((await d.get("meta", "lastSyncAt")) as number | undefined) ?? null;
+  return ((await (await db()).get("meta", "lastSyncAt")) as number | undefined) ?? null;
+}
+
+/** Best-effort storage headroom for a UI warning. null = API unavailable. */
+export async function storageHeadroom(): Promise<{ usedMB: number; quotaMB: number; pctUsed: number } | null> {
+  try {
+    const est = await navigator.storage?.estimate?.();
+    if (!est || est.quota == null || est.usage == null) return null;
+    return {
+      usedMB: est.usage / 1e6,
+      quotaMB: est.quota / 1e6,
+      pctUsed: (est.usage / est.quota) * 100,
+    };
+  } catch {
+    return null;
+  }
 }

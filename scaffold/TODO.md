@@ -192,13 +192,13 @@ that block even the owner. RBAC is uniform (every mutating route has a
   CJIS-style trail would want login success/failure. Bigger than a
   one-liner (new event(s), volume considerations); track for the security
   hardening pass.
-- **Deferred, tied to later PWA slices:** CLAUDE.md rule 6 ("field-originated
-  write endpoints must accept an `Idempotency-Key` and dedupe") is honoured
-  only by `POST /incidents`. Per docs §2.3 a Patrol Officer also "records
-  statements / logs evidence in the field", so `POST /cases/{id}/statements`
-  and `POST /evidence` will each need the same treatment once they're
-  field-fileable (field-PWA slice 2+). Not a bug today — the current PWA
-  slice is incident-only.
+- **DONE 2026-09-07 (rule 6):** `POST /cases/{id}/statements`,
+  `POST /cases/{id}/arrests` and `POST /evidence` now accept an optional
+  `Idempotency-Key` and dedupe on it (nullable UNIQUE `client_sync_id`,
+  case-service migration 0003 / evidence-service migration 0003), same
+  200-with-original-record semantics as `POST /incidents`. Optional rather
+  than required (rule 6 says "accept ... and dedupe"; required would break
+  web-portal's existing forms). Field-PWA slice 2 uses them.
 - **Judged not a gap:** `PUT /notification-preferences` emits no audit event.
   notification_db isn't in rule 3's scope ("case, evidence, HR/discipline,
   or IAM data"), it's a user's own self-service preference, and

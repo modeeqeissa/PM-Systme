@@ -2,22 +2,10 @@ import { useState } from "react";
 import type { FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Alert, Button, Card, TextInput } from "@pmp/ui";
-import { accessClaims, clearTokens } from "../lib/auth";
-import { outboxAll } from "../lib/db";
+import { accessClaims } from "../lib/auth";
 import { useOnline } from "../lib/net";
-import { fileIncident, syncNow } from "../lib/sync";
-
-function nowLocalInput(): string {
-  const d = new Date();
-  d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
-  return d.toISOString().slice(0, 16);
-}
-
-type Outcome =
-  | { kind: "synced" }
-  | { kind: "queued" }
-  | { kind: "rejected"; detail: string }
-  | { kind: "reauth" };
+import { fileIncident, runQueuedWrite, type WriteOutcome } from "../lib/sync";
+import { OutcomeAlert, nowLocalInput } from "../components/queued";
 
 export function FileIncidentPage() {
   const navigate = useNavigate();
@@ -29,7 +17,7 @@ export function FileIncidentPage() {
   const [stationId, setStationId] = useState(claims?.station_id ?? "");
   const [reportedAt, setReportedAt] = useState(nowLocalInput);
   const [busy, setBusy] = useState(false);
-  const [outcome, setOutcome] = useState<Outcome | null>(null);
+  const [outcome, setOutcome] = useState<WriteOutcome | null>(null);
 
   async function submit(e: FormEvent) {
     e.preventDefault();
@@ -37,27 +25,21 @@ export function FileIncidentPage() {
     setBusy(true);
     setOutcome(null);
     try {
-      const localId = await fileIncident({
-        reported_by: claims.sub,
-        incident_type: incidentType.trim(),
-        description: description.trim(),
-        station_id: stationId.trim(),
-        reported_at: new Date(reportedAt).toISOString(),
-      });
-      const r = await syncNow();
-      if (r.needsReauth) {
-        setOutcome({ kind: "reauth" });
-        return;
+      const result = await runQueuedWrite(() =>
+        fileIncident({
+          reported_by: claims.sub,
+          incident_type: incidentType.trim(),
+          description: description.trim(),
+          station_id: stationId.trim(),
+          reported_at: new Date(reportedAt).toISOString(),
+        }),
+      );
+      setOutcome(result);
+      if (result.kind === "synced" || result.kind === "queued") {
+        setIncidentType("");
+        setDescription("");
+        setReportedAt(nowLocalInput());
       }
-      const row = (await outboxAll()).find((o) => o.id === localId);
-      if (row?.state === "synced") setOutcome({ kind: "synced" });
-      else if (row?.state === "rejected")
-        setOutcome({ kind: "rejected", detail: row.lastError ?? "rejected" });
-      else setOutcome({ kind: "queued" });
-
-      setIncidentType("");
-      setDescription("");
-      setReportedAt(nowLocalInput());
     } finally {
       setBusy(false);
     }
@@ -83,45 +65,7 @@ export function FileIncidentPage() {
         </div>
       )}
 
-      {outcome?.kind === "synced" && (
-        <div className="mb-3">
-          <Alert variant="info">Filed and synced to case-service.</Alert>
-        </div>
-      )}
-      {outcome?.kind === "queued" && (
-        <div className="mb-3">
-          <Alert variant="info">
-            Saved on this device. It will sync automatically when you have signal
-            (or use “Sync now” on the cases screen).
-          </Alert>
-        </div>
-      )}
-      {outcome?.kind === "rejected" && (
-        <div className="mb-3">
-          <Alert variant="error">
-            The server rejected this incident ({outcome.detail}). Nothing was
-            filed — fix the details and try again.
-          </Alert>
-        </div>
-      )}
-      {outcome?.kind === "reauth" && (
-        <div className="mb-3">
-          <Alert variant="error">
-            Your session needs a refresh and the server can't be reached, or your
-            login has fully expired. The incident is saved on this device.{" "}
-            <button
-              className="underline"
-              onClick={() => {
-                clearTokens();
-                navigate("/login", { replace: true });
-              }}
-            >
-              Sign in again
-            </button>{" "}
-            to sync it.
-          </Alert>
-        </div>
-      )}
+      <OutcomeAlert outcome={outcome} noun="incident" onReauth={() => navigate("/login", { replace: true })} />
 
       <Card>
         <form onSubmit={submit} className="flex flex-col gap-4">

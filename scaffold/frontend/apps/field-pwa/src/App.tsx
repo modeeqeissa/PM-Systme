@@ -2,6 +2,7 @@ import { Navigate, Route, Routes } from "react-router-dom";
 import { LoginPage } from "./pages/LoginPage";
 import { CasesPage } from "./pages/CasesPage";
 import { FileIncidentPage } from "./pages/FileIncidentPage";
+import { CaseActionsPage } from "./pages/CaseActionsPage";
 import { RequireAuth } from "./routes/RequireAuth";
 
 export function App() {
@@ -21,6 +22,14 @@ export function App() {
         element={
           <RequireAuth>
             <FileIncidentPage />
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/case/:caseId"
+        element={
+          <RequireAuth>
+            <CaseActionsPage />
           </RequireAuth>
         }
       />
