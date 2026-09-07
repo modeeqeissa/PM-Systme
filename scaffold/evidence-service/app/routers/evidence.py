@@ -7,7 +7,9 @@ entry (CLAUDE.md rule 3 / FR-AUD-01).
 import datetime as dt
 import uuid
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, Response, UploadFile
+from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.deps import get_session, require_permission
@@ -28,23 +30,39 @@ def _actor(claims: dict) -> tuple[str, str]:
     response_model=EvidenceItemOut,
     status_code=201,
     responses={
+        200: {"model": EvidenceItemOut, "description": "Idempotent replay"},
         401: {"description": "Missing or invalid access token"},
         403: {"description": "Caller lacks evidence.vault.write"},
     },
 )
 async def log_evidence_item(
+    response: Response,
     case_id: uuid.UUID = Form(...),
     item_type: str = Form(..., max_length=50),
     description: str = Form(...),
     collected_by: uuid.UUID = Form(...),
     collected_at: dt.datetime = Form(...),
     file: UploadFile | None = File(default=None),
+    idempotency_key: uuid.UUID | None = Header(default=None, alias="Idempotency-Key"),
     session: AsyncSession = Depends(get_session),
     claims: dict = Depends(require_permission("evidence.vault.write")),
 ) -> EvidenceItemOut:
     """Log an evidence item. A digital ``file`` is SHA-256 hashed (FR-EVID-02) and
     stored encrypted (FR-EVID-05); a ``collected`` custody event is recorded
-    automatically (FR-EVID-03)."""
+    automatically (FR-EVID-03).
+
+    Accepts an optional ``Idempotency-Key`` header for offline field sync
+    (rule 6): a replay with the same key returns the original item (200) — the
+    file is not re-read, re-hashed or re-stored, and no event re-fires.
+    """
+    if idempotency_key is not None:
+        existing = await session.scalar(
+            select(EvidenceItem).where(EvidenceItem.client_sync_id == idempotency_key)
+        )
+        if existing is not None:
+            response.status_code = 200
+            return EvidenceItemOut.model_validate(existing)
+
     storage_ref: str | None = None
     sha256_hash: str | None = None
     if file is not None:
@@ -60,9 +78,18 @@ async def log_evidence_item(
         collected_at=collected_at,
         storage_ref=storage_ref,
         sha256_hash=sha256_hash,
+        client_sync_id=idempotency_key,
     )
     session.add(item)
-    await session.flush()
+    try:
+        await session.flush()
+    except IntegrityError:  # concurrent replay won the race on the unique key
+        await session.rollback()
+        existing = await session.scalar(
+            select(EvidenceItem).where(EvidenceItem.client_sync_id == idempotency_key)
+        )
+        response.status_code = 200
+        return EvidenceItemOut.model_validate(existing)
 
     session.add(
         CustodyEvent(

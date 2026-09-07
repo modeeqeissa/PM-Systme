@@ -151,11 +151,19 @@ paths:
       summary: Record an arrest against a case
       description: >
         Requires `case.write`. Publishes an `ArrestRecorded` domain event.
+        Accepts an optional `Idempotency-Key` header for offline field sync
+        (rule 6 / FR-CASE-10): a replay with the same key returns the original
+        record (200) and re-emits nothing; a changed body under the same key
+        is ignored.
       security: [{ bearerAuth: [] }]
       parameters:
         - in: path
           name: case_id
           required: true
+          schema: { type: string, format: uuid }
+        - in: header
+          name: Idempotency-Key
+          required: false
           schema: { type: string, format: uuid }
       requestBody:
         required: true
@@ -164,6 +172,7 @@ paths:
             schema: { $ref: "#/components/schemas/ArrestCreate" }
       responses:
         "201": { description: Arrest recorded, content: { application/json: { schema: { $ref: "#/components/schemas/Arrest" } } } }
+        "200": { description: Idempotent replay - original record returned, content: { application/json: { schema: { $ref: "#/components/schemas/Arrest" } } } }
         "401": { description: Missing or invalid access token }
         "403": { description: Caller lacks case.write }
         "404": { description: No case with that id }
@@ -190,11 +199,18 @@ paths:
       summary: Record a witness/suspect/victim statement against a case (FR-CASE-05)
       description: >
         Requires `case.write`. Publishes a `StatementRecorded` domain event.
+        Accepts an optional `Idempotency-Key` header for offline field sync
+        (rule 6): a replay with the same key returns the original record (200)
+        and re-emits nothing.
       security: [{ bearerAuth: [] }]
       parameters:
         - in: path
           name: case_id
           required: true
+          schema: { type: string, format: uuid }
+        - in: header
+          name: Idempotency-Key
+          required: false
           schema: { type: string, format: uuid }
       requestBody:
         required: true
@@ -203,6 +219,7 @@ paths:
             schema: { $ref: "#/components/schemas/StatementCreate" }
       responses:
         "201": { description: Statement recorded, content: { application/json: { schema: { $ref: "#/components/schemas/Statement" } } } }
+        "200": { description: Idempotent replay - original record returned, content: { application/json: { schema: { $ref: "#/components/schemas/Statement" } } } }
         "401": { description: Missing or invalid access token }
         "403": { description: Caller lacks case.write }
         "404": { description: No case with that id }

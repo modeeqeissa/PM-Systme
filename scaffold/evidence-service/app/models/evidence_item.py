@@ -38,3 +38,5 @@ class EvidenceItem(Base):
     status: Mapped[str] = mapped_column(
         String(30), nullable=False, server_default="logged"
     )
+    # Idempotency-Key for field-originated writes (rule 6); optional.
+    client_sync_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), unique=True)

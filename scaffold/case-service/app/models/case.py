@@ -56,6 +56,8 @@ class Arrest(Base):
     )
     location: Mapped[str | None] = mapped_column(Text)
     legal_basis: Mapped[str | None] = mapped_column(Text)
+    # Idempotency-Key for field-originated writes (rule 6); optional here.
+    client_sync_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), unique=True)
 
 
 class Statement(Base):
@@ -73,6 +75,8 @@ class Statement(Base):
     recorded_at: Mapped[dt.datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
+    # Idempotency-Key for field-originated writes (rule 6); optional here.
+    client_sync_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), unique=True)
 
 
 class CourtProceeding(Base):

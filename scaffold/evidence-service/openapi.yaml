@@ -30,7 +30,17 @@ paths:
         `file` for digital evidence - it is SHA-256 hashed and stored encrypted,
         and the hash is returned on the item. A `collected` custody event is
         recorded automatically (FR-EVID-03).
+
+        Accepts an optional `Idempotency-Key` header for offline field sync
+        (rule 6 / FR-CASE-10): a replay with the same key returns the original
+        item (200) without re-reading, re-hashing or re-storing the file, and
+        re-emits no event.
       security: [{ bearerAuth: [] }]
+      parameters:
+        - in: header
+          name: Idempotency-Key
+          required: false
+          schema: { type: string, format: uuid }
       requestBody:
         required: true
         content:
@@ -38,6 +48,7 @@ paths:
             schema: { $ref: "#/components/schemas/EvidenceItemCreate" }
       responses:
         "201": { description: Created, content: { application/json: { schema: { $ref: "#/components/schemas/EvidenceItem" } } } }
+        "200": { description: Idempotent replay - original item returned, content: { application/json: { schema: { $ref: "#/components/schemas/EvidenceItem" } } } }
         "401": { description: Missing or invalid access token }
         "403": { description: Caller lacks evidence.vault.write }
         "422": { description: Invalid payload }

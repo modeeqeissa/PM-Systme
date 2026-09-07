@@ -8,8 +8,9 @@ the independent, hash-chained audit-log entry (CLAUDE.md rule 3 / FR-AUD-01).
 import datetime as dt
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Response
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Response
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.deps import get_session, require_permission
@@ -50,6 +51,15 @@ router = APIRouter(prefix="/cases", tags=["cases"])
 
 def _actor(claims: dict) -> tuple[str, str]:
     return claims.get("sub"), ",".join(claims.get("roles") or [])
+
+
+async def _replay(session: AsyncSession, model, key: uuid.UUID | None):
+    """The existing row for this Idempotency-Key, if any (field-sync dedupe,
+    rule 6). Mirrors POST /incidents: a replay returns the ORIGINAL record and
+    re-emits no event; a changed body under the same key is ignored."""
+    if key is None:
+        return None
+    return await session.scalar(select(model).where(model.client_sync_id == key))
 
 
 @router.post(
@@ -249,6 +259,7 @@ async def list_arrests(
     response_model=ArrestOut,
     status_code=201,
     responses={
+        200: {"model": ArrestOut, "description": "Idempotent replay"},
         401: {"description": "Missing or invalid access token"},
         403: {"description": "Caller lacks case.write"},
         404: {"description": "No case with that id"},
@@ -257,12 +268,19 @@ async def list_arrests(
 async def record_arrest(
     case_id: uuid.UUID,
     payload: ArrestCreate,
+    response: Response,
+    idempotency_key: uuid.UUID | None = Header(default=None, alias="Idempotency-Key"),
     session: AsyncSession = Depends(get_session),
     claims: dict = Depends(require_permission("case.write")),
 ) -> ArrestOut:
     case = await session.get(Case, case_id)
     if case is None:
         raise HTTPException(status_code=404, detail="No case with that id")
+
+    existing = await _replay(session, Arrest, idempotency_key)
+    if existing is not None:
+        response.status_code = 200
+        return ArrestOut.model_validate(existing)
 
     arrest = Arrest(
         case_id=case_id,
@@ -271,9 +289,16 @@ async def record_arrest(
         arrest_date=payload.arrest_date,
         location=payload.location,
         legal_basis=payload.legal_basis,
+        client_sync_id=idempotency_key,
     )
     session.add(arrest)
-    await session.flush()
+    try:
+        await session.flush()
+    except IntegrityError:  # concurrent request won the race on the unique key
+        await session.rollback()
+        existing = await _replay(session, Arrest, idempotency_key)
+        response.status_code = 200
+        return ArrestOut.model_validate(existing)
     await session.refresh(arrest)
 
     actor_id, actor_role = _actor(claims)
@@ -327,6 +352,7 @@ async def list_statements(
     response_model=StatementOut,
     status_code=201,
     responses={
+        200: {"model": StatementOut, "description": "Idempotent replay"},
         401: {"description": "Missing or invalid access token"},
         403: {"description": "Caller lacks case.write"},
         404: {"description": "No case with that id"},
@@ -335,6 +361,8 @@ async def list_statements(
 async def record_statement(
     case_id: uuid.UUID,
     payload: StatementCreate,
+    response: Response,
+    idempotency_key: uuid.UUID | None = Header(default=None, alias="Idempotency-Key"),
     session: AsyncSession = Depends(get_session),
     claims: dict = Depends(require_permission("case.write")),
 ) -> StatementOut:
@@ -342,14 +370,26 @@ async def record_statement(
     if case is None:
         raise HTTPException(status_code=404, detail="No case with that id")
 
+    existing = await _replay(session, Statement, idempotency_key)
+    if existing is not None:
+        response.status_code = 200
+        return StatementOut.model_validate(existing)
+
     statement = Statement(
         case_id=case_id,
         recorded_by=payload.recorded_by,
         party_type=payload.party_type.value,
         statement_text=payload.statement_text,
+        client_sync_id=idempotency_key,
     )
     session.add(statement)
-    await session.flush()
+    try:
+        await session.flush()
+    except IntegrityError:
+        await session.rollback()
+        existing = await _replay(session, Statement, idempotency_key)
+        response.status_code = 200
+        return StatementOut.model_validate(existing)
     await session.refresh(statement)
 
     actor_id, actor_role = _actor(claims)
