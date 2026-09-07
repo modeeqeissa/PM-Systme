@@ -734,16 +734,18 @@ export const community = {
 // ====================================================================
 
 // --- audit-service (GET /audit — audit.read) -------------------------
+export type AuditAction = "create" | "read" | "update" | "delete" | "export";
 export interface AuditEntry {
   id: number;
   service_name: string;
-  actor_id: string | null;
-  actor_role: string | null;
+  actor_id: string;
+  actor_role: string;
   entity_type: string;
   entity_id: string;
-  action: string;
+  action: AuditAction;
   timestamp: string;
-  payload: Record<string, unknown> | null;
+  prev_hash: string;
+  record_hash: string;
 }
 export interface AuditQuery {
   actor_id?: string;
