@@ -19,9 +19,26 @@ from app.services.assignments import reassign
 
 router = APIRouter(prefix="/officers", tags=["officers"])
 
+# Callers who can write the HR domain (HR Officer) read it force-wide; a caller
+# holding only the read grant (Station Commander, migration iam-0008) sees just
+# their own station's officers — docs §2.3 "read on station-level dashboard".
+_WIDE_SCOPE_PERMISSION = "hr.officer.write"
+
 
 def _actor(claims: dict) -> tuple[str, str]:
     return claims.get("sub"), ",".join(claims.get("roles") or [])
+
+
+def _station_scope(claims: dict) -> tuple[bool, uuid.UUID | None]:
+    """(wide, station) — wide callers see every officer; otherwise results are
+    limited to `station` (the caller's JWT station_id). A read-only caller with
+    no usable station_id resolves to (False, None): they see nothing."""
+    if _WIDE_SCOPE_PERMISSION in (claims.get("permissions") or []):
+        return True, None
+    try:
+        return False, uuid.UUID(claims["station_id"])
+    except (KeyError, TypeError, ValueError):
+        return False, None
 
 
 def _emit_supervisor_changed(session, officer, previous, actor_id, actor_role) -> None:
@@ -127,9 +144,17 @@ async def list_officers(
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     session: AsyncSession = Depends(get_session),
-    _: dict = Depends(require_permission("hr.officer.read")),
+    claims: dict = Depends(require_permission("hr.officer.read")),
 ) -> list[OfficerOut]:
+    """FR-HR-01. Force-wide for HR Officers; scoped to the caller's station for
+    a read-only holder of the grant (Station Commander)."""
+    wide, station = _station_scope(claims)
+    if not wide and station is None:
+        return []
+
     q = select(Officer).order_by(Officer.badge_number).limit(limit).offset(offset)
+    if not wide:
+        q = q.join(Unit, Officer.unit_id == Unit.id).where(Unit.station_id == station)
     if unit_id is not None:
         q = q.where(Officer.unit_id == unit_id)
     if status_ is not None:
@@ -150,11 +175,21 @@ async def list_officers(
 async def get_officer(
     officer_id: uuid.UUID,
     session: AsyncSession = Depends(get_session),
-    _: dict = Depends(require_permission("hr.officer.read")),
+    claims: dict = Depends(require_permission("hr.officer.read")),
 ) -> OfficerOut:
     officer = await session.get(Officer, officer_id)
     if officer is None:
         raise HTTPException(status_code=404, detail="No officer with that id")
+
+    # Same station scope as the directory: a read-only caller can only see an
+    # officer at their own station (404, not 403 — don't confirm existence
+    # outside scope).
+    wide, station = _station_scope(claims)
+    if not wide:
+        unit = await session.get(Unit, officer.unit_id)
+        if station is None or unit is None or unit.station_id != station:
+            raise HTTPException(status_code=404, detail="No officer with that id")
+
     return OfficerOut.model_validate(officer)
 
 

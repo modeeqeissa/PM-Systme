@@ -72,7 +72,10 @@ paths:
         "409": { description: user_id or badge_number already in use }
     get:
       summary: List officers (FR-HR-01)
-      description: Requires `hr.officer.read`.
+      description: >
+        Requires `hr.officer.read`. HR Officers (who also hold `hr.officer.write`)
+        see every officer; a caller holding only the read grant (Station
+        Commander) sees only officers whose unit belongs to the caller's station.
       security: [{ bearerAuth: [] }]
       parameters:
         - { in: query, name: unit_id, schema: { type: string, format: uuid } }
@@ -91,7 +94,10 @@ paths:
   /officers/{officer_id}:
     get:
       summary: Retrieve one officer's profile (FR-HR-01)
-      description: Requires `hr.officer.read`.
+      description: >
+        Requires `hr.officer.read`. A read-only holder (Station Commander) can
+        only retrieve an officer at their own station; one outside their station
+        returns 404 (existence is not confirmed outside scope).
       security: [{ bearerAuth: [] }]
       parameters:
         - { in: path, name: officer_id, required: true, schema: { type: string, format: uuid } }

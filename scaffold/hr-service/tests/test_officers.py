@@ -152,6 +152,57 @@ async def test_get_officer_unknown_404(client, auth_hr):
     assert r.status_code == 404
 
 
+# --- station-scoped officer read (iam migration 0008) --------------------
+async def test_station_commander_lists_only_own_station_officers(
+    client, auth_cmd, cmd_station, make_unit, make_officer
+):
+    mine_unit = await make_unit(station_id=cmd_station)
+    mine = await make_officer(unit=mine_unit, badge_number="STN-MINE")
+    other = await make_officer(badge_number="STN-OTHER")  # random station
+
+    r = await client.get("/api/v1/officers", headers=auth_cmd)
+    assert r.status_code == 200  # not 403 — the grant now exists
+    ids = {o["id"] for o in r.json()}
+    assert str(mine.id) in ids
+    assert str(other.id) not in ids  # station-scoped, not force-wide
+
+
+async def test_hr_officer_still_sees_every_station(
+    client, auth_hr, cmd_station, make_unit, make_officer
+):
+    mine_unit = await make_unit(station_id=cmd_station)
+    a = await make_officer(unit=mine_unit)
+    b = await make_officer()  # different station
+
+    r = await client.get("/api/v1/officers", headers=auth_hr)
+    assert r.status_code == 200
+    ids = {o["id"] for o in r.json()}
+    assert {str(a.id), str(b.id)} <= ids  # hr.officer.write => force-wide
+
+
+async def test_station_commander_get_officer_is_station_scoped(
+    client, auth_cmd, cmd_station, make_unit, make_officer
+):
+    mine_unit = await make_unit(station_id=cmd_station)
+    mine = await make_officer(unit=mine_unit)
+    other = await make_officer()  # random station
+
+    ok = await client.get(f"/api/v1/officers/{mine.id}", headers=auth_cmd)
+    assert ok.status_code == 200
+    assert ok.json()["id"] == str(mine.id)
+
+    denied = await client.get(f"/api/v1/officers/{other.id}", headers=auth_cmd)
+    assert denied.status_code == 404  # existence not confirmed outside scope
+
+
+async def test_officer_read_still_requires_the_permission(client, auth_none, make_officer):
+    officer = await make_officer()
+    assert (await client.get("/api/v1/officers", headers=auth_none)).status_code == 403
+    assert (
+        await client.get(f"/api/v1/officers/{officer.id}", headers=auth_none)
+    ).status_code == 403
+
+
 async def test_patch_officer_status(client, auth_hr, make_officer):
     officer = await make_officer(status="active")
     r = await client.patch(

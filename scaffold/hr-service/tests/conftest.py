@@ -115,6 +115,11 @@ _E2E_USERS = {
 _E2E_PASSWORD = "E2e!TestPassw0rd"
 _totp_secrets: dict[str, str] = {}
 
+# E2E-CMD is created with this fixed station so tests can assert the
+# station-scoped officer read (iam migration 0008). Every other user gets a
+# random station.
+_CMD_STATION = "11111111-1111-4111-8111-111111111111"
+
 
 # --------------------------------------------------------------------------- #
 # database helpers
@@ -208,14 +213,14 @@ def iam_server():
         cwd=_IAM_DIR, env=_IAM_ENV, check=True, capture_output=True,
     )
     for badge, role in _E2E_USERS.items():
-        subprocess.run(
-            [
-                str(_IAM_PY), "-m", "scripts.create_user",
-                "--badge", badge, "--password", _E2E_PASSWORD,
-                "--name", badge, "--roles", role,
-            ],
-            cwd=_IAM_DIR, env=_IAM_ENV, check=True, capture_output=True,
-        )
+        cmd = [
+            str(_IAM_PY), "-m", "scripts.create_user",
+            "--badge", badge, "--password", _E2E_PASSWORD,
+            "--name", badge, "--roles", role,
+        ]
+        if badge == "E2E-CMD":
+            cmd += ["--station", _CMD_STATION]
+        subprocess.run(cmd, cwd=_IAM_DIR, env=_IAM_ENV, check=True, capture_output=True)
 
     proc = subprocess.Popen(
         [
@@ -267,6 +272,12 @@ def auth_hr(token_hr) -> dict:
 @pytest.fixture
 def auth_cmd(token_cmd) -> dict:
     return bearer(token_cmd)
+
+
+@pytest.fixture
+def cmd_station() -> uuid.UUID:
+    """The station E2E-CMD (Station Commander) belongs to — for station-scope tests."""
+    return uuid.UUID(_CMD_STATION)
 
 
 @pytest.fixture
