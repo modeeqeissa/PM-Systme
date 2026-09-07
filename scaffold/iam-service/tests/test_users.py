@@ -172,3 +172,41 @@ async def test_non_admin_cannot_reset_others_password(client, make_user, access_
         json={"new_password": "R3set!attemptpw"},
     )
     assert r.status_code == 403
+
+
+# --- GET /users : read-only admin listing (FR-IAM-06) ------------------
+async def test_list_users_requires_iam_user_read(client, make_user, access_token_for):
+    weak = await make_user(roles=["Patrol Officer"])
+    token = await access_token_for(weak)
+    r = await client.get(USERS, headers=auth(token))
+    assert r.status_code == 403
+
+
+async def test_admin_lists_users_with_q_and_status_filters(
+    client, make_user, access_token_for
+):
+    admin = await make_user(roles=["ICT Admin"])
+    token = await access_token_for(admin)
+    tag = uuid.uuid4().hex[:8]
+    await make_user(badge_number=f"LIST-A-{tag}")
+    await make_user(badge_number=f"LIST-B-{tag}", status="deactivated")
+
+    everyone = await client.get(USERS, headers=auth(token))
+    assert everyone.status_code == 200
+    badges = {u["badge_number"] for u in everyone.json()}
+    assert {f"LIST-A-{tag}", f"LIST-B-{tag}"} <= badges
+    # response carries the role graph the admin UI needs
+    assert all("roles" in u and "mfa_enrolled" in u for u in everyone.json())
+
+    matched = await client.get(USERS, headers=auth(token), params={"q": f"LIST-B-{tag}"})
+    assert [u["badge_number"] for u in matched.json()] == [f"LIST-B-{tag}"]
+
+    deactivated = await client.get(
+        USERS, headers=auth(token), params={"status": "deactivated"}
+    )
+    got = {u["badge_number"] for u in deactivated.json()}
+    assert f"LIST-B-{tag}" in got and f"LIST-A-{tag}" not in got
+
+
+async def test_list_users_requires_a_token(client):
+    assert (await client.get(USERS)).status_code == 401

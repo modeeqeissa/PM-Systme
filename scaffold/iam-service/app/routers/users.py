@@ -1,7 +1,7 @@
 """/users/* — profile, account management, password, role assignment."""
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.deps import get_current_user, get_session, require_permission
@@ -9,8 +9,9 @@ from app.models import User
 from app.schemas import CurrentUser, PasswordChange, RoleIdList
 from app.schemas import User as UserOut
 from app.schemas import UserCreate, UserUpdate
+from app.schemas.user import Status
 from app.services import users as svc
-from app.services.rbac import effective_permissions, get_user
+from app.services.rbac import effective_permissions, get_user, list_users
 
 router = APIRouter(prefix="/users", tags=["users"])
 
@@ -18,6 +19,19 @@ router = APIRouter(prefix="/users", tags=["users"])
 @router.get("/me", response_model=CurrentUser)
 async def read_me(user: User = Depends(get_current_user)):
     return CurrentUser.from_model(user)
+
+
+@router.get("", response_model=list[UserOut])
+async def list_user_accounts(
+    q: str | None = Query(default=None),
+    status: Status | None = Query(default=None),
+    limit: int = Query(default=100, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
+    session: AsyncSession = Depends(get_session),
+    _: User = Depends(require_permission("iam.user.read")),
+):
+    rows = await list_users(session, q=q, status=status, limit=limit, offset=offset)
+    return [UserOut.from_model(u) for u in rows]
 
 
 @router.post("", response_model=UserOut, status_code=201)

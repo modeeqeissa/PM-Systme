@@ -1,7 +1,7 @@
 """Helpers for loading users with their role/permission graph."""
 import uuid
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -21,6 +21,32 @@ async def get_user_by_badge(session: AsyncSession, badge_number: str) -> User | 
     return await session.scalar(
         _user_query().where(User.badge_number == badge_number)
     )
+
+
+async def list_users(
+    session: AsyncSession,
+    *,
+    q: str | None = None,
+    status: str | None = None,
+    limit: int = 100,
+    offset: int = 0,
+) -> list[User]:
+    """Read-only admin listing (FR-IAM-06). `q` is a case-insensitive substring
+    match on badge number / full name / email."""
+    query = _user_query().order_by(User.badge_number)
+    if q:
+        like = f"%{q}%"
+        query = query.where(
+            or_(
+                User.badge_number.ilike(like),
+                User.full_name.ilike(like),
+                User.email.ilike(like),
+            )
+        )
+    if status:
+        query = query.where(User.status == status)
+    query = query.limit(limit).offset(offset)
+    return list((await session.scalars(query)).all())
 
 
 def effective_permissions(user: User) -> list[str]:

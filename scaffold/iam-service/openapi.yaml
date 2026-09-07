@@ -111,6 +111,22 @@ paths:
         "401": { description: Missing or invalid access token }
 
   /users:
+    get:
+      tags: [users]
+      summary: List user accounts (FR-IAM-06)
+      description: >
+        Requires the `iam.user.read` permission. Read-only administrative
+        listing; `q` matches badge number / full name / email (case-insensitive).
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { in: query, name: q, required: false, schema: { type: string } }
+        - { in: query, name: status, required: false, schema: { type: string, enum: [active, suspended, deactivated] } }
+        - { in: query, name: limit, required: false, schema: { type: integer, minimum: 1, maximum: 500, default: 100 } }
+        - { in: query, name: offset, required: false, schema: { type: integer, minimum: 0, default: 0 } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/User" } } } } }
+        "401": { description: Missing or invalid access token }
+        "403": { description: Caller lacks iam.user.read }
     post:
       tags: [users]
       summary: Create a user account (FR-IAM-06)
