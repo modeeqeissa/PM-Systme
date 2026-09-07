@@ -6,7 +6,12 @@
 #   ./dev-portal.sh up               # migrate + start iam/case/dashboard/hr/training/community
 #   ./dev-portal.sh seed             # create PORTAL-* users, enroll MFA, save + print secrets
 #   ./dev-portal.sh code PW-HR   # current 6-digit TOTP code for one account
+#   ./dev-portal.sh codes            # current TOTP code for every seeded account
 #   ./dev-portal.sh down             # stop the services this script started
+#
+# MFA (TOTP) is mandatory in iam-service by design (FR-IAM-01) and can't be
+# switched off. To avoid re-entering a code all day, `up` starts iam-service
+# with a 12h access-token TTL (dev only) so one sign-in lasts a work day.
 set -euo pipefail
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
@@ -18,6 +23,8 @@ mkdir -p "$PIDDIR"
 # Fixed so enrolled MFA secrets survive an iam-service restart. Dev only.
 export IAM_MFA_ENC_KEY="${IAM_MFA_ENC_KEY:-h2QidqCUNaGOeo9g-OiLJRfUfKWCmVdRLr4EDzG-TL0=}"
 export EVENTS_KAFKA_BOOTSTRAP="${EVENTS_KAFKA_BOOTSTRAP:-localhost:29092}"
+# Dev only: one sign-in lasts ~12h so you don't re-do badge+password+TOTP all day.
+export IAM_ACCESS_TOKEN_TTL="${IAM_ACCESS_TOKEN_TTL:-43200}"
 
 PW='Portal!Passw0rd'
 PY="$SCAFFOLD/iam-service/.venv/bin/python"
@@ -87,6 +94,14 @@ code() {
   "$PY" -c "import pyotp,sys; print(pyotp.TOTP('$s').now())"
 }
 
+codes() {
+  [ -f "$SECRETS" ] || { echo "run './dev-portal.sh seed' first"; exit 1; }
+  while IFS='=' read -r b s; do
+    [ -n "$b" ] || continue
+    printf '%-13s %s\n' "$b" "$("$PY" -c "import pyotp; print(pyotp.TOTP('$s').now())")"
+  done < "$SECRETS"
+}
+
 down() {
   for f in "$PIDDIR"/*.pid; do
     [ -e "$f" ] || continue
@@ -95,6 +110,6 @@ down() {
 }
 
 case "${1:-}" in
-  up) up ;; seed) seed ;; code) shift; code "$@" ;; down) down ;;
-  *) echo "usage: $0 {up|seed|code <BADGE>|down}"; exit 1 ;;
+  up) up ;; seed) seed ;; code) shift; code "$@" ;; codes) codes ;; down) down ;;
+  *) echo "usage: $0 {up|seed|code <BADGE>|codes|down}"; exit 1 ;;
 esac

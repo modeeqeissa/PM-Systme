@@ -159,9 +159,6 @@ export function LoginPage() {
           </form>
         )}
       </Card>
-      <p className="mt-4 text-center text-xs text-slate-400">
-        Talks to iam-service on <code>:8001</code>. Needs docker-compose + iam-service up.
-      </p>
     </div>
   );
 }
