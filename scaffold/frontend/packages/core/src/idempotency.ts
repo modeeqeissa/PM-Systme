@@ -11,8 +11,10 @@ import { useRef } from "react";
  *   - only once the write has actually succeeded do we mint a new key for the
  *     next, separate write.
  *
- * The offline field PWA will persist this key with the queued item; here it just
- * lives for the lifetime of the form.
+ * The web-portal keeps the key for the lifetime of the form (useIdempotencyKey).
+ * The offline field PWA persists it with the queued incident in IndexedDB, so a
+ * sync that happens minutes later — possibly after several failed attempts —
+ * still replays the write under the original key.
  */
 export function newIdempotencyKey(): string {
   return crypto.randomUUID();

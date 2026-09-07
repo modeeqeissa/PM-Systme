@@ -15,7 +15,7 @@
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true,
-    "types": ["vitest/globals"],
+    "types": ["vitest/globals", "vite-plugin-pwa/client"],
     "paths": {
       "@pmp/ui": ["../../packages/ui/src/index.ts"],
       "@pmp/core": ["../../packages/core/src/index.ts"]

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { renderHook, act } from "@testing-library/react";
-import { newIdempotencyKey, useIdempotencyKey } from "../lib/idempotency";
+import { newIdempotencyKey, useIdempotencyKey } from "@pmp/core";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 

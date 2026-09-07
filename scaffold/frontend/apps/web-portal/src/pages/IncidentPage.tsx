@@ -10,7 +10,7 @@ import {
   type Incident,
 } from "../lib/api";
 import { currentClaims } from "../lib/auth";
-import { useIdempotencyKey } from "../lib/idempotency";
+import { useIdempotencyKey } from "@pmp/core";
 import { localInputToIso, toLocalInputValue } from "../lib/datetime";
 
 type Problem =

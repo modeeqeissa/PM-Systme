@@ -1,0 +1,16 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  @apply bg-slate-50 text-slate-900 antialiased;
+}
+
+/* NFR-USE-02: field use — larger touch targets by default. */
+button,
+[role="button"],
+input,
+select,
+textarea {
+  min-height: 44px;
+}
