@@ -18,6 +18,9 @@ EVENT_MAP: dict[str, tuple[str, str, str]] = {
     "CustodyEventRecorded": ("custody_event", "create", "custody_event_id"),
     # a verification read that found tampering
     "EvidenceHashMismatch": ("evidence_item", "read", "evidence_id"),
+    # FR-AUD-01: sensitive-record reads — file content verified / custody chain read
+    "EvidenceFileVerified": ("evidence_item", "read", "evidence_id"),
+    "CustodyChainRead": ("evidence_item", "read", "evidence_id"),
     # iam-service admin / lockout (TD-003). 'delete' = soft-delete/status change
     # per SRS §9.3.10, which is exactly what deactivation is.
     "UserCreated": ("user", "create", "user_id"),
@@ -42,6 +45,9 @@ EVENT_MAP: dict[str, tuple[str, str, str]] = {
     "DisciplineRecordCreated": ("discipline_record", "create", "discipline_record_id"),
     "DisciplineRecordUpdated": ("discipline_record", "update", "discipline_record_id"),
     "DisciplineRecordDeleted": ("discipline_record", "delete", "discipline_record_id"),
+    # FR-AUD-01: sensitive-record reads. Keyed on officer_id ("whose discipline
+    # file was read"); the record ids ride along in metadata.payload.
+    "DisciplineRecordRead": ("officer", "read", "officer_id"),
     "PerformanceReviewRecorded": ("performance_review", "create", "performance_review_id"),
     "PerformanceReviewUpdated": ("performance_review", "update", "performance_review_id"),
     "PerformanceReviewDeleted": ("performance_review", "delete", "performance_review_id"),

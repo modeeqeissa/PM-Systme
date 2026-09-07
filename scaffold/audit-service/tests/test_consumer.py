@@ -58,6 +58,17 @@ async def test_all_event_types_map_to_expected_entity_and_action(client, emit, c
         {"evidence_id": str(uuid.uuid4()), "stored_hash": "a" * 64, "computed_hash": "b" * 64},
         service="evidence-service",
     )
+    # FR-AUD-01: sensitive-record reads
+    await emit(
+        "EvidenceFileVerified",
+        {"evidence_id": str(uuid.uuid4()), "match": True},
+        service="evidence-service",
+    )
+    await emit(
+        "CustodyChainRead",
+        {"evidence_id": str(uuid.uuid4()), "event_count": 3},
+        service="evidence-service",
+    )
 
     # iam-service admin / lockout events (TD-003)
     await emit("UserCreated", {"user_id": str(uuid.uuid4())}, service="iam-service")
@@ -94,6 +105,11 @@ async def test_all_event_types_map_to_expected_entity_and_action(client, emit, c
     )
     await emit(
         "DisciplineRecordDeleted", {"discipline_record_id": str(uuid.uuid4())}, service="hr-service"
+    )
+    await emit(
+        "DisciplineRecordRead",
+        {"officer_id": str(uuid.uuid4()), "scope": "single", "count": 1},
+        service="hr-service",
     )
     await emit(
         "PerformanceReviewRecorded",
@@ -157,7 +173,7 @@ async def test_all_event_types_map_to_expected_entity_and_action(client, emit, c
         service="integration-gateway-service",
     )
 
-    assert await consumer.process_available() == 48
+    assert await consumer.process_available() == 51
     rows = await _audit_rows()
     seen = {(r.entity_type, r.action) for r in rows}
     assert seen == {
@@ -188,6 +204,7 @@ async def test_all_event_types_map_to_expected_entity_and_action(client, emit, c
         ("discipline_record", "create"),
         ("discipline_record", "update"),
         ("discipline_record", "delete"),
+        ("officer", "read"),          # DisciplineRecordRead (FR-AUD-01)
         ("performance_review", "create"),
         ("performance_review", "update"),
         ("performance_review", "delete"),

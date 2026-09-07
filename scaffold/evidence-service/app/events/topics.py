@@ -5,6 +5,12 @@ _TOPICS = {
     "EvidenceLogged": "evidence.logged",
     "CustodyEventRecorded": "evidence.custody_recorded",
     "EvidenceHashMismatch": "evidence.hash_mismatch",
+    # FR-AUD-01: audit access to evidence file content / custody-chain detail,
+    # not just writes. EvidenceFileVerified fires on every verify call (the
+    # file bytes are read + hashed); a mismatch still additionally emits
+    # EvidenceHashMismatch. CustodyChainRead fires on a full chain read.
+    "EvidenceFileVerified": "evidence.file_verified",
+    "CustodyChainRead": "evidence.custody_chain_read",
 }
 
 ALL_TOPICS = tuple(_TOPICS.values())

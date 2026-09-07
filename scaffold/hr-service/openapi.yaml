@@ -384,6 +384,7 @@ paths:
       summary: Discipline-record history for one officer (FR-HR-06)
       description: >
         Requires `hr.discipline.read` — HR/command only (docs Section 2.3).
+        FR-AUD-01: each access emits a `DisciplineRecordRead` audit event.
       security: [{ bearerAuth: [] }]
       parameters:
         - { in: path, name: officer_id, required: true, schema: { type: string, format: uuid } }
@@ -402,6 +403,7 @@ paths:
       summary: Retrieve one discipline record (FR-HR-06)
       description: >
         Requires `hr.discipline.read` — HR/command only (docs Section 2.3).
+        FR-AUD-01: each access emits a `DisciplineRecordRead` audit event.
       security: [{ bearerAuth: [] }]
       parameters:
         - { in: path, name: discipline_record_id, required: true, schema: { type: string, format: uuid } }

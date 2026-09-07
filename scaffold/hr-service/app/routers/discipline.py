@@ -98,7 +98,7 @@ async def create_discipline_record(
 async def list_officer_discipline_records(
     officer_id: uuid.UUID,
     session: AsyncSession = Depends(get_session),
-    _: dict = Depends(require_permission("hr.discipline.read")),
+    claims: dict = Depends(require_permission("hr.discipline.read")),
 ) -> list[DisciplineRecordOut]:
     officer = await session.get(Officer, officer_id)
     if officer is None:
@@ -110,6 +110,25 @@ async def list_officer_discipline_records(
         .order_by(DisciplineRecord.created_at.desc())
     )
     rows = (await session.scalars(q)).all()
+
+    # FR-AUD-01: one event per access of an officer's discipline file — keyed on
+    # officer_id ("whose file was read"), not per record. No narrative in the
+    # payload (see create_discipline_record).
+    actor_id, actor_role = _actor(claims)
+    enqueue(
+        session,
+        event_type="DisciplineRecordRead",
+        aggregate_type="officer",
+        aggregate_id=officer_id,
+        actor_id=actor_id,
+        actor_role=actor_role,
+        payload={
+            "officer_id": str(officer_id),
+            "scope": "list",
+            "count": len(rows),
+            "discipline_record_ids": [str(r.id) for r in rows],
+        },
+    )
     return [DisciplineRecordOut.model_validate(r) for r in rows]
 
 
@@ -125,11 +144,28 @@ async def list_officer_discipline_records(
 async def get_discipline_record(
     discipline_record_id: uuid.UUID,
     session: AsyncSession = Depends(get_session),
-    _: dict = Depends(require_permission("hr.discipline.read")),
+    claims: dict = Depends(require_permission("hr.discipline.read")),
 ) -> DisciplineRecordOut:
     record = await session.get(DisciplineRecord, discipline_record_id)
     if record is None:
         raise HTTPException(status_code=404, detail="No discipline record with that id")
+
+    # FR-AUD-01: audit the read, keyed on officer_id like the list endpoint.
+    actor_id, actor_role = _actor(claims)
+    enqueue(
+        session,
+        event_type="DisciplineRecordRead",
+        aggregate_type="officer",
+        aggregate_id=record.officer_id,
+        actor_id=actor_id,
+        actor_role=actor_role,
+        payload={
+            "officer_id": str(record.officer_id),
+            "scope": "single",
+            "count": 1,
+            "discipline_record_ids": [str(record.id)],
+        },
+    )
     return DisciplineRecordOut.model_validate(record)
 
 

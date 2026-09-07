@@ -42,9 +42,9 @@ async def _require_item(session: AsyncSession, evidence_id: uuid.UUID) -> Eviden
 async def list_custody_events(
     evidence_id: uuid.UUID,
     session: AsyncSession = Depends(get_session),
-    _: dict = Depends(require_permission("evidence.vault.read")),
+    claims: dict = Depends(require_permission("evidence.vault.read")),
 ) -> list[CustodyEventOut]:
-    await _require_item(session, evidence_id)
+    item = await _require_item(session, evidence_id)
     rows = (
         await session.scalars(
             select(CustodyEvent)
@@ -52,6 +52,22 @@ async def list_custody_events(
             .order_by(CustodyEvent.occurred_at, CustodyEvent.id)
         )
     ).all()
+
+    # FR-AUD-01: the full custody chain is sensitive detail — audit who read it.
+    actor_id, actor_role = _actor(claims)
+    enqueue(
+        session,
+        event_type="CustodyChainRead",
+        aggregate_type="evidence_item",
+        aggregate_id=evidence_id,
+        actor_id=actor_id,
+        actor_role=actor_role,
+        payload={
+            "evidence_id": str(evidence_id),
+            "case_id": str(item.case_id),
+            "event_count": len(rows),
+        },
+    )
     return [CustodyEventOut.from_model(r) for r in rows]
 
 

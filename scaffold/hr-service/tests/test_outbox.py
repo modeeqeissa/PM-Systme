@@ -116,6 +116,37 @@ async def test_discipline_record_create_update_delete_all_enqueue(
     assert "description" not in updated[0].body["payload"]
 
 
+async def test_discipline_record_reads_enqueue_read_events(client, auth_hr, make_officer):
+    """FR-AUD-01: reading a discipline record (single or the officer's list)
+    emits DisciplineRecordRead, keyed on officer_id, with no narrative."""
+    officer = await make_officer()
+    r = await client.post(
+        f"/api/v1/officers/{officer.id}/discipline-records",
+        json={"incident_date": "2026-08-15", "description": "Late for shift."},
+        headers=auth_hr,
+    )
+    record_id = r.json()["id"]
+
+    await client.get(f"/api/v1/discipline-records/{record_id}", headers=auth_hr)
+    await client.get(
+        f"/api/v1/officers/{officer.id}/discipline-records", headers=auth_hr
+    )
+
+    reads = await _outbox_rows("DisciplineRecordRead")
+    assert len(reads) == 2
+    single = next(x for x in reads if x.body["payload"]["scope"] == "single")
+    listed = next(x for x in reads if x.body["payload"]["scope"] == "list")
+    assert single.aggregate_id == str(officer.id)
+    assert single.body["payload"]["discipline_record_ids"] == [record_id]
+    assert listed.body["payload"]["count"] == 1
+    assert all("description" not in x.body["payload"] for x in reads)
+
+
+async def test_missing_discipline_record_read_does_not_enqueue(client, auth_hr):
+    await client.get(f"/api/v1/discipline-records/{uuid.uuid4()}", headers=auth_hr)
+    assert await _outbox_rows("DisciplineRecordRead") == []
+
+
 async def test_transfer_requested_and_status_changed_enqueue(
     client, auth_hr, auth_cmd, make_officer, make_unit
 ):

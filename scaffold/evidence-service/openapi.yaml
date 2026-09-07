@@ -74,6 +74,7 @@ paths:
       description: >
         Requires `evidence.vault.read`. Returns the custody events in
         chronological order - this is the append-only chain of custody.
+        FR-AUD-01: each read emits a `CustodyChainRead` audit event.
       security: [{ bearerAuth: [] }]
       parameters:
         - { in: path, name: evidence_id, required: true, schema: { type: string, format: uuid } }
@@ -112,7 +113,9 @@ paths:
       description: >
         Requires `evidence.vault.read`. Recomputes the SHA-256 of the stored
         file and compares it to the hash recorded at upload; `match: false`
-        flags tampering.
+        flags tampering. FR-AUD-01: every call emits an `EvidenceFileVerified`
+        audit event (the file bytes are read); a mismatch additionally emits
+        `EvidenceHashMismatch`.
       security: [{ bearerAuth: [] }]
       parameters:
         - { in: path, name: evidence_id, required: true, schema: { type: string, format: uuid } }

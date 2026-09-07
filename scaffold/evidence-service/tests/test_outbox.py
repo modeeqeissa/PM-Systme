@@ -96,6 +96,53 @@ async def test_hash_mismatch_enqueues_event_but_a_match_does_not(client, auth_fu
     assert rows[0].body["actor_id"] is not None
 
 
+async def test_verify_always_enqueues_evidence_file_verified(client, auth_full):
+    """FR-AUD-01: reading + hashing the stored file is audited on every verify,
+    match or not — separate from EvidenceHashMismatch."""
+    content = b"authentic " + uuid.uuid4().bytes
+    form = _form()
+    ev = (
+        await client.post(
+            "/api/v1/evidence",
+            data=form,
+            files={"file": ("f.bin", content, "application/octet-stream")},
+            headers=auth_full,
+        )
+    ).json()
+
+    r = await client.post(f"/api/v1/evidence/{ev['id']}/verify", headers=auth_full)
+    assert r.status_code == 200 and r.json()["match"] is True
+
+    verified = await _rows("EvidenceFileVerified")
+    assert len(verified) == 1
+    assert verified[0].topic.endswith("evidence.file_verified")
+    assert verified[0].body["payload"]["evidence_id"] == ev["id"]
+    assert verified[0].body["payload"]["case_id"] == form["case_id"]
+    assert verified[0].body["payload"]["match"] is True
+    assert "verified_at" in verified[0].body["payload"]
+    assert await _rows("EvidenceHashMismatch") == []
+
+
+async def test_custody_chain_read_enqueues_event(client, make_item, auth_full):
+    """FR-AUD-01: reading the full custody chain is audited."""
+    item = await make_item()
+    await client.post(
+        f"/api/v1/evidence/{item.id}/custody",
+        json={"action": "stored", "from_officer": str(uuid.uuid4())},
+        headers=auth_full,
+    )
+    r = await client.get(f"/api/v1/evidence/{item.id}/custody", headers=auth_full)
+    assert r.status_code == 200
+    chain_len = len(r.json())
+
+    reads = await _rows("CustodyChainRead")
+    assert len(reads) == 1
+    assert reads[0].topic.endswith("evidence.custody_chain_read")
+    assert reads[0].body["payload"]["evidence_id"] == str(item.id)
+    assert reads[0].body["payload"]["event_count"] == chain_len
+    assert reads[0].body["actor_id"] is not None
+
+
 async def test_rejected_custody_write_leaves_no_outbox_row(client, make_item, auth_full):
     item = await make_item()
     # transferred without acknowledgement -> 400, whole transaction rolls back

@@ -22,6 +22,9 @@ _TOPICS = {
     "DisciplineRecordCreated": "hr.discipline_record_created",
     "DisciplineRecordUpdated": "hr.discipline_record_updated",
     "DisciplineRecordDeleted": "hr.discipline_record_deleted",
+    # FR-AUD-01: reads of discipline data are audited too (most access-restricted
+    # data in the platform — who *looked* matters, not just who wrote).
+    "DisciplineRecordRead": "hr.discipline_record_read",
     "PerformanceReviewRecorded": "hr.performance_review_recorded",
     "PerformanceReviewUpdated": "hr.performance_review_updated",
     "PerformanceReviewDeleted": "hr.performance_review_deleted",

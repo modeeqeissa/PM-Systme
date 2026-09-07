@@ -15,6 +15,8 @@ _BASE_TOPICS = (
     "evidence.logged",
     "evidence.custody_recorded",
     "evidence.hash_mismatch",
+    "evidence.file_verified",
+    "evidence.custody_chain_read",
     # iam-service admin / lockout events (TD-003, FR-IAM-05/06)
     "user.created",
     "user.updated",
@@ -38,6 +40,7 @@ _BASE_TOPICS = (
     "hr.discipline_record_created",
     "hr.discipline_record_updated",
     "hr.discipline_record_deleted",
+    "hr.discipline_record_read",
     "hr.performance_review_recorded",
     "hr.performance_review_updated",
     "hr.performance_review_deleted",

@@ -176,8 +176,25 @@ async def verify_evidence_hash(
     verified_at = dt.datetime.now(dt.timezone.utc)
     match = computed == item.sha256_hash
 
+    actor_id, actor_role = _actor(claims)
+    # FR-AUD-01: every verify reads + hashes the stored file bytes — audit the
+    # access itself, regardless of outcome.
+    enqueue(
+        session,
+        event_type="EvidenceFileVerified",
+        aggregate_type="evidence_item",
+        aggregate_id=item.id,
+        actor_id=actor_id,
+        actor_role=actor_role,
+        payload={
+            "evidence_id": str(item.id),
+            "case_id": str(item.case_id),
+            "verified_at": verified_at.isoformat(),
+            "match": match,
+        },
+    )
+
     if not match:
-        actor_id, actor_role = _actor(claims)
         enqueue(
             session,
             event_type="EvidenceHashMismatch",
