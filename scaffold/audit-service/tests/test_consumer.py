@@ -61,6 +61,7 @@ async def test_all_event_types_map_to_expected_entity_and_action(client, emit, c
 
     # iam-service admin / lockout events (TD-003)
     await emit("UserCreated", {"user_id": str(uuid.uuid4())}, service="iam-service")
+    await emit("UserUpdated", {"user_id": str(uuid.uuid4()), "fields": ["station_id"]}, service="iam-service")
     await emit("UserDeactivated", {"user_id": str(uuid.uuid4())}, service="iam-service")
     await emit("UserRoleReassigned", {"user_id": str(uuid.uuid4())}, service="iam-service")
     await emit(
@@ -153,7 +154,7 @@ async def test_all_event_types_map_to_expected_entity_and_action(client, emit, c
         service="integration-gateway-service",
     )
 
-    assert await consumer.process_available() == 44
+    assert await consumer.process_available() == 45
     rows = await _audit_rows()
     seen = {(r.entity_type, r.action) for r in rows}
     assert seen == {
@@ -169,7 +170,7 @@ async def test_all_event_types_map_to_expected_entity_and_action(client, emit, c
         ("evidence_item", "read"),   # hash-mismatch detection
         ("user", "create"),          # UserCreated
         ("user", "delete"),          # UserDeactivated (soft-delete/status change)
-        ("user", "update"),          # UserRoleReassigned + AccountLockedOut
+        ("user", "update"),          # UserUpdated + UserRoleReassigned + AccountLockedOut
         ("officer", "create"),
         ("officer", "update"),
         ("unit", "create"),

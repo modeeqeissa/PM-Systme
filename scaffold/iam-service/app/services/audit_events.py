@@ -33,6 +33,31 @@ def user_created(session: AsyncSession, *, actor: User, user: User) -> None:
     )
 
 
+def user_updated(
+    session: AsyncSession, *, actor: User, user: User, fields: list[str]
+) -> None:
+    """An admin PATCH that changed profile/scoping fields (full_name, email,
+    station_id, status) other than the deactivation transition — FR-IAM-06
+    "reassign user accounts ... every action written to the audit log".
+    station_id in particular is RBAC-scoping data (CLAUDE.md rule 3)."""
+    actor_id, actor_role = _actor(actor)
+    enqueue(
+        session,
+        event_type="UserUpdated",
+        aggregate_type="user",
+        aggregate_id=user.id,
+        actor_id=actor_id,
+        actor_role=actor_role,
+        payload={
+            "user_id": str(user.id),
+            "badge_number": user.badge_number,
+            "fields": sorted(fields),
+            "station_id": str(user.station_id),
+            "status": user.status,
+        },
+    )
+
+
 def user_deactivated(
     session: AsyncSession, *, actor: User, user: User, previous_status: str
 ) -> None:

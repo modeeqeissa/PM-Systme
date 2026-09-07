@@ -17,6 +17,7 @@ _BASE_TOPICS = (
     "evidence.hash_mismatch",
     # iam-service admin / lockout events (TD-003, FR-IAM-05/06)
     "user.created",
+    "user.updated",
     "user.deactivated",
     "user.role_reassigned",
     "account.locked_out",

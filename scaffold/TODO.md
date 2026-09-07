@@ -119,6 +119,11 @@ without a deploy. `notification_preferences` (FR-NOTIF-02) exists with
 notification whose (recipient, channel) preference is disabled. Only the
 default channel and the DevChannel below remain.
 
+**UPDATE 2026-09-07 (migration 0005):** a suppressed notification now lands
+in its own terminal status `suppressed` (added to the §9.3.8 status enum),
+not `failed` — an intentional opt-out is no longer indistinguishable from a
+real provider failure.
+
 **Known ordering limitation:** the officer_id -> user_id lookup
 (`app.models.OfficerUserMap`, fed by `hr.officer_created` /
 `hr.officer_supervisor_changed`) depends on those events having been
@@ -159,6 +164,49 @@ per-system request/response schemas, an actual outbound client, auth/mTLS to
 that system, and error/retry handling replace the stub in
 `app/services/adapters.py`. One TD line, four independent unblocks (CAD,
 NCDB, COURTS, JAIL).
+
+---
+
+## TD-006 — consistency-audit findings (2026-09-07)
+
+A pass over all 10 services against the standing rules (audit event on every
+mutating write / RBAC least-privilege / append-only where specified /
+idempotency where relevant). Append-only (evidence `custody_events`, audit
+`audit_logs`) is solidly enforced — REVOKE + BEFORE UPDATE/DELETE triggers
+that block even the owner. RBAC is uniform (every mutating route has a
+`.write`/`.approve` code). Open items:
+
+- **Fixed now:** iam `PATCH /users/{id}` changing `full_name` / `email` /
+  `station_id` (or a non-deactivation `status`) emitted nothing — a gap
+  against rule 3 / FR-IAM-06 ("reassign user accounts ... every action
+  written to the audit log"), and `station_id` is RBAC-scoping data. Now
+  emits `UserUpdated` (`user.updated` -> audit `user`/`update`). The
+  deactivation transition keeps its own richer `UserDeactivated` and isn't
+  double-reported.
+- **Still deferred (was already in TD-003):** iam `POST /users/{id}/password`
+  (admin password reset) and `POST /roles` / `PUT /roles/{id}/permissions`
+  (permission-definition changes) emit no audit event. Both are
+  security-relevant IAM writes. Add when Phase 1 revisits iam.
+- **Deferred, flagged:** iam authentication events (successful login /
+  logout / refresh) are not audited — only `AccountLockedOut` is. A
+  CJIS-style trail would want login success/failure. Bigger than a
+  one-liner (new event(s), volume considerations); track for the security
+  hardening pass.
+- **Deferred, tied to later PWA slices:** CLAUDE.md rule 6 ("field-originated
+  write endpoints must accept an `Idempotency-Key` and dedupe") is honoured
+  only by `POST /incidents`. Per docs §2.3 a Patrol Officer also "records
+  statements / logs evidence in the field", so `POST /cases/{id}/statements`
+  and `POST /evidence` will each need the same treatment once they're
+  field-fileable (field-PWA slice 2+). Not a bug today — the current PWA
+  slice is incident-only.
+- **Judged not a gap:** `PUT /notification-preferences` emits no audit event.
+  notification_db isn't in rule 3's scope ("case, evidence, HR/discipline,
+  or IAM data"), it's a user's own self-service preference, and
+  notification-service has no outbox wiring. Left as-is.
+- **Minor, not changed:** `PUT /users/{id}/roles` is gated on
+  `iam.role.write` where `iam.user.write` would read more naturally (it
+  mutates a user, not a role definition). Defensible either way; left alone
+  to avoid churn.
 
 ---
 

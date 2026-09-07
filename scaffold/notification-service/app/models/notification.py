@@ -34,7 +34,7 @@ class Notification(Base):
             "channel IN ('email','sms','push','in_app')", name="ck_notifications_channel"
         ),
         CheckConstraint(
-            "status IN ('queued','sent','delivered','failed')",
+            "status IN ('queued','sent','delivered','failed','suppressed')",
             name="ck_notifications_status",
         ),
     )

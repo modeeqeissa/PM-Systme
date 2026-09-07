@@ -7,6 +7,7 @@ from app.events.config import topic_prefix
 
 _TOPICS = {
     "UserCreated": "user.created",
+    "UserUpdated": "user.updated",
     "UserDeactivated": "user.deactivated",
     "UserRoleReassigned": "user.role_reassigned",
     "AccountLockedOut": "account.locked_out",

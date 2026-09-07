@@ -50,7 +50,7 @@ class DeliveryWorker:
 
     async def run_once(self) -> int:
         """Attempt delivery of every queued notification. Returns how many
-        transitioned to sent or failed."""
+        transitioned to sent, failed, or suppressed."""
         async with self._sessionmaker() as session:
             rows = (
                 await session.scalars(
@@ -63,9 +63,10 @@ class DeliveryWorker:
             handled = 0
             for row in rows:
                 # FR-NOTIF-02: a row explicitly disabling this channel for this
-                # user suppresses delivery. No 'suppressed' status exists in
-                # SRS §9.3.8's enum, so it lands as 'failed' with a logged
-                # reason — terminal, not retried.
+                # user suppresses delivery. Terminal state 'suppressed'
+                # (§9.3.8, migration 0005) — distinct from 'failed' so an
+                # intentional opt-out isn't confused with a provider failure;
+                # not retried.
                 pref = await session.scalar(
                     select(NotificationPreference).where(
                         NotificationPreference.user_id == row.recipient_user_id,
@@ -77,7 +78,7 @@ class DeliveryWorker:
                         "notification %s suppressed: recipient disabled channel %s",
                         row.id, row.channel,
                     )
-                    row.status = "failed"
+                    row.status = "suppressed"
                     handled += 1
                     continue
 

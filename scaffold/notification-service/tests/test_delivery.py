@@ -103,7 +103,9 @@ async def test_delivery_worker_suppresses_channel_disabled_by_preference(make_no
 
     async with SessionLocal() as s:
         row = await s.get(Notification, n.id)
-    assert row.status == "failed"  # terminal, not retried
+    assert row.status == "suppressed"  # distinct terminal state, not retried, not a failure
+
+    assert await worker.run_once() == 0  # terminal — a second pass picks up nothing
 
 
 async def test_delivery_worker_delivers_when_a_different_channel_is_disabled(make_notification):

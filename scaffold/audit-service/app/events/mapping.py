@@ -21,6 +21,7 @@ EVENT_MAP: dict[str, tuple[str, str, str]] = {
     # iam-service admin / lockout (TD-003). 'delete' = soft-delete/status change
     # per SRS §9.3.10, which is exactly what deactivation is.
     "UserCreated": ("user", "create", "user_id"),
+    "UserUpdated": ("user", "update", "user_id"),
     "UserDeactivated": ("user", "delete", "user_id"),
     "UserRoleReassigned": ("user", "update", "user_id"),
     "AccountLockedOut": ("user", "update", "user_id"),

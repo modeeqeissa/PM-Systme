@@ -85,6 +85,36 @@ async def test_suspend_does_not_emit_userdeactivated(client, admin_token, make_u
     assert await _rows("UserDeactivated") == []
 
 
+# --- UserUpdated (FR-IAM-06 — non-deactivation admin edits) ------------
+async def test_station_reassignment_emits_user_updated(client, admin_token, make_user):
+    u = await make_user()
+    url = f"/api/v1/users/{u.id}"
+    new_station = str(uuid.uuid4())
+
+    r = await client.patch(url, headers=auth(admin_token), json={"station_id": new_station})
+    assert r.status_code == 200
+    rows = await _rows("UserUpdated")
+    assert len(rows) == 1
+    assert rows[0].body["payload"]["fields"] == ["station_id"]
+    assert rows[0].body["payload"]["station_id"] == new_station
+
+    # a PATCH that changes nothing emits nothing
+    await client.patch(url, headers=auth(admin_token), json={"station_id": new_station})
+    assert len(await _rows("UserUpdated")) == 1
+
+
+async def test_deactivating_patch_emits_only_userdeactivated_not_user_updated(
+    client, admin_token, make_user
+):
+    u = await make_user()
+    r = await client.patch(
+        f"/api/v1/users/{u.id}", headers=auth(admin_token), json={"status": "deactivated"}
+    )
+    assert r.status_code == 200
+    assert len(await _rows("UserDeactivated")) == 1
+    assert await _rows("UserUpdated") == []  # status-only deactivation isn't double-reported
+
+
 # --- UserRoleReassigned ---------------------------------------------
 async def test_role_reassignment_emits_only_when_the_set_changes(
     client, admin_token, make_user

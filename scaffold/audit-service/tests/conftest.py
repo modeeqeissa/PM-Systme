@@ -107,6 +107,7 @@ _BASE_TOPIC = {
     "CustodyEventRecorded": "evidence.custody_recorded",
     "EvidenceHashMismatch": "evidence.hash_mismatch",
     "UserCreated": "user.created",
+    "UserUpdated": "user.updated",
     "UserDeactivated": "user.deactivated",
     "UserRoleReassigned": "user.role_reassigned",
     "AccountLockedOut": "account.locked_out",

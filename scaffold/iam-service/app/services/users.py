@@ -67,9 +67,11 @@ async def update_user(
 
     previous_status = user.status
     data = payload.model_dump(exclude_unset=True)
+    changed: list[str] = []
     for field in ("full_name", "email", "station_id", "status"):
-        if field in data:
+        if field in data and data[field] != getattr(user, field):
             setattr(user, field, data[field])
+            changed.append(field)
 
     try:
         await session.flush()
@@ -81,10 +83,17 @@ async def update_user(
         await auth_service.revoke_all_sessions(session, user.id)
 
     # FR-IAM-06: emit only on the transition INTO 'deactivated'.
-    if user.status == "deactivated" and previous_status != "deactivated":
+    deactivated = user.status == "deactivated" and previous_status != "deactivated"
+    if deactivated:
         audit_events.user_deactivated(
             session, actor=actor, user=user, previous_status=previous_status
         )
+    # Any other admin change to a profile/scoping field (esp. station_id) is
+    # itself an audit-worthy IAM write — the deactivation transition already
+    # has its own richer event, so don't double-report a status-only PATCH.
+    other = [f for f in changed if not (f == "status" and deactivated)]
+    if other:
+        audit_events.user_updated(session, actor=actor, user=user, fields=other)
 
     return await get_user(session, user.id)
 
