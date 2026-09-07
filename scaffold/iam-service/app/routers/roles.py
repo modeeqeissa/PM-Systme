@@ -9,6 +9,7 @@ from app.models import Permission as PermissionModel
 from app.models import Role as RoleModel
 from app.models import User
 from app.schemas import Permission, PermissionCodeList, Role, RoleCreate
+from app.services import audit_events
 
 router = APIRouter(tags=["rbac"])
 
@@ -26,7 +27,7 @@ async def list_roles(
 async def create_role(
     payload: RoleCreate,
     session: AsyncSession = Depends(get_session),
-    _: User = Depends(require_permission("iam.role.write")),
+    admin: User = Depends(require_permission("iam.role.write")),
 ):
     # permissions=[] so the collection counts as loaded (no lazy IO after flush).
     role = RoleModel(name=payload.name, description=payload.description, permissions=[])
@@ -36,6 +37,7 @@ async def create_role(
     except IntegrityError:
         await session.rollback()
         raise HTTPException(status.HTTP_409_CONFLICT, "Role name already exists")
+    audit_events.role_created(session, actor=admin, role=role)  # FR-IAM-06
     return Role.from_model(role)
 
 
@@ -44,7 +46,7 @@ async def set_role_permissions(
     role_id: int,
     payload: PermissionCodeList,
     session: AsyncSession = Depends(get_session),
-    _: User = Depends(require_permission("iam.role.write")),
+    admin: User = Depends(require_permission("iam.role.write")),
 ):
     role = await session.get(RoleModel, role_id)
     if role is None:
@@ -60,8 +62,14 @@ async def set_role_permissions(
         raise HTTPException(
             status.HTTP_404_NOT_FOUND, f"Unknown permission code(s): {sorted(missing)}"
         )
+    previous = [p.code for p in role.permissions]
     role.permissions = list(perms)
     await session.flush()
+    new = [p.code for p in perms]
+    if set(previous) != set(new):  # FR-IAM-06 — emit only on an actual change
+        audit_events.role_permissions_changed(
+            session, actor=admin, role=role, previous=previous, new=new
+        )
     return Role.from_model(role)
 
 

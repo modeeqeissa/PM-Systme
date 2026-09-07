@@ -10,6 +10,9 @@ _TOPICS = {
     "UserUpdated": "user.updated",
     "UserDeactivated": "user.deactivated",
     "UserRoleReassigned": "user.role_reassigned",
+    "UserPasswordChanged": "user.password_changed",
+    "RoleCreated": "role.created",
+    "RolePermissionsChanged": "role.permissions_changed",
     "AccountLockedOut": "account.locked_out",
 }
 

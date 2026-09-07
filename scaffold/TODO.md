@@ -79,17 +79,35 @@ independent Audit Log entry SRS §5.8 requires.
   `audit-service/tests/test_consumer.py` (mapping of all four).
 - No `TODO(TD-003)` code markers existed; none to remove.
 
-### Still deferred
-- iam-service `POST /users/{id}/password` and role/permission-definition changes
-  don't emit yet — add when Phase 1 revisits iam.
-
 **UPDATE 2026-09-05:** FR-IAM-05's notification half is done — notification-
 service now consumes `account.locked_out` directly (`user_id` is already an
 identity_db id, no lookup needed). See TD-004.
 
+**FULLY CLOSED 2026-09-07:** the last two gaps are wired into the same
+outbox path:
+- `POST /users/{id}/password` → `UserPasswordChanged` (`user.password_changed`,
+  payload `by_admin` distinguishes an admin reset from a self-service change;
+  actor is the admin or the user accordingly) → audit `user`/`update`.
+- `POST /roles` → `RoleCreated` (`role.created`) → audit `role`/`create`;
+  `PUT /roles/{id}/permissions` on an actual change → `RolePermissionsChanged`
+  (`role.permissions_changed`, carries previous/new code sets) → audit
+  `role`/`update`.
+Tests in `iam-service/tests/test_outbox.py` (self vs admin actor, role
+create-then-grant, no event on a no-op permission set) and the audit
+all-event-types mapping (now 48). Every runtime endpoint that mutates
+identity_db under FR-IAM-06 now emits — nothing left silent. The auth *flow*
+(login / MFA / refresh / logout) deliberately does NOT feed the hash chain —
+see TD-006's auth-events note.
+
 ---
 
-## TD-004 — notification-service has no real delivery provider — deliberately deferred
+## TD-004 — notification-service ships with the DevChannel — a settled design, not an open gap
+
+**Status: this is the intended pilot behaviour, deferred indefinitely by
+product decision. There is no plan, timeline, or owner to "fix" — it is not
+blocking anything and needs no periodic review.** It stays listed only so the
+rationale is on record. Revisit *only if and when* a real messaging provider
+is actually chosen and funded.
 
 **Is:** notification-service (FR-NOTIF-01/03) consumes `hr.transfer_status_
 changed`, `hr.leave_status_changed`, `training.officer_certification_status_
@@ -136,8 +154,11 @@ unlikely, since an officer's creation event will almost always be consumed
 long before any
 transfer/leave/certification/follow-up event references them.
 
-**Resolve when:** a channel provider (SMTP/SMS gateway) and a scoped way to
-resolve recipient contact details are chosen.
+**If a provider is ever adopted**, two pieces of work would follow: a real
+`NotificationChannel` per medium (SMTP / SMS gateway / push), and a scoped
+way to resolve a recipient's contact details without touching identity_db
+directly (rule 1) — likely a small read-only lookup exposed by iam-service.
+Neither is scheduled.
 
 ---
 
@@ -183,15 +204,26 @@ that block even the owner. RBAC is uniform (every mutating route has a
   emits `UserUpdated` (`user.updated` -> audit `user`/`update`). The
   deactivation transition keeps its own richer `UserDeactivated` and isn't
   double-reported.
-- **Still deferred (was already in TD-003):** iam `POST /users/{id}/password`
-  (admin password reset) and `POST /roles` / `PUT /roles/{id}/permissions`
-  (permission-definition changes) emit no audit event. Both are
-  security-relevant IAM writes. Add when Phase 1 revisits iam.
-- **Deferred, flagged:** iam authentication events (successful login /
-  logout / refresh) are not audited — only `AccountLockedOut` is. A
-  CJIS-style trail would want login success/failure. Bigger than a
-  one-liner (new event(s), volume considerations); track for the security
-  hardening pass.
+- **DONE 2026-09-07 (reopened + closed TD-003):** iam `POST /users/{id}/password`
+  now emits `UserPasswordChanged` (with `by_admin`), and `POST /roles` /
+  `PUT /roles/{id}/permissions` emit `RoleCreated` / `RolePermissionsChanged`
+  — all through the existing outbox, mapped in audit-service. Every runtime
+  FR-IAM-06 endpoint that writes identity_db now audits. See TD-003.
+- **Decided 2026-09-07 — NOT a gap: successful logins / logouts / token
+  refreshes stay out of the hash-chained audit trail.** Reasoning:
+  FR-AUD-01 / SRS §5.8 scope the tamper-evident `audit_db.audit_logs` to
+  *sensitive-record access and administrative actions* — immutable,
+  oversight-facing, low-volume. A routine shift-start login (or a 15-minute
+  token refresh) is neither: it is high-cardinality telemetry with little
+  per-event forensic value, and folding it into the hash chain dilutes the
+  trail's signal and inflates its size. The security-relevant transition —
+  repeated failures leading to a lockout — is *already* captured as
+  `AccountLockedOut`. CJIS-style authentication logging is a real
+  requirement, but it belongs in a **separate operational security-event
+  stream** (structured logs → SIEM, with its own retention), not this
+  chain. **Recommended future work (own ticket, not this slice):** emit
+  login-success / login-failure / logout / refresh to such a stream. No
+  change to `audit_db`.
 - **DONE 2026-09-07 (rule 6):** `POST /cases/{id}/statements`,
   `POST /cases/{id}/arrests` and `POST /evidence` now accept an optional
   `Idempotency-Key` and dedupe on it (nullable UNIQUE `client_sync_id`,

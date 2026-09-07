@@ -103,6 +103,64 @@ def user_role_reassigned(
     )
 
 
+def user_password_changed(
+    session: AsyncSession, *, actor: User, user: User, by_admin: bool
+) -> None:
+    """FR-IAM-06 — a password reset is a security-relevant IAM write. `actor`
+    is the admin who reset it, or the user themselves on a self-service
+    change; `by_admin` records which."""
+    actor_id, actor_role = _actor(actor)
+    enqueue(
+        session,
+        event_type="UserPasswordChanged",
+        aggregate_type="user",
+        aggregate_id=user.id,
+        actor_id=actor_id,
+        actor_role=actor_role,
+        payload={
+            "user_id": str(user.id),
+            "badge_number": user.badge_number,
+            "by_admin": by_admin,
+        },
+    )
+
+
+def role_created(session: AsyncSession, *, actor: User, role) -> None:
+    """FR-IAM-03/06 — a new role is a permission-definition change."""
+    actor_id, actor_role = _actor(actor)
+    enqueue(
+        session,
+        event_type="RoleCreated",
+        aggregate_type="role",
+        aggregate_id=role.id,
+        actor_id=actor_id,
+        actor_role=actor_role,
+        payload={"role_id": role.id, "name": role.name},
+    )
+
+
+def role_permissions_changed(
+    session: AsyncSession, *, actor: User, role, previous: list[str], new: list[str]
+) -> None:
+    """FR-IAM-03/06 — changing what a role grants is high-impact; carries the
+    before/after code sets, like UserRoleReassigned."""
+    actor_id, actor_role = _actor(actor)
+    enqueue(
+        session,
+        event_type="RolePermissionsChanged",
+        aggregate_type="role",
+        aggregate_id=role.id,
+        actor_id=actor_id,
+        actor_role=actor_role,
+        payload={
+            "role_id": role.id,
+            "name": role.name,
+            "previous_permissions": sorted(previous),
+            "new_permissions": sorted(new),
+        },
+    )
+
+
 def account_locked_out(
     session: AsyncSession, *, user: User, failed_login_count: int
 ) -> None:

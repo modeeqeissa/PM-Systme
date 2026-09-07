@@ -134,6 +134,76 @@ async def test_role_reassignment_emits_only_when_the_set_changes(
     assert len(await _rows("UserRoleReassigned")) == 1
 
 
+# --- UserPasswordChanged (FR-IAM-06 — TD-003 reopened) ---------------
+async def test_self_password_change_emits_user_password_changed(
+    client, make_user, access_token_for
+):
+    user = await make_user(roles=["Patrol Officer"])
+    token = await access_token_for(user)
+    r = await client.post(
+        f"/api/v1/users/{user.id}/password",
+        headers=auth(token),
+        json={"current_password": user.password, "new_password": "N3w!selfpasswd"},
+    )
+    assert r.status_code == 204
+    rows = await _rows("UserPasswordChanged")
+    assert len(rows) == 1
+    assert rows[0].body["payload"]["by_admin"] is False
+    assert rows[0].body["actor_id"] == str(user.id)  # self-service -> actor is the user
+
+
+async def test_admin_password_reset_emits_user_password_changed_by_admin(
+    client, make_user, access_token_for
+):
+    admin = await make_user(roles=["ICT Admin"])
+    token = await access_token_for(admin)
+    target = await make_user()
+    r = await client.post(
+        f"/api/v1/users/{target.id}/password",
+        headers=auth(token),
+        json={"new_password": "R3set!byadminpw"},
+    )
+    assert r.status_code == 204
+    rows = await _rows("UserPasswordChanged")
+    assert len(rows) == 1
+    payload = rows[0].body["payload"]
+    assert payload["by_admin"] is True
+    assert payload["user_id"] == str(target.id)
+    assert rows[0].body["actor_id"] == str(admin.id)
+
+
+# --- RoleCreated / RolePermissionsChanged (FR-IAM-06 — permission defs) ---
+async def test_role_lifecycle_emits_created_then_permissions_changed(client, admin_token):
+    created = await client.post(
+        "/api/v1/roles", headers=auth(admin_token), json={"name": f"Analyst-{uuid.uuid4().hex[:6]}"}
+    )
+    assert created.status_code == 201
+    role_id = created.json()["id"]
+
+    rc = await _rows("RoleCreated")
+    assert len(rc) == 1
+    assert rc[0].body["payload"]["role_id"] == role_id
+
+    changed = await client.put(
+        f"/api/v1/roles/{role_id}/permissions",
+        headers=auth(admin_token),
+        json={"codes": ["case.read", "audit.read"]},
+    )
+    assert changed.status_code == 200
+    rp = await _rows("RolePermissionsChanged")
+    assert len(rp) == 1
+    assert rp[0].body["payload"]["previous_permissions"] == []
+    assert rp[0].body["payload"]["new_permissions"] == ["audit.read", "case.read"]
+
+    # setting the same permission set again -> no new event
+    await client.put(
+        f"/api/v1/roles/{role_id}/permissions",
+        headers=auth(admin_token),
+        json={"codes": ["audit.read", "case.read"]},
+    )
+    assert len(await _rows("RolePermissionsChanged")) == 1
+
+
 # --- AccountLockedOut (FR-IAM-05) ---------------------------------------
 async def test_lockout_emits_exactly_once_not_per_failed_attempt(client, make_user):
     pw = "R1ght!Passw0rd"

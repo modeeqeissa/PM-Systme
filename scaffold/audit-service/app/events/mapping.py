@@ -24,6 +24,9 @@ EVENT_MAP: dict[str, tuple[str, str, str]] = {
     "UserUpdated": ("user", "update", "user_id"),
     "UserDeactivated": ("user", "delete", "user_id"),
     "UserRoleReassigned": ("user", "update", "user_id"),
+    "UserPasswordChanged": ("user", "update", "user_id"),
+    "RoleCreated": ("role", "create", "role_id"),
+    "RolePermissionsChanged": ("role", "update", "role_id"),
     "AccountLockedOut": ("user", "update", "user_id"),
     # hr-service (FR-HR-01..07)
     "OfficerCreated": ("officer", "create", "officer_id"),

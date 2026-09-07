@@ -158,3 +158,7 @@ async def change_password(
     await session.flush()
     # FR-IAM-02: password change revokes every active session.
     await auth_service.revoke_all_sessions(session, user.id)
+    # FR-IAM-06: audit the change (admin reset vs. self-service).
+    audit_events.user_password_changed(
+        session, actor=caller, user=user, by_admin=not is_self
+    )

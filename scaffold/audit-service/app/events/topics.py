@@ -20,6 +20,9 @@ _BASE_TOPICS = (
     "user.updated",
     "user.deactivated",
     "user.role_reassigned",
+    "user.password_changed",
+    "role.created",
+    "role.permissions_changed",
     "account.locked_out",
     # hr-service (FR-HR-01..07)
     "hr.officer_created",
