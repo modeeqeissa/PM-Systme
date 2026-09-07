@@ -12,6 +12,7 @@ export const TAB_META: TabMeta[] = [
   { id: "health", label: "System Health", anyOf: [] },
   { id: "kpis", label: "Live KPIs", anyOf: ["dashboard.view"] },
   { id: "audit", label: "Audit & Activity", anyOf: ["audit.read"] },
+  { id: "users", label: "Users & Roles", anyOf: ["iam.user.read"] },
 ];
 
 /** Every permission any tab cares about. The NavBar entry shows "Command

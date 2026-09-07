@@ -7,6 +7,7 @@ import { PermissionNotice } from "../../routes/RequirePermission";
 import { SystemHealthPanel } from "./SystemHealthPanel";
 import { LiveKpisPanel } from "./LiveKpisPanel";
 import { AuditFeedPanel } from "./AuditFeedPanel";
+import { UserAdminPanel } from "./UserAdminPanel";
 import { TAB_META } from "./tabs";
 
 export { COMMAND_CENTER_PERMS } from "./tabs";
@@ -15,6 +16,7 @@ const RENDERERS: Record<string, () => JSX.Element> = {
   health: () => <SystemHealthPanel />,
   kpis: () => <LiveKpisPanel />,
   audit: () => <AuditFeedPanel />,
+  users: () => <UserAdminPanel />,
 };
 
 export function CommandCenterPage() {
