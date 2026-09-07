@@ -5,12 +5,14 @@ import { NavBar } from "../../components/NavBar";
 import { hasAnyPerm } from "../../lib/rbac";
 import { PermissionNotice } from "../../routes/RequirePermission";
 import { SystemHealthPanel } from "./SystemHealthPanel";
+import { LiveKpisPanel } from "./LiveKpisPanel";
 import { TAB_META } from "./tabs";
 
 export { COMMAND_CENTER_PERMS } from "./tabs";
 
 const RENDERERS: Record<string, () => JSX.Element> = {
   health: () => <SystemHealthPanel />,
+  kpis: () => <LiveKpisPanel />,
 };
 
 export function CommandCenterPage() {

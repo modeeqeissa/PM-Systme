@@ -10,6 +10,7 @@ export interface TabMeta {
 
 export const TAB_META: TabMeta[] = [
   { id: "health", label: "System Health", anyOf: [] },
+  { id: "kpis", label: "Live KPIs", anyOf: ["dashboard.view"] },
 ];
 
 /** Every permission any tab cares about. The NavBar entry shows "Command
