@@ -287,6 +287,47 @@ audit: Patrol Officer opens a case -> Station Commander assigns an officer
 notification; a `case.write`-only token gets 403. **case-service's entire
 original schema (docs §9.3.2) is now implemented.**
 
+**Post-Phase-1 hardening — `pwa-debt-k8s` slice, all 3 phases complete
+(2026-09-07):**
+- **Phase 1 — offline field writes + idempotency ✅** (`972292f`, `cd257e3`).
+  case-service migration 0003 and evidence-service migration 0003 add a
+  nullable UNIQUE `client_sync_id`; `POST /cases/{id}/statements`,
+  `POST /cases/{id}/arrests`, `POST /evidence` accept an optional
+  `Idempotency-Key` and replay to 200-with-original-record, no duplicate
+  event (see TD-006 rule-6 note). OpenAPI updated for all three. Tests:
+  case 94→102, evidence 35→39. field-pwa gained statement / arrest /
+  evidence offline capture — outbox in IndexedDB (file as base64 string,
+  not Blob — flagged: `fake-indexeddb` + WebView/Safari Blob-in-IDB
+  reliability), background sync on reconnect with the stored key,
+  storage-quota surfacing. Idempotency helper extracted to `@pmp/core`.
+  Live-verified: incident + evidence filed offline, queued, auto-synced on
+  reconnect, server-computed SHA-256 matched, replay returned 200 with no
+  duplicate row.
+- **Phase 2 — audit-log debt ✅** (`ad80f79`). Folded into TD-003 /
+  TD-006 above: iam password-change and role/permission mutations now
+  audit; `PATCH /users/{id}` non-deactivation changes now emit
+  `UserUpdated`; auth-success logging decided out of the hash chain (own
+  future ticket). notification `suppressed` status split from `failed`
+  (migration 0005) for the preference-disabled path. TD-004 reworded as a
+  settled design decision, not an open gap; TD-005 untouched.
+- **Phase 3 — Kubernetes manifests ✅** (`841ebf4`). `infra/k8s/` —
+  generic, portable, **not cloud-specific and not deployed**. Plain YAML +
+  Kustomize (no Helm), one dir per service per §3.6: Deployment (alembic
+  initContainer + uvicorn, restricted PodSecurity), ClusterIP Service
+  (never public, §3.5), ConfigMap, `secret.template.yaml` (REPLACE_ME keys
+  only), HPA (CPU 70%; commented Kafka-lag External metric for the 3
+  consumers per NFR-SCALE-01), per-namespace ResourceQuota, NetworkPolicy
+  (ingress only from the gateway namespace). `cluster/` has the 12
+  namespaces + per-namespace default-deny; evidence + hr are
+  `pmp.gov/tier: sensitive` with a dedicated encryption-key Secret slot and
+  stricter egress. Probes hit `/health`. Env-var names, DB names and ports
+  cross-checked against each `app/config.py`, `init-databases.sql` and
+  CLAUDE.md. **Validated, not deployed:** `kubectl kustomize infra/k8s |
+  kubeconform -strict -kubernetes-version 1.29.0` → 92 resources, all
+  valid, 0 errors; nothing applied to a cluster. `infra/k8s/README.md`
+  lists everything a real deployment must still supply (images, secret
+  values + manager, data plane, ingress/TLS, sizing — all placeholders).
+
 **Open, flagged (not forgotten):** TD-004, TD-005 above. Plus:
 - FR-COMM-05 / FR-HR-08 / FR-TRAIN-04 style summary-reporting FRs are
   deferred as reporting-over-existing-data (dashboard-service territory),
