@@ -384,6 +384,8 @@ async def make_notification():
                 payload=overrides.get("payload", {}),
                 status=overrides.get("status", "queued"),
             )
+            if "created_at" in overrides:
+                n.created_at = overrides["created_at"]
             session.add(n)
             await session.commit()
             await session.refresh(n)

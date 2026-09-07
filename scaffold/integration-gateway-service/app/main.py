@@ -12,11 +12,12 @@ import contextlib
 
 from fastapi import FastAPI
 
-from app import db
+from app import config, db
 from app.events import OutboxRelay
 from app.events.config import relay_enabled
 from app.routers import adapters, external_system_logs, integration_configs
 from app.services.correlation import CorrelationIdMiddleware
+from app.services.retention import RetentionWorker
 
 API_PREFIX = "/api/v1"
 
@@ -24,15 +25,21 @@ API_PREFIX = "/api/v1"
 @contextlib.asynccontextmanager
 async def lifespan(app: FastAPI):
     relay: OutboxRelay | None = None
+    retention: RetentionWorker | None = None
     if relay_enabled():
         relay = OutboxRelay(db.SessionLocal)
         await relay.start()
         relay.spawn()
+    if config.retention_enabled():
+        retention = RetentionWorker(db.SessionLocal)
+        retention.spawn()
     try:
         yield
     finally:
         if relay is not None:
             await relay.stop()
+        if retention is not None:
+            await retention.stop()
 
 
 def create_app() -> FastAPI:

@@ -2,9 +2,11 @@
 
 Contract: notification-service/openapi.yaml. Notifications are created solely
 by the Kafka consumer (app.events.consumer) and delivered by the background
-delivery worker (app.services.delivery); both are spawned on startup unless
-NOTIFICATION_CONSUMER_ENABLED=0 / NOTIFICATION_DELIVERY_ENABLED=0 (tests
-drive them explicitly).
+delivery worker (app.services.delivery); a retention worker
+(app.services.retention, FR-AUD-04) purges rows past the 90-day window. All
+three spawn on startup unless disabled per env
+(NOTIFICATION_{CONSUMER,DELIVERY,RETENTION}_ENABLED=0); tests drive them
+explicitly.
 """
 import contextlib
 
@@ -14,6 +16,7 @@ from app import config, db
 from app.events import NotificationConsumer
 from app.routers import notifications, preferences
 from app.services.delivery import DeliveryWorker
+from app.services.retention import RetentionWorker
 
 API_PREFIX = "/api/v1"
 
@@ -22,6 +25,7 @@ API_PREFIX = "/api/v1"
 async def lifespan(app: FastAPI):
     consumer: NotificationConsumer | None = None
     delivery: DeliveryWorker | None = None
+    retention: RetentionWorker | None = None
     if config.consumer_enabled():
         consumer = NotificationConsumer(db.SessionLocal)
         await consumer.start()
@@ -29,6 +33,9 @@ async def lifespan(app: FastAPI):
     if config.delivery_enabled():
         delivery = DeliveryWorker(db.SessionLocal)
         delivery.spawn()
+    if config.retention_enabled():
+        retention = RetentionWorker(db.SessionLocal)
+        retention.spawn()
     try:
         yield
     finally:
@@ -36,6 +43,8 @@ async def lifespan(app: FastAPI):
             await consumer.stop()
         if delivery is not None:
             await delivery.stop()
+        if retention is not None:
+            await retention.stop()
 
 
 def create_app() -> FastAPI:

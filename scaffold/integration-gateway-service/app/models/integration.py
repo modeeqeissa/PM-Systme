@@ -1,6 +1,15 @@
+import datetime as dt
 import uuid
 
-from sqlalchemy import BigInteger, Boolean, CheckConstraint, Integer, String
+from sqlalchemy import (
+    BigInteger,
+    Boolean,
+    CheckConstraint,
+    DateTime,
+    Integer,
+    String,
+    func,
+)
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -33,3 +42,7 @@ class ExternalSystemLog(Base):
     # trace id linking request/response across services
     correlation_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
     response_status: Mapped[int | None] = mapped_column(Integer)
+    # FR-AUD-04 / §9.6: retention window (180 days) is measured from here.
+    created_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )

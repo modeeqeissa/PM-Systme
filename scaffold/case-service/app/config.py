@@ -47,3 +47,12 @@ def iam_jwks_url() -> str:
 
 def jwks_cache_ttl_seconds() -> int:
     return int(os.getenv("CASE_JWKS_CACHE_TTL", "300"))
+
+
+# --- Retention (FR-AUD-04 / docs §9.6) ----------------------------------
+# case records are effectively indefinite. This is an ADVISORY minimum only:
+# case-service has NO delete path (no purge job, no DELETE in app code or
+# migrations against cases / incidents / arrests / statements). The value
+# exists so the retention floor is explicit and greppable and cannot be
+# accidentally shortened by a future change without touching this line.
+RETENTION_DAYS_MINIMUM = int(os.getenv("CASE_RETENTION_DAYS", "3650"))  # ~10 years, floor

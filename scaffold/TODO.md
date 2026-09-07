@@ -329,6 +329,18 @@ original schema (docs §9.3.2) is now implemented.**
   values + manager, data plane, ingress/TLS, sizing — all placeholders).
 
 **Open, flagged (not forgotten):** TD-004, TD-005 above. Plus:
-- FR-COMM-05 / FR-HR-08 / FR-TRAIN-04 style summary-reporting FRs are
-  deferred as reporting-over-existing-data (dashboard-service territory),
-  not new domain state.
+- FR-TRAIN-04 style summary-reporting FR is deferred as
+  reporting-over-existing-data (dashboard-service territory), not new
+  domain state. (FR-COMM-05 / FR-HR-08 built in the must/should closeout.)
+
+**FR-AUD-04 retention — the "keep indefinitely" domains (2026-09-08):**
+case-service, evidence-service and audit-service have **no delete path** —
+no purge job, and no `DELETE` against `cases` / `incidents` / `arrests` /
+`statements` / `evidence_items` / `custody_events` / `audit_logs` in app
+code or migrations (evidence `custody_events` and `audit_logs` are
+additionally REVOKE + trigger append-only). Each config carries an
+explicit `RETENTION_DAYS[_MINIMUM]` constant (env-overridable, default ~10
+years) that documents the retention **floor** so it can't be silently
+shortened. Only `notification_db.notifications` (90d) and
+`integration_db.external_system_logs` (180d) have real scheduled purge
+jobs (`app/services/retention.py` in each), per docs §9.6.

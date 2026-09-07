@@ -73,3 +73,11 @@ def vault_dir() -> str:
 
 
 VAULT_ENC_KEY = os.getenv("EVIDENCE_VAULT_KEY")  # urlsafe-base64 32-byte Fernet key
+
+
+# --- Retention (FR-AUD-04 / docs §9.6) --------------------------------
+# evidence + custody records are effectively indefinite. ADVISORY minimum
+# only: evidence-service has NO delete path (custody_events is append-only,
+# enforced by REVOKE + triggers; no purge job). The value makes the
+# retention floor explicit so it can't be quietly shortened.
+RETENTION_DAYS_MINIMUM = int(os.getenv("EVIDENCE_RETENTION_DAYS", "3650"))  # ~10 years, floor

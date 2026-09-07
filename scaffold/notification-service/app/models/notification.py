@@ -52,6 +52,10 @@ class Notification(Base):
     status: Mapped[str] = mapped_column(
         String(20), nullable=False, server_default="queued"
     )
+    # FR-AUD-04 / §9.6: retention window (90 days) is measured from here.
+    created_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
 
 
 class OfficerUserMap(Base):

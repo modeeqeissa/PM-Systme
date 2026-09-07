@@ -40,3 +40,21 @@ def iam_jwks_url() -> str:
 
 def jwks_cache_ttl_seconds() -> int:
     return int(os.getenv("INTEGRATION_GATEWAY_JWKS_CACHE_TTL", "300"))
+
+
+# --- Retention / purge (FR-AUD-04 / docs §9.6) ------------------------------
+# external_system_logs are 180-day operational data — safe to actually delete.
+# The purge job (app.services.retention) runs in-process; period configurable
+# by the ICT unit.
+def retention_enabled() -> bool:
+    return os.getenv("INTEGRATION_GATEWAY_RETENTION_ENABLED", "1") not in (
+        "0", "false", "False", "",
+    )
+
+
+def log_retention_days() -> int:
+    return int(os.getenv("INTEGRATION_GATEWAY_LOG_RETENTION_DAYS", "180"))
+
+
+def retention_poll_seconds() -> float:
+    return float(os.getenv("INTEGRATION_GATEWAY_RETENTION_POLL_SECONDS", "86400"))

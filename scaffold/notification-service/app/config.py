@@ -65,3 +65,20 @@ def delivery_enabled() -> bool:
 
 def delivery_poll_seconds() -> float:
     return float(os.getenv("NOTIFICATION_DELIVERY_POLL_SECONDS", "5.0"))
+
+
+# --- Retention / purge (FR-AUD-04 / docs §9.6) ------------------------------
+# Notifications are 90-day operational data — safe to actually delete. The
+# purge job (app.services.retention) runs in-process; disable per env for
+# tests / archival experiments. The period is configurable by the ICT unit.
+def retention_enabled() -> bool:
+    return os.getenv("NOTIFICATION_RETENTION_ENABLED", "1") not in ("0", "false", "False", "")
+
+
+def retention_days() -> int:
+    return int(os.getenv("NOTIFICATION_RETENTION_DAYS", "90"))
+
+
+def retention_poll_seconds() -> float:
+    # Daily by default; overridable (tests drive run_once directly).
+    return float(os.getenv("NOTIFICATION_RETENTION_POLL_SECONDS", "86400"))
