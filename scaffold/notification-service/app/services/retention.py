@@ -5,18 +5,26 @@ the real scheduled purge job: rows whose ``created_at`` is older than the
 configured window are removed. Mirrors the delivery-worker / outbox-relay
 poll-loop shape used elsewhere; no HTTP trigger (docs Section 2.3 names no
 notification-service role, same as delivery). Tests call ``run_once`` directly.
+
+Per §9.6, delivery-*failure* records (status='failed') are kept longer — a
+year — so an operator can still investigate a bad delivery well after the
+routine 90-day window. 'suppressed' is an intentional opt-out, not a failure,
+so it purges on the normal schedule.
 """
 import asyncio
 import datetime as dt
 import logging
 
-from sqlalchemy import delete
+from sqlalchemy import delete, or_
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app import config
 from app.models import Notification
 
 log = logging.getLogger("notification-service.retention-worker")
+
+# §9.6: delivery-failure records are retained a year, not the routine 90 days.
+_FAILED_RETENTION_DAYS = 365
 
 
 class RetentionWorker:
@@ -26,19 +34,30 @@ class RetentionWorker:
         self._stopping = asyncio.Event()
 
     async def run_once(self) -> int:
-        """Delete every notification older than the retention window. Returns
-        the row count removed."""
-        cutoff = dt.datetime.now(dt.timezone.utc) - dt.timedelta(days=config.retention_days())
+        """Purge notifications past their retention window (§9.6):
+        status='failed' rows after a year, everything else after the
+        configured operational window. Returns the row count removed."""
+        now = dt.datetime.now(dt.timezone.utc)
+        routine_cutoff = now - dt.timedelta(days=config.retention_days())
+        failed_cutoff = now - dt.timedelta(days=_FAILED_RETENTION_DAYS)
         async with self._sessionmaker() as session:
             result = await session.execute(
-                delete(Notification).where(Notification.created_at < cutoff)
+                delete(Notification).where(
+                    or_(
+                        (Notification.status != "failed")
+                        & (Notification.created_at < routine_cutoff),
+                        (Notification.status == "failed")
+                        & (Notification.created_at < failed_cutoff),
+                    )
+                )
             )
             await session.commit()
             removed = result.rowcount or 0
             if removed:
                 log.info(
-                    "retention: purged %d notification(s) older than %d days",
-                    removed, config.retention_days(),
+                    "retention: purged %d notification(s) "
+                    "(routine window %dd, failed-delivery window %dd)",
+                    removed, config.retention_days(), _FAILED_RETENTION_DAYS,
                 )
             return removed
 

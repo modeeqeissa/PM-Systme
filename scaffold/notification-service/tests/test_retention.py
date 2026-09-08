@@ -43,3 +43,26 @@ async def test_retention_period_is_configurable(make_notification, monkeypatch):
     monkeypatch.setenv("NOTIFICATION_RETENTION_DAYS", "7")
     await make_notification(created_at=dt.datetime.now(UTC) - dt.timedelta(days=8))
     assert await RetentionWorker(SessionLocal).run_once() == 1
+
+
+async def test_failed_delivery_records_are_kept_for_a_year(make_notification):
+    """§9.6: status='failed' rows survive the routine 90-day window and are
+    only purged after a year; 'suppressed' purges on the normal schedule."""
+    now = dt.datetime.now(UTC)
+    kept_failed = await make_notification(
+        status="failed", created_at=now - dt.timedelta(days=120)
+    )
+    purged_failed = await make_notification(
+        status="failed", created_at=now - dt.timedelta(days=400)
+    )
+    purged_suppressed = await make_notification(
+        status="suppressed", created_at=now - dt.timedelta(days=120)
+    )
+
+    removed = await RetentionWorker(SessionLocal).run_once()
+    assert removed == 2
+
+    remaining = await _remaining_ids()
+    assert kept_failed.id in remaining
+    assert purged_failed.id not in remaining
+    assert purged_suppressed.id not in remaining
