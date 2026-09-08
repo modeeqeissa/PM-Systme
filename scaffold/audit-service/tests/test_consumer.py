@@ -175,6 +175,24 @@ async def test_all_event_types_map_to_expected_entity_and_action(client, emit, c
         {"follow_up_action_id": str(uuid.uuid4())},
         service="community-service",
     )
+    await emit("CommunityCreated", {"community_id": str(uuid.uuid4())}, service="community-service")
+    await emit("CommunityUpdated", {"community_id": str(uuid.uuid4())}, service="community-service")
+    await emit(
+        "OrganizationCreated", {"organization_id": str(uuid.uuid4())}, service="community-service"
+    )
+    await emit(
+        "OrganizationUpdated", {"organization_id": str(uuid.uuid4())}, service="community-service"
+    )
+    await emit(
+        "MeetingMinutesRecorded", {"meeting_minutes_id": str(uuid.uuid4())}, service="community-service"
+    )
+    await emit(
+        "MeetingMinutesUpdated", {"meeting_minutes_id": str(uuid.uuid4())}, service="community-service"
+    )
+    await emit("DecisionRecorded", {"decision_id": str(uuid.uuid4())}, service="community-service")
+    await emit(
+        "DecisionStatusChanged", {"decision_id": str(uuid.uuid4())}, service="community-service"
+    )
 
     # integration-gateway-service (FR-INT-01..05)
     await emit(
@@ -188,7 +206,7 @@ async def test_all_event_types_map_to_expected_entity_and_action(client, emit, c
         service="integration-gateway-service",
     )
 
-    assert await consumer.process_available() == 56
+    assert await consumer.process_available() == 64
     rows = await _audit_rows()
     seen = {(r.entity_type, r.action) for r in rows}
     assert seen == {
@@ -240,6 +258,14 @@ async def test_all_event_types_map_to_expected_entity_and_action(client, emit, c
         ("concern", "update"),
         ("follow_up_action", "create"),
         ("follow_up_action", "update"),
+        ("community", "create"),
+        ("community", "update"),
+        ("organization", "create"),
+        ("organization", "update"),
+        ("meeting_minutes", "create"),
+        ("meeting_minutes", "update"),
+        ("decision", "create"),
+        ("decision", "update"),
         ("integration_config", "update"),
         ("external_system_call", "create"),
     }

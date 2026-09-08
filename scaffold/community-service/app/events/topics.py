@@ -15,6 +15,14 @@ _TOPICS = {
     "ConcernStatusChanged": "community.concern_status_changed",
     "FollowUpActionCreated": "community.follow_up_action_created",
     "FollowUpActionStatusChanged": "community.follow_up_action_status_changed",
+    "CommunityCreated": "community.community_created",
+    "CommunityUpdated": "community.community_updated",
+    "OrganizationCreated": "community.organization_created",
+    "OrganizationUpdated": "community.organization_updated",
+    "MeetingMinutesRecorded": "community.meeting_minutes_recorded",
+    "MeetingMinutesUpdated": "community.meeting_minutes_updated",
+    "DecisionRecorded": "community.decision_recorded",
+    "DecisionStatusChanged": "community.decision_status_changed",
 }
 
 ALL_TOPICS = tuple(_TOPICS.values())

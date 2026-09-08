@@ -20,6 +20,7 @@ const ITEMS: { to: string; label: string; anyOf: string[] }[] = [
   { to: "/training/issue", label: "Issue cert", anyOf: ["training.cert.write"] },
   { to: "/training/compliance", label: "Compliance", anyOf: ["training.cert.read"] },
   { to: "/community/meetings", label: "Community", anyOf: ["community.read"] },
+  { to: "/community/communities", label: "Communities", anyOf: ["community.read"] },
   { to: "/community/concerns", label: "Concerns", anyOf: ["community.read"] },
   { to: "/community/follow-ups", label: "Follow-ups", anyOf: ["community.read"] },
   // Command Center: shown when the caller holds any permission a panel needs

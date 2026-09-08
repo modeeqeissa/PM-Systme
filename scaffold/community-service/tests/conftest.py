@@ -103,7 +103,7 @@ _db.SessionLocal = SessionLocal
 
 from app.events import OutboxRelay, topic_for  # noqa: E402
 from app.main import app  # noqa: E402
-from app.models import Concern, Meeting  # noqa: E402
+from app.models import Community, Concern, Meeting  # noqa: E402
 from app.services.recompute_task import RecomputeTask  # noqa: E402
 
 # badge -> seeded role. "Community Liaison Officer" holds community.{read,
@@ -269,8 +269,9 @@ async def _clean_tables():
     async with engine.begin() as conn:
         await conn.execute(
             text(
-                "TRUNCATE follow_up_actions, concerns, meetings, "
-                "outbox_events RESTART IDENTITY CASCADE"
+                "TRUNCATE follow_up_actions, concerns, decisions, meeting_minutes, "
+                "meetings, organizations, communities, outbox_events "
+                "RESTART IDENTITY CASCADE"
             )
         )
     yield
@@ -333,11 +334,29 @@ def read_kafka():
 
 
 @pytest_asyncio.fixture
+async def make_community():
+    async def _make(**overrides) -> Community:
+        async with SessionLocal() as session:
+            community = Community(
+                name=overrides.get("name", "Riverside Neighbourhood Watch"),
+                station_id=overrides.get("station_id", uuid.uuid4()),
+                description=overrides.get("description"),
+            )
+            session.add(community)
+            await session.commit()
+            await session.refresh(community)
+            return community
+
+    return _make
+
+
+@pytest_asyncio.fixture
 async def make_meeting():
     async def _make(**overrides) -> Meeting:
         async with SessionLocal() as session:
             meeting = Meeting(
                 station_id=overrides.get("station_id", uuid.uuid4()),
+                community_id=overrides.get("community_id"),
                 facilitator_id=overrides.get("facilitator_id", uuid.uuid4()),
                 meeting_date=overrides.get("meeting_date", dt.date(2026, 6, 1)),
                 location=overrides.get("location", "Central Station Hall"),

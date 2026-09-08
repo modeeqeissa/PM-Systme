@@ -10,6 +10,7 @@ import { fakeJwt } from "../../test/jwt";
 
 const listMeetings = vi.fn();
 const createMeeting = vi.fn();
+const listCommunities = vi.fn();
 
 vi.mock("../../lib/api", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../../lib/api")>();
@@ -18,6 +19,7 @@ vi.mock("../../lib/api", async (importOriginal) => {
     community: {
       ...actual.community,
       meetings: { list: (...a: unknown[]) => listMeetings(...a), create: (...a: unknown[]) => createMeeting(...a) },
+      communities: { ...actual.community.communities, list: (...a: unknown[]) => listCommunities(...a) },
     },
   };
 });
@@ -50,7 +52,9 @@ function renderPage(permissions: string[]) {
 beforeEach(() => {
   listMeetings.mockReset();
   createMeeting.mockReset();
+  listCommunities.mockReset();
   listMeetings.mockResolvedValue([]);
+  listCommunities.mockResolvedValue([]);
 });
 
 describe("MeetingsPage", () => {
@@ -81,6 +85,7 @@ describe("MeetingsPage", () => {
 
     expect(createMeeting).toHaveBeenCalledWith({
       station_id: "5ta7104e-0000-0000-0000-000000000000",
+      community_id: null,
       facilitator_id: "fac00000-0000-0000-0000-000000000000",
       meeting_date: "2026-04-01",
       location: "Library",

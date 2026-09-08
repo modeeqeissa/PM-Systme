@@ -12,6 +12,8 @@ import { CourseCatalogPage } from "./pages/training/CourseCatalogPage";
 import { IssueCertificationPage } from "./pages/training/IssueCertificationPage";
 import { CompliancePage } from "./pages/training/CompliancePage";
 import { MeetingsPage } from "./pages/community/MeetingsPage";
+import { MeetingDetailPage } from "./pages/community/MeetingDetailPage";
+import { CommunitiesPage } from "./pages/community/CommunitiesPage";
 import { ConcernsPage } from "./pages/community/ConcernsPage";
 import { ConcernDetailPage } from "./pages/community/ConcernDetailPage";
 import { FollowUpsPage } from "./pages/community/FollowUpsPage";
@@ -106,11 +108,31 @@ export function App() {
       />
 
       <Route
+        path="/community/communities"
+        element={
+          <Protected>
+            <RequirePermission anyOf={["community.read"]}>
+              <CommunitiesPage />
+            </RequirePermission>
+          </Protected>
+        }
+      />
+      <Route
         path="/community/meetings"
         element={
           <Protected>
             <RequirePermission anyOf={["community.read"]}>
               <MeetingsPage />
+            </RequirePermission>
+          </Protected>
+        }
+      />
+      <Route
+        path="/community/meetings/:meetingId"
+        element={
+          <Protected>
+            <RequirePermission anyOf={["community.read"]}>
+              <MeetingDetailPage />
             </RequirePermission>
           </Protected>
         }

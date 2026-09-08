@@ -75,6 +75,15 @@ EVENT_MAP: dict[str, tuple[str, str, str]] = {
     "ConcernStatusChanged": ("concern", "update", "concern_id"),
     "FollowUpActionCreated": ("follow_up_action", "create", "follow_up_action_id"),
     "FollowUpActionStatusChanged": ("follow_up_action", "update", "follow_up_action_id"),
+    # docs §9.3.4 revised — communities, partner orgs, formal minutes & decisions
+    "CommunityCreated": ("community", "create", "community_id"),
+    "CommunityUpdated": ("community", "update", "community_id"),
+    "OrganizationCreated": ("organization", "create", "organization_id"),
+    "OrganizationUpdated": ("organization", "update", "organization_id"),
+    "MeetingMinutesRecorded": ("meeting_minutes", "create", "meeting_minutes_id"),
+    "MeetingMinutesUpdated": ("meeting_minutes", "update", "meeting_minutes_id"),
+    "DecisionRecorded": ("decision", "create", "decision_id"),
+    "DecisionStatusChanged": ("decision", "update", "decision_id"),
     # integration-gateway-service (FR-INT-01..05)
     "IntegrationConfigUpdated": ("integration_config", "update", "integration_config_id"),
     "ExternalSystemCallLogged": ("external_system_call", "create", "correlation_id"),

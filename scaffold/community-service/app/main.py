@@ -16,7 +16,14 @@ from fastapi import FastAPI
 from app import config, db
 from app.events import OutboxRelay
 from app.events.config import relay_enabled
-from app.routers import concerns, follow_up_actions, meetings
+from app.routers import (
+    communities,
+    concerns,
+    follow_up_actions,
+    meeting_records,
+    meetings,
+    organizations,
+)
 from app.services.recompute_task import RecomputeTask
 
 API_PREFIX = "/api/v1"
@@ -50,7 +57,12 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
     )
 
+    app.include_router(communities.router, prefix=API_PREFIX)
+    app.include_router(organizations.router, prefix=API_PREFIX)
     app.include_router(meetings.router, prefix=API_PREFIX)
+    app.include_router(meeting_records.minutes_router, prefix=API_PREFIX)
+    app.include_router(meeting_records.decisions_by_meeting_router, prefix=API_PREFIX)
+    app.include_router(meeting_records.decisions_router, prefix=API_PREFIX)
     app.include_router(concerns.router, prefix=API_PREFIX)
     app.include_router(follow_up_actions.by_concern_router, prefix=API_PREFIX)
     app.include_router(follow_up_actions.router, prefix=API_PREFIX)

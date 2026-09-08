@@ -760,12 +760,33 @@ export const training = {
   },
 };
 
-// --- community-service (FR-COMM-01..04) ------------------------------
+// --- community-service (FR-COMM-01..04 + §9.3.4 richness) -----------
 export type ConcernStatus = "open" | "in_progress" | "resolved";
 export type FollowUpStatus = "pending" | "overdue" | "completed";
+export type DecisionStatus = "pending" | "implemented" | "abandoned";
+
+export interface CommunityCreate {
+  name: string;
+  station_id: string;
+  description?: string | null;
+}
+export interface Community extends CommunityCreate {
+  id: string;
+}
+
+export interface OrganizationCreate {
+  name: string;
+  community_id?: string | null;
+  contact_name?: string | null;
+  contact_phone?: string | null;
+}
+export interface Organization extends OrganizationCreate {
+  id: string;
+}
 
 export interface MeetingCreate {
   station_id: string;
+  community_id?: string | null;
   facilitator_id: string;
   meeting_date: string;
   location: string;
@@ -773,6 +794,20 @@ export interface MeetingCreate {
 }
 export interface Meeting extends MeetingCreate {
   id: string;
+}
+
+export interface MeetingMinutes {
+  id: string;
+  meeting_id: string;
+  content: string;
+  recorded_by: string;
+}
+
+export interface Decision {
+  id: string;
+  meeting_id: string;
+  description: string;
+  status: DecisionStatus;
 }
 
 export interface ConcernCreate {
@@ -798,11 +833,44 @@ export interface FollowUpAction extends FollowUpActionCreate {
 }
 
 export const community = {
-  meetings: {
+  communities: {
     list: (stationId?: string) =>
-      request<Meeting[]>("/api/community", `/api/v1/meetings${qs({ station_id: stationId })}`, { auth: true }),
+      request<Community[]>("/api/community", `/api/v1/communities${qs({ station_id: stationId })}`, { auth: true }),
+    get: (id: string) => request<Community>("/api/community", `/api/v1/communities/${id}`, { auth: true }),
+    create: (body: CommunityCreate) =>
+      request<Community>("/api/community", "/api/v1/communities", json(body)),
+    update: (id: string, body: { name?: string; description?: string | null }) =>
+      request<Community>("/api/community", `/api/v1/communities/${id}`, patch(body)),
+  },
+  organizations: {
+    list: (communityId?: string) =>
+      request<Organization[]>("/api/community", `/api/v1/organizations${qs({ community_id: communityId })}`, { auth: true }),
+    create: (body: OrganizationCreate) =>
+      request<Organization>("/api/community", "/api/v1/organizations", json(body)),
+    update: (id: string, body: Partial<OrganizationCreate>) =>
+      request<Organization>("/api/community", `/api/v1/organizations/${id}`, patch(body)),
+  },
+  meetings: {
+    list: (params: { station_id?: string; community_id?: string } = {}) =>
+      request<Meeting[]>("/api/community", `/api/v1/meetings${qs(params)}`, { auth: true }),
     get: (id: string) => request<Meeting>("/api/community", `/api/v1/meetings/${id}`, { auth: true }),
     create: (body: MeetingCreate) => request<Meeting>("/api/community", "/api/v1/meetings", json(body)),
+  },
+  minutes: {
+    get: (meetingId: string) =>
+      request<MeetingMinutes>("/api/community", `/api/v1/meetings/${meetingId}/minutes`, { auth: true }),
+    create: (meetingId: string, body: { content: string; recorded_by: string }) =>
+      request<MeetingMinutes>("/api/community", `/api/v1/meetings/${meetingId}/minutes`, json(body)),
+    update: (meetingId: string, body: { content: string }) =>
+      request<MeetingMinutes>("/api/community", `/api/v1/meetings/${meetingId}/minutes`, patch(body)),
+  },
+  decisions: {
+    forMeeting: (meetingId: string) =>
+      request<Decision[]>("/api/community", `/api/v1/meetings/${meetingId}/decisions`, { auth: true }),
+    create: (meetingId: string, body: { description: string }) =>
+      request<Decision>("/api/community", `/api/v1/meetings/${meetingId}/decisions`, json(body)),
+    setStatus: (id: string, status: DecisionStatus) =>
+      request<Decision>("/api/community", `/api/v1/decisions/${id}`, patch({ status })),
   },
   concerns: {
     list: (params: { meeting_id?: string; category?: string; status?: ConcernStatus } = {}) =>

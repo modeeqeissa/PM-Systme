@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.deps import get_session, require_permission
 from app.events import enqueue
-from app.models import Meeting
+from app.models import Community, Meeting
 from app.schemas import MeetingCreate, MeetingOut
 
 router = APIRouter(prefix="/meetings", tags=["meetings"])
@@ -29,6 +29,7 @@ def _actor(claims: dict) -> tuple[str, str]:
     responses={
         401: {"description": "Missing or invalid access token"},
         403: {"description": "Caller lacks community.write"},
+        404: {"description": "community_id does not exist"},
     },
 )
 async def log_meeting(
@@ -36,8 +37,12 @@ async def log_meeting(
     session: AsyncSession = Depends(get_session),
     claims: dict = Depends(require_permission("community.write")),
 ) -> MeetingOut:
+    if payload.community_id is not None and await session.get(Community, payload.community_id) is None:
+        raise HTTPException(status_code=404, detail="community_id does not exist")
+
     meeting = Meeting(
         station_id=payload.station_id,
+        community_id=payload.community_id,
         facilitator_id=payload.facilitator_id,
         meeting_date=payload.meeting_date,
         location=payload.location,
@@ -58,6 +63,7 @@ async def log_meeting(
         payload={
             "meeting_id": str(meeting.id),
             "station_id": str(meeting.station_id),
+            "community_id": str(meeting.community_id) if meeting.community_id else None,
             "facilitator_id": str(meeting.facilitator_id),
             "meeting_date": meeting.meeting_date.isoformat(),
         },
@@ -73,12 +79,15 @@ async def log_meeting(
 )
 async def list_meetings(
     station_id: uuid.UUID | None = Query(default=None),
+    community_id: uuid.UUID | None = Query(default=None),
     session: AsyncSession = Depends(get_session),
     _: dict = Depends(require_permission("community.read")),
 ) -> list[MeetingOut]:
     q = select(Meeting).order_by(Meeting.meeting_date.desc())
     if station_id is not None:
         q = q.where(Meeting.station_id == station_id)
+    if community_id is not None:
+        q = q.where(Meeting.community_id == community_id)
     rows = (await session.scalars(q)).all()
     return [MeetingOut.model_validate(m) for m in rows]
 

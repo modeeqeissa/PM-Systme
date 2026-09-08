@@ -49,6 +49,7 @@ paths:
       security: [{ bearerAuth: [] }]
       parameters:
         - { in: query, name: station_id, schema: { type: string, format: uuid } }
+        - { in: query, name: community_id, schema: { type: string, format: uuid } }
       responses:
         "200":
           description: Meetings
@@ -70,6 +71,241 @@ paths:
         "401": { description: Missing or invalid access token }
         "403": { description: Caller lacks community.read }
         "404": { description: No meeting with that id }
+
+  /meetings/{meeting_id}/minutes:
+    get:
+      summary: Get a meeting's minutes (FR-COMM-01 / docs §9.3.4)
+      description: Requires `community.read`. One formal minutes record per meeting.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { in: path, name: meeting_id, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200": { description: Minutes, content: { application/json: { schema: { $ref: "#/components/schemas/MeetingMinutes" } } } }
+        "401": { description: Missing or invalid access token }
+        "403": { description: Caller lacks community.read }
+        "404": { description: No meeting with that id, or it has no minutes yet }
+    post:
+      summary: Record a meeting's minutes
+      description: >
+        Requires `community.write`. Creates the single minutes record for the
+        meeting; 409 if it already exists (PATCH to edit). Publishes a
+        `MeetingMinutesRecorded` domain event.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { in: path, name: meeting_id, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/MeetingMinutesCreate" }
+      responses:
+        "201": { description: Minutes recorded, content: { application/json: { schema: { $ref: "#/components/schemas/MeetingMinutes" } } } }
+        "401": { description: Missing or invalid access token }
+        "403": { description: Caller lacks community.write }
+        "404": { description: No meeting with that id }
+        "409": { description: This meeting already has minutes — PATCH to edit them }
+    patch:
+      summary: Edit a meeting's minutes
+      description: Requires `community.write`. Publishes a `MeetingMinutesUpdated` domain event.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { in: path, name: meeting_id, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/MeetingMinutesUpdate" }
+      responses:
+        "200": { description: Minutes updated, content: { application/json: { schema: { $ref: "#/components/schemas/MeetingMinutes" } } } }
+        "401": { description: Missing or invalid access token }
+        "403": { description: Caller lacks community.write }
+        "404": { description: No meeting with that id, or it has no minutes yet }
+
+  /meetings/{meeting_id}/decisions:
+    get:
+      summary: List decisions made at a meeting (docs §9.3.4)
+      description: Requires `community.read`.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { in: path, name: meeting_id, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: Decisions
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/Decision" } }
+        "401": { description: Missing or invalid access token }
+        "403": { description: Caller lacks community.read }
+        "404": { description: No meeting with that id }
+    post:
+      summary: Record a formal decision made at a meeting
+      description: >
+        Requires `community.write`. The decision starts `pending`; its
+        lifecycle is driven via `PATCH /decisions/{id}`. Publishes a
+        `DecisionRecorded` domain event.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { in: path, name: meeting_id, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/DecisionCreate" }
+      responses:
+        "201": { description: Decision recorded, content: { application/json: { schema: { $ref: "#/components/schemas/Decision" } } } }
+        "401": { description: Missing or invalid access token }
+        "403": { description: Caller lacks community.write }
+        "404": { description: No meeting with that id }
+
+  /decisions/{decision_id}:
+    get:
+      summary: Get a decision
+      description: Requires `community.read`.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { in: path, name: decision_id, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200": { description: Decision, content: { application/json: { schema: { $ref: "#/components/schemas/Decision" } } } }
+        "401": { description: Missing or invalid access token }
+        "403": { description: Caller lacks community.read }
+        "404": { description: No decision with that id }
+    patch:
+      summary: Update a decision's status (pending / implemented / abandoned)
+      description: Requires `community.write`. Publishes a `DecisionStatusChanged` domain event.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { in: path, name: decision_id, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/DecisionStatusUpdate" }
+      responses:
+        "200": { description: Updated, content: { application/json: { schema: { $ref: "#/components/schemas/Decision" } } } }
+        "401": { description: Missing or invalid access token }
+        "403": { description: Caller lacks community.write }
+        "404": { description: No decision with that id }
+
+  /communities:
+    get:
+      summary: List communities (docs §9.3.4)
+      description: Requires `community.read`. Optionally filtered by `station_id`.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { in: query, name: station_id, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: Communities
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/Community" } }
+        "401": { description: Missing or invalid access token }
+        "403": { description: Caller lacks community.read }
+    post:
+      summary: Create a community
+      description: Requires `community.write`. Publishes a `CommunityCreated` domain event.
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CommunityCreate" }
+      responses:
+        "201": { description: Created, content: { application/json: { schema: { $ref: "#/components/schemas/Community" } } } }
+        "401": { description: Missing or invalid access token }
+        "403": { description: Caller lacks community.write }
+
+  /communities/{community_id}:
+    get:
+      summary: Get a community
+      description: Requires `community.read`.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { in: path, name: community_id, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200": { description: Community, content: { application/json: { schema: { $ref: "#/components/schemas/Community" } } } }
+        "401": { description: Missing or invalid access token }
+        "403": { description: Caller lacks community.read }
+        "404": { description: No community with that id }
+    patch:
+      summary: Update a community (name / description)
+      description: >
+        Requires `community.write`. `station_id` is the ownership anchor and
+        is not editable. Publishes a `CommunityUpdated` domain event.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { in: path, name: community_id, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CommunityUpdate" }
+      responses:
+        "200": { description: Updated, content: { application/json: { schema: { $ref: "#/components/schemas/Community" } } } }
+        "401": { description: Missing or invalid access token }
+        "403": { description: Caller lacks community.write }
+        "404": { description: No community with that id }
+
+  /organizations:
+    get:
+      summary: List partner organizations (docs §9.3.4)
+      description: Requires `community.read`. Optionally filtered by `community_id`.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { in: query, name: community_id, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: Organizations
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/Organization" } }
+        "401": { description: Missing or invalid access token }
+        "403": { description: Caller lacks community.read }
+    post:
+      summary: Create a partner organization
+      description: >
+        Requires `community.write`. `community_id` (optional) must reference an
+        existing community. Publishes an `OrganizationCreated` domain event.
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/OrganizationCreate" }
+      responses:
+        "201": { description: Created, content: { application/json: { schema: { $ref: "#/components/schemas/Organization" } } } }
+        "401": { description: Missing or invalid access token }
+        "403": { description: Caller lacks community.write }
+        "404": { description: community_id does not exist }
+
+  /organizations/{organization_id}:
+    get:
+      summary: Get a partner organization
+      description: Requires `community.read`.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { in: path, name: organization_id, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200": { description: Organization, content: { application/json: { schema: { $ref: "#/components/schemas/Organization" } } } }
+        "401": { description: Missing or invalid access token }
+        "403": { description: Caller lacks community.read }
+        "404": { description: No organization with that id }
+    patch:
+      summary: Update a partner organization
+      description: Requires `community.write`. Publishes an `OrganizationUpdated` domain event.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { in: path, name: organization_id, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/OrganizationUpdate" }
+      responses:
+        "200": { description: Updated, content: { application/json: { schema: { $ref: "#/components/schemas/Organization" } } } }
+        "401": { description: Missing or invalid access token }
+        "403": { description: Caller lacks community.write }
+        "404": { description: No organization with that id, or community_id does not exist }
 
   /concerns:
     post:
@@ -248,6 +484,7 @@ components:
       required: [station_id, facilitator_id, meeting_date, location]
       properties:
         station_id: { type: string, format: uuid }
+        community_id: { type: string, format: uuid, nullable: true, description: "The community this meeting was held with, where applicable (docs §9.3.4)" }
         facilitator_id: { type: string, format: uuid }
         meeting_date: { type: string, format: date }
         location: { type: string }
@@ -258,6 +495,86 @@ components:
         - type: object
           properties:
             id: { type: string, format: uuid }
+
+    CommunityCreate:
+      type: object
+      required: [name, station_id]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 150 }
+        station_id: { type: string, format: uuid }
+        description: { type: string, nullable: true }
+    CommunityUpdate:
+      type: object
+      description: Partial update — station_id is not editable.
+      properties:
+        name: { type: string, minLength: 1, maxLength: 150 }
+        description: { type: string, nullable: true }
+    Community:
+      allOf:
+        - $ref: "#/components/schemas/CommunityCreate"
+        - type: object
+          properties:
+            id: { type: string, format: uuid }
+
+    OrganizationCreate:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 150 }
+        community_id: { type: string, format: uuid, nullable: true }
+        contact_name: { type: string, nullable: true, maxLength: 150 }
+        contact_phone: { type: string, nullable: true, maxLength: 30 }
+    OrganizationUpdate:
+      type: object
+      properties:
+        name: { type: string, minLength: 1, maxLength: 150 }
+        community_id: { type: string, format: uuid, nullable: true }
+        contact_name: { type: string, nullable: true, maxLength: 150 }
+        contact_phone: { type: string, nullable: true, maxLength: 30 }
+    Organization:
+      allOf:
+        - $ref: "#/components/schemas/OrganizationCreate"
+        - type: object
+          properties:
+            id: { type: string, format: uuid }
+
+    MeetingMinutesCreate:
+      type: object
+      required: [content, recorded_by]
+      properties:
+        content: { type: string, minLength: 1 }
+        recorded_by: { type: string, format: uuid }
+    MeetingMinutesUpdate:
+      type: object
+      required: [content]
+      properties:
+        content: { type: string, minLength: 1 }
+    MeetingMinutes:
+      allOf:
+        - $ref: "#/components/schemas/MeetingMinutesCreate"
+        - type: object
+          properties:
+            id: { type: string, format: uuid }
+            meeting_id: { type: string, format: uuid }
+
+    DecisionCreate:
+      type: object
+      required: [description]
+      properties:
+        description: { type: string, minLength: 1 }
+    Decision:
+      allOf:
+        - $ref: "#/components/schemas/DecisionCreate"
+        - type: object
+          properties:
+            id: { type: string, format: uuid }
+            meeting_id: { type: string, format: uuid }
+            status: { type: string, enum: [pending, implemented, abandoned] }
+    DecisionStatusUpdate:
+      type: object
+      required: [status]
+      properties:
+        status: { type: string, enum: [pending, implemented, abandoned] }
 
     ConcernCreate:
       type: object

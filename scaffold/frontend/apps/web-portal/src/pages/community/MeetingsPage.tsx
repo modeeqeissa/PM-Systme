@@ -1,6 +1,6 @@
 import { useState } from "react";
 import type { FormEvent } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Alert, Button, Card, Spinner, TextInput } from "@pmp/ui";
 import { NavBar } from "../../components/NavBar";
@@ -55,10 +55,21 @@ export function MeetingsPage() {
             <Card key={m.id}>
               <div className="flex items-start justify-between">
                 <div>
-                  <h3 className="font-medium text-ink">{m.location}</h3>
+                  <Link
+                    to={`/community/meetings/${m.id}`}
+                    className="font-medium text-ink underline decoration-hair underline-offset-2 hover:decoration-ink-faint"
+                  >
+                    {m.location}
+                  </Link>
                   <p className="text-sm text-ink-faint">
                     {m.meeting_date} · facilitator{" "}
                     <span className="font-mono text-xs">{m.facilitator_id.slice(0, 8)}…</span>
+                    {m.community_id && (
+                      <>
+                        {" · community "}
+                        <span className="font-mono text-xs">{m.community_id.slice(0, 8)}…</span>
+                      </>
+                    )}
                   </p>
                 </div>
                 <span className="font-mono text-xs text-ink-faint">{m.station_id.slice(0, 8)}…</span>
@@ -66,6 +77,12 @@ export function MeetingsPage() {
               {m.attendee_summary && (
                 <p className="mt-2 text-sm text-ink-muted">{m.attendee_summary}</p>
               )}
+              <Link
+                to={`/community/meetings/${m.id}`}
+                className="mt-2 inline-block text-xs text-ink-faint underline"
+              >
+                Minutes &amp; decisions →
+              </Link>
             </Card>
           ))}
         </div>
@@ -79,8 +96,14 @@ function NewMeetingForm() {
   const qc = useQueryClient();
   const claims = currentClaims();
   const [open, setOpen] = useState(false);
+  const communitiesQ = useQuery({
+    queryKey: ["cm-communities"],
+    queryFn: () => community.communities.list(),
+    retry: false,
+  });
   const [form, setForm] = useState({
     station_id: claims?.station_id ?? "",
+    community_id: "",
     facilitator_id: claims?.sub ?? "",
     meeting_date: "",
     location: "",
@@ -101,13 +124,14 @@ function NewMeetingForm() {
     try {
       await community.meetings.create({
         station_id: form.station_id.trim(),
+        community_id: form.community_id || null,
         facilitator_id: form.facilitator_id.trim(),
         meeting_date: form.meeting_date,
         location: form.location.trim(),
         attendee_summary: form.attendee_summary.trim() || null,
       });
       setDone(true);
-      setForm({ ...form, meeting_date: "", location: "", attendee_summary: "" });
+      setForm({ ...form, community_id: "", meeting_date: "", location: "", attendee_summary: "" });
       await qc.invalidateQueries({ queryKey: ["cm-meetings"] });
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) {
@@ -137,6 +161,22 @@ function NewMeetingForm() {
           />
           {done && <Alert variant="info">Meeting logged.</Alert>}
           <TextInput label="Station id" value={form.station_id} onChange={set("station_id")} error={fe.station_id} placeholder="uuid" required />
+          <div className="flex flex-col gap-1">
+            <label htmlFor="mtg-community" className="text-sm font-medium text-ink-muted">
+              Community (optional)
+            </label>
+            <select
+              id="mtg-community"
+              value={form.community_id}
+              onChange={set("community_id")}
+              className="rounded-md border border-hair px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-accent-command/50"
+            >
+              <option value="">— none —</option>
+              {(communitiesQ.data ?? []).map((c) => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </select>
+          </div>
           <TextInput label="Facilitator id" value={form.facilitator_id} onChange={set("facilitator_id")} error={fe.facilitator_id} placeholder="uuid" required />
           <div className="flex flex-col gap-1">
             <label htmlFor="mtg-date" className="text-sm font-medium text-ink-muted">
