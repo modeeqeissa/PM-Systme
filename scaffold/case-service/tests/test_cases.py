@@ -176,13 +176,14 @@ async def test_open_case_links_incident(client, auth_rw):
 
 
 # --- POST /cases/{id}/arrests ---------------------------------------------
-async def test_record_arrest(client, make_case, auth_rw):
+async def test_record_arrest(client, make_case, make_person, auth_rw):
     case = await make_case(status="investigating")
+    suspect = await make_person()
     r = await client.post(
         f"/api/v1/cases/{case.id}/arrests",
         json={
             "officer_id": str(uuid.uuid4()),
-            "suspect_id": str(uuid.uuid4()),
+            "suspect_id": str(suspect.id),
             "arrest_date": "2026-09-03T12:00:00+00:00",
             "legal_basis": "caught in the act",
         },
@@ -191,8 +192,26 @@ async def test_record_arrest(client, make_case, auth_rw):
     assert r.status_code == 201, r.text
     body = r.json()
     assert body["case_id"] == str(case.id)
+    assert body["suspect_id"] == str(suspect.id)
     assert body["legal_basis"] == "caught in the act"
     uuid.UUID(body["id"])
+
+
+async def test_record_arrest_unknown_suspect_404(client, make_case, auth_rw):
+    """suspect_id is a real FK now (docs §9.3.2 revised) — an id with no person
+    behind it is rejected, not silently stored."""
+    case = await make_case(status="investigating")
+    r = await client.post(
+        f"/api/v1/cases/{case.id}/arrests",
+        json={
+            "officer_id": str(uuid.uuid4()),
+            "suspect_id": str(uuid.uuid4()),
+            "arrest_date": "2026-09-03T12:00:00+00:00",
+        },
+        headers=auth_rw,
+    )
+    assert r.status_code == 404
+    assert "person" in r.json()["detail"].lower()
 
 
 async def test_record_arrest_unknown_case_404(client, auth_rw):
@@ -223,9 +242,9 @@ async def test_record_arrest_requires_write(client, make_case, auth_ro):
 
 
 # --- GET /cases/{id}/arrests ------------------------------------------------
-async def test_list_arrests(client, make_case, auth_rw):
+async def test_list_arrests(client, make_case, make_person, auth_rw):
     case = await make_case(status="investigating")
-    suspect_id = str(uuid.uuid4())
+    suspect_id = str((await make_person()).id)
     r = await client.post(
         f"/api/v1/cases/{case.id}/arrests",
         json={
@@ -278,6 +297,54 @@ async def test_record_statement(client, make_case, auth_rw):
     assert body["recorded_by"] == recorded_by
     assert body["party_type"] == "witness"
     uuid.UUID(body["id"])
+
+
+async def test_record_statement_with_person_id(client, make_case, make_person, auth_rw):
+    case = await make_case(status="investigating")
+    person = await make_person()
+    r = await client.post(
+        f"/api/v1/cases/{case.id}/statements",
+        json={
+            "recorded_by": str(uuid.uuid4()),
+            "person_id": str(person.id),
+            "party_type": "witness",
+            "statement_text": "I know the suspect personally.",
+        },
+        headers=auth_rw,
+    )
+    assert r.status_code == 201, r.text
+    assert r.json()["person_id"] == str(person.id)
+
+
+async def test_record_statement_anonymous_person_id_null(client, make_case, auth_rw):
+    case = await make_case(status="investigating")
+    r = await client.post(
+        f"/api/v1/cases/{case.id}/statements",
+        json={
+            "recorded_by": str(uuid.uuid4()),
+            "party_type": "witness",
+            "statement_text": "Anonymous tip.",
+        },
+        headers=auth_rw,
+    )
+    assert r.status_code == 201
+    assert r.json()["person_id"] is None
+
+
+async def test_record_statement_unknown_person_404(client, make_case, auth_rw):
+    case = await make_case(status="investigating")
+    r = await client.post(
+        f"/api/v1/cases/{case.id}/statements",
+        json={
+            "recorded_by": str(uuid.uuid4()),
+            "person_id": str(uuid.uuid4()),
+            "party_type": "witness",
+            "statement_text": "…",
+        },
+        headers=auth_rw,
+    )
+    assert r.status_code == 404
+    assert "person" in r.json()["detail"].lower()
 
 
 async def test_record_statement_unknown_case_404(client, auth_rw):

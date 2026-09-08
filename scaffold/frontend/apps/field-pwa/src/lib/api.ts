@@ -109,6 +109,49 @@ export const cases = {
     raw<CaseRow[]>("/api/case", "/api/v1/cases", { token }).then((r) => r.data),
 };
 
+export interface PersonRow {
+  id: string;
+  first_name: string;
+  last_name: string;
+  date_of_birth: string | null;
+  national_id: string | null;
+  gender: string | null;
+  address: string | null;
+  phone: string | null;
+  notes: string | null;
+  created_at: string;
+}
+
+/**
+ * Person master records (docs §9.3.2). `arrests.suspect_id` is a real FK to
+ * `persons.id` now, and `persons` has no offline idempotency key in the SRS, so
+ * these two calls are **online-only** — the field arrest form resolves or
+ * registers the person before the arrest itself queues.
+ */
+export const persons = {
+  search: (token: string, q: string) =>
+    raw<PersonRow[]>(
+      "/api/case",
+      `/api/v1/persons?q=${encodeURIComponent(q)}&limit=8`,
+      { token },
+    ).then((r) => r.data),
+
+  create: (
+    token: string,
+    body: {
+      first_name: string;
+      last_name: string;
+      date_of_birth?: string | null;
+      national_id?: string | null;
+    },
+  ) =>
+    raw<PersonRow>("/api/case", "/api/v1/persons", {
+      method: "POST",
+      body: JSON.stringify(body),
+      token,
+    }).then((r) => r.data),
+};
+
 /**
  * Send one queued outbox item to its endpoint with its stable Idempotency-Key.
  * 201 (created) and 200 (server already had the key — a replay) both count as

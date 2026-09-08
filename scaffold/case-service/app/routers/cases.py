@@ -15,7 +15,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.deps import get_session, require_permission
 from app.events import enqueue
-from app.models import Arrest, Case, CaseOfficer, CourtProceeding, Incident, Statement
+from app.models import (
+    Arrest,
+    Case,
+    CaseOfficer,
+    CasePerson,
+    CourtProceeding,
+    Incident,
+    Person,
+    Statement,
+)
 from app.schemas import (
     ArrestCreate,
     ArrestOut,
@@ -23,6 +32,9 @@ from app.schemas import (
     CaseOfficerAssign,
     CaseOfficerOut,
     CaseOut,
+    CasePersonCreate,
+    CasePersonOut,
+    CasePersonRole,
     CaseStatus,
     CaseStatusUpdate,
     CourtProceedingCreate,
@@ -282,6 +294,12 @@ async def record_arrest(
         response.status_code = 200
         return ArrestOut.model_validate(existing)
 
+    if await session.get(Person, payload.suspect_id) is None:
+        raise HTTPException(
+            status_code=404,
+            detail="suspect_id does not reference a known person",
+        )
+
     arrest = Arrest(
         case_id=case_id,
         officer_id=payload.officer_id,
@@ -375,9 +393,16 @@ async def record_statement(
         response.status_code = 200
         return StatementOut.model_validate(existing)
 
+    if payload.person_id is not None and await session.get(Person, payload.person_id) is None:
+        raise HTTPException(
+            status_code=404,
+            detail="person_id does not reference a known person",
+        )
+
     statement = Statement(
         case_id=case_id,
         recorded_by=payload.recorded_by,
+        person_id=payload.person_id,
         party_type=payload.party_type.value,
         statement_text=payload.statement_text,
         client_sync_id=idempotency_key,
@@ -404,6 +429,7 @@ async def record_statement(
             "statement_id": str(statement.id),
             "case_id": str(case_id),
             "recorded_by": str(statement.recorded_by),
+            "person_id": str(statement.person_id) if statement.person_id else None,
             "party_type": statement.party_type,
         },
     )
@@ -634,6 +660,175 @@ async def unassign_case_officer(
             "case_id": str(case_id),
             "officer_id": str(officer_id),
             "role_on_case": removed_role,
+        },
+    )
+    return None
+
+
+# --- Persons linked to a case (docs §9.3.2 — case_persons) --------------
+@router.get(
+    "/{case_id}/persons",
+    response_model=list[CasePersonOut],
+    responses={
+        401: {"description": "Missing or invalid access token"},
+        403: {"description": "Caller lacks case.read"},
+        404: {"description": "No case with that id"},
+    },
+)
+async def list_case_persons(
+    case_id: uuid.UUID,
+    session: AsyncSession = Depends(get_session),
+    _: dict = Depends(require_permission("case.read")),
+) -> list[CasePersonOut]:
+    """List the persons linked to a case and the role each holds on it."""
+    case = await session.get(Case, case_id)
+    if case is None:
+        raise HTTPException(status_code=404, detail="No case with that id")
+
+    q = (
+        select(CasePerson)
+        .where(CasePerson.case_id == case_id)
+        .order_by(CasePerson.role, CasePerson.person_id)
+    )
+    rows = (await session.scalars(q)).all()
+    return [CasePersonOut.model_validate(r) for r in rows]
+
+
+@router.post(
+    "/{case_id}/persons",
+    response_model=CasePersonOut,
+    status_code=201,
+    responses={
+        200: {"model": CasePersonOut, "description": "Person already held this role on the case"},
+        401: {"description": "Missing or invalid access token"},
+        403: {"description": "Caller lacks case.write"},
+        404: {"description": "No case with that id, or person_id does not exist"},
+    },
+)
+async def link_case_person(
+    case_id: uuid.UUID,
+    payload: CasePersonCreate,
+    response: Response,
+    session: AsyncSession = Depends(get_session),
+    claims: dict = Depends(require_permission("case.write")),
+) -> CasePersonOut:
+    """Link an existing person to a case with a role (suspect/victim/witness).
+
+    Idempotent on (case, person, role): re-posting the same triple returns the
+    existing link with 200 and emits nothing. The same person may be linked to
+    the case under a different role, and to other cases under any role.
+    """
+    case = await session.get(Case, case_id)
+    if case is None:
+        raise HTTPException(status_code=404, detail="No case with that id")
+    if await session.get(Person, payload.person_id) is None:
+        raise HTTPException(status_code=404, detail="person_id does not reference a known person")
+
+    role = payload.role.value
+    existing = await session.scalar(
+        select(CasePerson).where(
+            CasePerson.case_id == case_id,
+            CasePerson.person_id == payload.person_id,
+            CasePerson.role == role,
+        )
+    )
+    if existing is not None:
+        response.status_code = 200
+        return CasePersonOut.model_validate(existing)
+
+    link = CasePerson(case_id=case_id, person_id=payload.person_id, role=role)
+    session.add(link)
+    try:
+        await session.flush()
+    except IntegrityError:  # concurrent identical link won the race
+        await session.rollback()
+        existing = await session.scalar(
+            select(CasePerson).where(
+                CasePerson.case_id == case_id,
+                CasePerson.person_id == payload.person_id,
+                CasePerson.role == role,
+            )
+        )
+        response.status_code = 200
+        return CasePersonOut.model_validate(existing)
+    await session.refresh(link)
+
+    actor_id, actor_role = _actor(claims)
+    enqueue(
+        session,
+        event_type="PersonLinkedToCase",
+        aggregate_type="case_person",
+        aggregate_id=case_id,
+        actor_id=actor_id,
+        actor_role=actor_role,
+        payload={
+            "case_id": str(case_id),
+            "person_id": str(payload.person_id),
+            "role": role,
+        },
+    )
+    return CasePersonOut.model_validate(link)
+
+
+@router.delete(
+    "/{case_id}/persons/{person_id}",
+    status_code=204,
+    responses={
+        401: {"description": "Missing or invalid access token"},
+        403: {"description": "Caller lacks case.write"},
+        404: {"description": "No case with that id, or the person holds no such link on it"},
+    },
+)
+async def unlink_case_person(
+    case_id: uuid.UUID,
+    person_id: uuid.UUID,
+    role: CasePersonRole | None = Query(
+        default=None,
+        description="Remove only this role's link; omit to remove every link this person holds on the case",
+    ),
+    session: AsyncSession = Depends(get_session),
+    claims: dict = Depends(require_permission("case.write")),
+) -> None:
+    """Unlink a person from a case.
+
+    Hard-deletes the `case_persons` row(s): it is a plain link table (docs
+    §9.3.2) and carries none of the evidentiary weight of custody events. The
+    person master record and any arrests/statements referencing them are
+    untouched. History stays reconstructable from the `PersonLinkedToCase` /
+    `PersonUnlinkedFromCase` audit-log entries.
+    """
+    case = await session.get(Case, case_id)
+    if case is None:
+        raise HTTPException(status_code=404, detail="No case with that id")
+
+    q = select(CasePerson).where(
+        CasePerson.case_id == case_id, CasePerson.person_id == person_id
+    )
+    if role is not None:
+        q = q.where(CasePerson.role == role.value)
+    rows = list((await session.scalars(q)).all())
+    if not rows:
+        raise HTTPException(
+            status_code=404, detail="This person holds no such link on the case"
+        )
+
+    removed_roles = sorted(r.role for r in rows)
+    for r in rows:
+        await session.delete(r)
+    await session.flush()
+
+    actor_id, actor_role = _actor(claims)
+    enqueue(
+        session,
+        event_type="PersonUnlinkedFromCase",
+        aggregate_type="case_person",
+        aggregate_id=case_id,
+        actor_id=actor_id,
+        actor_role=actor_role,
+        payload={
+            "case_id": str(case_id),
+            "person_id": str(person_id),
+            "roles": removed_roles,
         },
     )
     return None

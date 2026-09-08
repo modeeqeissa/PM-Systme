@@ -69,9 +69,14 @@ class PartyType(str, enum.Enum):
 
 
 class StatementCreate(BaseModel):
-    """Request body for POST /cases/{case_id}/statements."""
+    """Request body for POST /cases/{case_id}/statements.
+
+    `person_id` (optional) ties the statement to an identified `persons` record;
+    omit it for an anonymous/unidentified source (docs §9.3.2 revised).
+    """
 
     recorded_by: uuid.UUID
+    person_id: uuid.UUID | None = None
     party_type: PartyType
     statement_text: str
 
@@ -82,6 +87,7 @@ class StatementOut(BaseModel):
     id: uuid.UUID
     case_id: uuid.UUID
     recorded_by: uuid.UUID
+    person_id: uuid.UUID | None = None
     party_type: PartyType
     statement_text: str
     recorded_at: dt.datetime

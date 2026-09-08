@@ -37,6 +37,94 @@ paths:
         "200": { description: Idempotent replay - existing record returned }
         "401": { description: Missing or invalid access token }
         "403": { description: Caller lacks case.write }
+  /persons:
+    get:
+      summary: Search person master records by name / national_id (docs §9.3.2)
+      description: >
+        Requires `case.read`. `q` does a case-insensitive substring match on
+        first or last name; `national_id` is an exact match. With no filter,
+        returns the most recently created persons. Backs the "search existing
+        or create new" flow on the arrest and statement forms and pairs with
+        case search (FR-CASE-08).
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { in: query, name: q, schema: { type: string, minLength: 1, maxLength: 100 } }
+        - { in: query, name: national_id, schema: { type: string, maxLength: 50 } }
+        - { in: query, name: limit, schema: { type: integer, default: 50, minimum: 1, maximum: 200 } }
+        - { in: query, name: offset, schema: { type: integer, default: 0, minimum: 0 } }
+      responses:
+        "200":
+          description: Persons, newest first
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/Person" } }
+        "401": { description: Missing or invalid access token }
+        "403": { description: Caller lacks case.read }
+    post:
+      summary: Create a person master record (docs §9.3.2)
+      description: >
+        Requires `case.write`. `national_id`, when supplied, must be unique —
+        it is the practical de-duplication key. Publishes a `PersonCreated`
+        domain event.
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PersonCreate" }
+      responses:
+        "201": { description: Person created, content: { application/json: { schema: { $ref: "#/components/schemas/Person" } } } }
+        "401": { description: Missing or invalid access token }
+        "403": { description: Caller lacks case.write }
+        "409": { description: national_id already belongs to another person }
+  /persons/{person_id}:
+    get:
+      summary: Retrieve a person master record
+      description: Requires the `case.read` permission.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { in: path, name: person_id, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/Person" } } } }
+        "401": { description: Missing or invalid access token }
+        "403": { description: Caller lacks case.read }
+        "404": { description: No person with that id }
+    patch:
+      summary: Update a person master record (partial)
+      description: >
+        Requires `case.write`. Only fields present in the body are changed.
+        Publishes a `PersonUpdated` domain event carrying the changed field
+        names.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { in: path, name: person_id, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PersonUpdate" }
+      responses:
+        "200": { description: Updated, content: { application/json: { schema: { $ref: "#/components/schemas/Person" } } } }
+        "401": { description: Missing or invalid access token }
+        "403": { description: Caller lacks case.write }
+        "404": { description: No person with that id }
+        "409": { description: national_id already belongs to another person }
+    delete:
+      summary: Delete a person master record
+      description: >
+        Requires `case.approve` — deleting removes an identity other records
+        point at. Blocked with 409 while the person is still referenced by an
+        arrest, a statement, or a `case_persons` link. Publishes a
+        `PersonDeleted` domain event.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { in: path, name: person_id, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "204": { description: Person deleted }
+        "401": { description: Missing or invalid access token }
+        "403": { description: Caller lacks case.approve }
+        "404": { description: No person with that id }
+        "409": { description: Person is still referenced by an arrest, statement or case link }
   /cases:
     get:
       summary: List cases visible to the caller (FR-CASE-03, FR-IAM-04)
@@ -331,6 +419,62 @@ paths:
         "401": { description: Missing or invalid access token }
         "403": { description: Caller lacks case.approve }
         "404": { description: No case with that id, or officer not assigned to it }
+  /cases/{case_id}/persons:
+    get:
+      summary: List persons linked to a case and their role on it (docs §9.3.2)
+      description: Requires the `case.read` permission.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { in: path, name: case_id, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: Links on this case
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/CasePerson" } }
+        "401": { description: Missing or invalid access token }
+        "403": { description: Caller lacks case.read }
+        "404": { description: No case with that id }
+    post:
+      summary: Link an existing person to a case with a role (docs §9.3.2)
+      description: >
+        Requires `case.write`. Idempotent on (case, person, role): a first link
+        returns 201, re-posting the same triple returns 200 and emits nothing.
+        The same person may be linked under a different role, and to other
+        cases. Publishes a `PersonLinkedToCase` domain event.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { in: path, name: case_id, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CasePersonCreate" }
+      responses:
+        "201": { description: Person linked, content: { application/json: { schema: { $ref: "#/components/schemas/CasePerson" } } } }
+        "200": { description: Person already held this role on the case, content: { application/json: { schema: { $ref: "#/components/schemas/CasePerson" } } } }
+        "401": { description: Missing or invalid access token }
+        "403": { description: Caller lacks case.write }
+        "404": { description: No case with that id, or person_id does not exist }
+  /cases/{case_id}/persons/{person_id}:
+    delete:
+      summary: Unlink a person from a case (docs §9.3.2)
+      description: >
+        Requires `case.write`. Pass `role` to remove only that role's link;
+        omit it to remove every link the person holds on the case.
+        Hard-deletes the `case_persons` row(s) and publishes a
+        `PersonUnlinkedFromCase` domain event. The person master record and any
+        arrests/statements referencing them are untouched.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { in: path, name: case_id, required: true, schema: { type: string, format: uuid } }
+        - { in: path, name: person_id, required: true, schema: { type: string, format: uuid } }
+        - { in: query, name: role, schema: { type: string, enum: [suspect, victim, witness] } }
+      responses:
+        "204": { description: Person unlinked }
+        "401": { description: Missing or invalid access token }
+        "403": { description: Caller lacks case.write }
+        "404": { description: No case with that id, or the person holds no such link on it }
 
 components:
   securitySchemes:
@@ -395,6 +539,7 @@ components:
       required: [recorded_by, party_type, statement_text]
       properties:
         recorded_by: { type: string, format: uuid }
+        person_id: { type: string, format: uuid, nullable: true, description: "Identified person; omit for an anonymous/unidentified source" }
         party_type: { type: string, enum: [witness, suspect, victim] }
         statement_text: { type: string }
     Statement:
@@ -405,6 +550,50 @@ components:
             id: { type: string, format: uuid }
             case_id: { type: string, format: uuid }
             recorded_at: { type: string, format: date-time }
+    PersonCreate:
+      type: object
+      required: [first_name, last_name]
+      properties:
+        first_name: { type: string, minLength: 1, maxLength: 100 }
+        last_name: { type: string, minLength: 1, maxLength: 100 }
+        date_of_birth: { type: string, format: date, nullable: true }
+        national_id: { type: string, maxLength: 50, nullable: true, description: "UNIQUE where present — the practical de-duplication key" }
+        gender: { type: string, maxLength: 20, nullable: true }
+        address: { type: string, nullable: true }
+        phone: { type: string, maxLength: 30, nullable: true }
+        notes: { type: string, nullable: true }
+    PersonUpdate:
+      type: object
+      description: Partial update — every field optional; only keys present are applied.
+      properties:
+        first_name: { type: string, minLength: 1, maxLength: 100 }
+        last_name: { type: string, minLength: 1, maxLength: 100 }
+        date_of_birth: { type: string, format: date, nullable: true }
+        national_id: { type: string, maxLength: 50, nullable: true }
+        gender: { type: string, maxLength: 20, nullable: true }
+        address: { type: string, nullable: true }
+        phone: { type: string, maxLength: 30, nullable: true }
+        notes: { type: string, nullable: true }
+    Person:
+      allOf:
+        - $ref: "#/components/schemas/PersonCreate"
+        - type: object
+          properties:
+            id: { type: string, format: uuid }
+            created_at: { type: string, format: date-time }
+    CasePersonCreate:
+      type: object
+      required: [person_id, role]
+      properties:
+        person_id: { type: string, format: uuid }
+        role: { type: string, enum: [suspect, victim, witness] }
+    CasePerson:
+      allOf:
+        - $ref: "#/components/schemas/CasePersonCreate"
+        - type: object
+          properties:
+            id: { type: string, format: uuid }
+            case_id: { type: string, format: uuid }
     CourtProceedingCreate:
       type: object
       required: [hearing_date]

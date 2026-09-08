@@ -8,6 +8,7 @@ from app.models.case import (
     Statement,
 )
 from app.models.incident import Incident
+from app.models.person import CasePerson, Person
 
 __all__ = [
     "Base",
@@ -17,4 +18,6 @@ __all__ = [
     "Arrest",
     "Statement",
     "CourtProceeding",
+    "Person",
+    "CasePerson",
 ]

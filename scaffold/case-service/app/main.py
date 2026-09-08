@@ -14,7 +14,7 @@ from fastapi import FastAPI
 from app import db
 from app.events import OutboxRelay
 from app.events.config import relay_enabled
-from app.routers import cases, incidents
+from app.routers import cases, incidents, persons
 
 API_PREFIX = "/api/v1"
 
@@ -43,6 +43,7 @@ def create_app() -> FastAPI:
 
     app.include_router(incidents.router, prefix=API_PREFIX)
     app.include_router(cases.router, prefix=API_PREFIX)
+    app.include_router(persons.router, prefix=API_PREFIX)
 
     @app.get("/health", tags=["ops"], include_in_schema=False)
     async def health() -> dict[str, str]:

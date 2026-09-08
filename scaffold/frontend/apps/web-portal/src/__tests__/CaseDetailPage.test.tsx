@@ -9,9 +9,11 @@ import {
   type Arrest,
   type Case,
   type CaseOfficer,
+  type CasePerson,
   type CourtProceeding,
   type CustodyEvent,
   type EvidenceItem,
+  type Person,
   type Statement,
 } from "../lib/api";
 import { setToken } from "../lib/auth";
@@ -30,6 +32,12 @@ const recordCourtProceeding = vi.fn();
 const getOfficers = vi.fn();
 const assignOfficer = vi.fn();
 const unassignOfficer = vi.fn();
+const getCasePersons = vi.fn();
+const linkPerson = vi.fn();
+const unlinkPerson = vi.fn();
+const personSearch = vi.fn();
+const personGet = vi.fn();
+const personCreate = vi.fn();
 
 vi.mock("../lib/api", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../lib/api")>();
@@ -47,6 +55,14 @@ vi.mock("../lib/api", async (importOriginal) => {
       officers: (...a: unknown[]) => getOfficers(...a),
       assignOfficer: (...a: unknown[]) => assignOfficer(...a),
       unassignOfficer: (...a: unknown[]) => unassignOfficer(...a),
+      persons: (...a: unknown[]) => getCasePersons(...a),
+      linkPerson: (...a: unknown[]) => linkPerson(...a),
+      unlinkPerson: (...a: unknown[]) => unlinkPerson(...a),
+    },
+    persons: {
+      search: (...a: unknown[]) => personSearch(...a),
+      get: (...a: unknown[]) => personGet(...a),
+      create: (...a: unknown[]) => personCreate(...a),
     },
     evidence: {
       create: (...a: unknown[]) => createEvidence(...a),
@@ -60,6 +76,32 @@ const SUB = "11111111-1111-4111-8111-111111111111";
 const CASE_ID = "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
 const EV_ID = "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee";
 const SUSPECT_ID = "99999999-9999-4999-8999-999999999999";
+
+function personRec(over: Partial<Person> = {}): Person {
+  return {
+    id: SUSPECT_ID,
+    first_name: "Mory",
+    last_name: "Kante",
+    date_of_birth: "1985-03-04",
+    national_id: "NID-777",
+    gender: null,
+    address: null,
+    phone: null,
+    notes: null,
+    created_at: "2026-09-01T00:00:00Z",
+    ...over,
+  };
+}
+
+function casePersonLink(over: Partial<CasePerson> = {}): CasePerson {
+  return {
+    id: "1a1a1a1a-1a1a-4a1a-8a1a-1a1a1a1a1a1a",
+    case_id: CASE_ID,
+    person_id: SUSPECT_ID,
+    role: "suspect",
+    ...over,
+  };
+}
 
 function theCase(over: Partial<Case> = {}): Case {
   return {
@@ -120,6 +162,7 @@ function statement(over: Partial<Statement> = {}): Statement {
     id: "ssssssss-ssss-4sss-8sss-ssssssssssss",
     case_id: CASE_ID,
     recorded_by: SUB,
+    person_id: null,
     party_type: "witness",
     statement_text: "I saw the suspect leave through the back door.",
     recorded_at: "2026-09-05T10:05:00Z",
@@ -177,6 +220,12 @@ beforeEach(() => {
   getOfficers.mockReset();
   assignOfficer.mockReset();
   unassignOfficer.mockReset();
+  getCasePersons.mockReset();
+  linkPerson.mockReset();
+  unlinkPerson.mockReset();
+  personSearch.mockReset();
+  personGet.mockReset();
+  personCreate.mockReset();
   setToken(fakeJwt({ sub: SUB, badge_number: "OFF-9" }));
   getCase.mockResolvedValue(theCase());
   getCustody.mockResolvedValue([custodyEvent()]);
@@ -184,7 +233,24 @@ beforeEach(() => {
   getStatements.mockResolvedValue([]);
   getCourtProceedings.mockResolvedValue([]);
   getOfficers.mockResolvedValue([]);
+  getCasePersons.mockResolvedValue([]);
+  personSearch.mockResolvedValue([]);
+  personGet.mockResolvedValue(personRec());
 });
+
+async function pickPerson(
+  user: ReturnType<typeof userEvent.setup>,
+  label: string | RegExp,
+  person: Person = personRec(),
+) {
+  personSearch.mockResolvedValue([person]);
+  await user.type(screen.getByLabelText(label), person.last_name);
+  await user.click(
+    await screen.findByRole("button", {
+      name: new RegExp(`${person.last_name}, ${person.first_name}`),
+    }),
+  );
+}
 
 async function addEvidence(user: ReturnType<typeof userEvent.setup>, withFile = true) {
   await user.type(screen.getByLabelText("Item type"), "digital_file");
@@ -430,7 +496,7 @@ describe("CaseDetailPage", () => {
 
   describe("record arrest", () => {
     async function fillAndSubmit(user: ReturnType<typeof userEvent.setup>) {
-      await user.type(screen.getByLabelText("Suspect id"), SUSPECT_ID);
+      await pickPerson(user, "Suspect");
       await user.type(screen.getByLabelText("Location"), "Central Market");
       await user.type(screen.getByLabelText("Legal basis"), "caught in the act");
       await user.click(screen.getByRole("button", { name: "Record arrest" }));
@@ -582,6 +648,136 @@ describe("CaseDetailPage", () => {
       renderPage();
       expect(
         await screen.findByText(/permission to view statements/i),
+      ).toBeInTheDocument();
+    });
+
+    it("attaches a picked person_id to the statement", async () => {
+      const user = userEvent.setup();
+      recordStatement.mockResolvedValue(statement({ person_id: SUSPECT_ID }));
+      renderPage();
+      await screen.findByText("CASE-2026-000010");
+
+      await pickPerson(user, "Linked person (optional)");
+      await user.selectOptions(screen.getByLabelText("Party type"), "suspect");
+      await user.type(screen.getByLabelText("Statement"), "I did not do it.");
+      await user.click(screen.getByRole("button", { name: "Record statement" }));
+
+      expect(recordStatement).toHaveBeenCalledTimes(1);
+      const [, body] = recordStatement.mock.calls[0];
+      expect(body.person_id).toBe(SUSPECT_ID);
+      expect(body.party_type).toBe("suspect");
+    });
+
+    it("sends person_id: null for an anonymous statement", async () => {
+      const user = userEvent.setup();
+      recordStatement.mockResolvedValue(statement());
+      renderPage();
+      await screen.findByText("CASE-2026-000010");
+
+      await user.selectOptions(screen.getByLabelText("Party type"), "witness");
+      await user.type(screen.getByLabelText("Statement"), "An anonymous tip.");
+      await user.click(screen.getByRole("button", { name: "Record statement" }));
+
+      const [, body] = recordStatement.mock.calls[0];
+      expect(body.person_id).toBeNull();
+    });
+  });
+
+  describe("people on this case (case_persons)", () => {
+    async function linkAndSubmit(
+      user: ReturnType<typeof userEvent.setup>,
+      role = "victim",
+    ) {
+      await pickPerson(user, "Person");
+      await user.selectOptions(screen.getByLabelText("Role on this case"), role);
+      await user.click(screen.getByRole("button", { name: "Link person" }));
+    }
+
+    it("lists people already linked, with their role", async () => {
+      getCasePersons.mockResolvedValue([
+        casePersonLink({ role: "suspect" }),
+        casePersonLink({
+          id: "2b2b2b2b-2b2b-4b2b-8b2b-2b2b2b2b2b2b",
+          person_id: "88888888-8888-4888-8888-888888888888",
+          role: "witness",
+        }),
+      ]);
+      renderPage();
+      const first = (await screen.findByText(SUSPECT_ID)).closest("li")!;
+      expect(within(first).getByText("Suspect")).toBeInTheDocument();
+      const second = screen
+        .getByText("88888888-8888-4888-8888-888888888888")
+        .closest("li")!;
+      expect(within(second).getByText("Witness")).toBeInTheDocument();
+      expect(getCasePersons).toHaveBeenCalledWith(CASE_ID);
+    });
+
+    it("shows an empty state with no linked people", async () => {
+      renderPage();
+      expect(
+        await screen.findByText("No people linked to this case yet."),
+      ).toBeInTheDocument();
+    });
+
+    it("POSTs person_id + role and refetches the list", async () => {
+      const user = userEvent.setup();
+      linkPerson.mockResolvedValue(casePersonLink({ role: "victim" }));
+      renderPage();
+      await screen.findByText("CASE-2026-000010");
+
+      getCasePersons.mockResolvedValue([casePersonLink({ role: "victim" })]);
+      await linkAndSubmit(user, "victim");
+
+      expect(linkPerson).toHaveBeenCalledTimes(1);
+      const [postedCaseId, body] = linkPerson.mock.calls[0];
+      expect(postedCaseId).toBe(CASE_ID);
+      expect(body).toEqual({ person_id: SUSPECT_ID, role: "victim" });
+    });
+
+    it("blocks submit with a field error when no person is picked", async () => {
+      const user = userEvent.setup();
+      renderPage();
+      await screen.findByText("CASE-2026-000010");
+      await user.click(screen.getByRole("button", { name: "Link person" }));
+      expect(
+        await screen.findByText("Select or create a person"),
+      ).toBeInTheDocument();
+      expect(linkPerson).not.toHaveBeenCalled();
+    });
+
+    it("unlinks a person for a specific role via DELETE and refetches", async () => {
+      const user = userEvent.setup();
+      getCasePersons.mockResolvedValue([casePersonLink({ role: "suspect" })]);
+      unlinkPerson.mockResolvedValue(undefined);
+      renderPage();
+      await screen.findByText(SUSPECT_ID);
+
+      getCasePersons.mockResolvedValue([]);
+      await user.click(screen.getByRole("button", { name: "Unlink" }));
+
+      expect(unlinkPerson).toHaveBeenCalledWith(CASE_ID, SUSPECT_ID, "suspect");
+      expect(
+        await screen.findByText("No people linked to this case yet."),
+      ).toBeInTheDocument();
+    });
+
+    it("surfaces a 403 with a clear case.write message", async () => {
+      const user = userEvent.setup();
+      linkPerson.mockRejectedValue(new ApiError(403, "RBAC scope denied"));
+      renderPage();
+      await screen.findByText("CASE-2026-000010");
+      await linkAndSubmit(user);
+      expect(
+        await screen.findByText(/can't change who is linked to this case/i),
+      ).toBeInTheDocument();
+    });
+
+    it("surfaces a 403 fetching the linked-people list", async () => {
+      getCasePersons.mockReset();
+      getCasePersons.mockRejectedValue(new ApiError(403, "RBAC scope denied"));
+      renderPage();
+      expect(
+        await screen.findByText(/permission to view linked people/i),
       ).toBeInTheDocument();
     });
   });

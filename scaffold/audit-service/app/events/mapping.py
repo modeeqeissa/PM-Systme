@@ -14,6 +14,14 @@ EVENT_MAP: dict[str, tuple[str, str, str]] = {
     # case_id (officer_id + role_on_case ride along in metadata.payload).
     "CaseOfficerAssigned": ("case_officer", "create", "case_id"),
     "CaseOfficerUnassigned": ("case_officer", "delete", "case_id"),
+    # docs §9.3.2 — person master records (suspects/victims/witnesses). PII, so
+    # every mutation is audited (CLAUDE.md rule 3). Link/unlink key on case_id;
+    # person_id + role ride along in metadata.payload.
+    "PersonCreated": ("person", "create", "person_id"),
+    "PersonUpdated": ("person", "update", "person_id"),
+    "PersonDeleted": ("person", "delete", "person_id"),
+    "PersonLinkedToCase": ("case_person", "create", "case_id"),
+    "PersonUnlinkedFromCase": ("case_person", "delete", "case_id"),
     "EvidenceLogged": ("evidence_item", "create", "evidence_id"),
     "CustodyEventRecorded": ("custody_event", "create", "custody_event_id"),
     # a verification read that found tampering

@@ -67,8 +67,11 @@ async def test_failed_status_transition_writes_no_outbox_row(client, make_case, 
     assert await _outbox_rows("CaseStatusChanged") == []  # rolled back with the write
 
 
-async def test_status_change_and_arrest_enqueue_events(client, make_case, auth_rw):
+async def test_status_change_and_arrest_enqueue_events(
+    client, make_case, make_person, auth_rw
+):
     case = await make_case(status="open")
+    suspect = await make_person()
     r = await client.patch(
         f"/api/v1/cases/{case.id}/status",
         json={"status": "investigating"},
@@ -79,7 +82,7 @@ async def test_status_change_and_arrest_enqueue_events(client, make_case, auth_r
         f"/api/v1/cases/{case.id}/arrests",
         json={
             "officer_id": str(uuid.uuid4()),
-            "suspect_id": str(uuid.uuid4()),
+            "suspect_id": str(suspect.id),
             "arrest_date": "2026-09-03T12:00:00+00:00",
         },
         headers=auth_rw,

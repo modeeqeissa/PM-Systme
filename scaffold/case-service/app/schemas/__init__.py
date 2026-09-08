@@ -14,6 +14,14 @@ from app.schemas.case import (
     StatementOut,
 )
 from app.schemas.incident import IncidentCreate, IncidentOut
+from app.schemas.person import (
+    CasePersonCreate,
+    CasePersonOut,
+    CasePersonRole,
+    PersonCreate,
+    PersonOut,
+    PersonUpdate,
+)
 
 __all__ = [
     "IncidentCreate",
@@ -31,4 +39,10 @@ __all__ = [
     "StatementOut",
     "CourtProceedingCreate",
     "CourtProceedingOut",
+    "PersonCreate",
+    "PersonUpdate",
+    "PersonOut",
+    "CasePersonCreate",
+    "CasePersonOut",
+    "CasePersonRole",
 ]

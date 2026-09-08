@@ -13,7 +13,7 @@ matching the established pattern.
 | Service | Port | Database | Migration head | Status | FR / schema §§ |
 |---|---|---|---|---|---|
 | iam-service | 8001 | identity_db | 0002 | **built** | 4.1 / 9.3.1 |
-| case-service | 8002 | case_db | 0002 | **built** | 4.2 / 9.3.2 |
+| case-service | 8002 | case_db | 0004 | **built** | 4.2 / 9.3.2 |
 | evidence-service | 8003 | evidence_db | 0002 | **built** | 4.3 / 9.3.3 |
 | community-service | 8004 | community_db | 0001 | stub (schema only) | 4.4 / 9.3.4 |
 | training-service | 8005 | training_db | 0001 | stub (schema only) | 4.5 / 9.3.5 |
@@ -39,7 +39,10 @@ for Phase 1.
 ## Kafka topics (built services only)
 
 Producers (transactional outbox → `app/events/relay.py`):
-- case-service: `incident.reported`, `case.opened`, `case.status_changed`, `case.arrest_recorded`
+- case-service: `incident.reported`, `case.opened`, `case.status_changed`, `case.arrest_recorded`,
+  `case.statement_recorded`, `case.court_proceeding_recorded`, `case.officer_assigned`,
+  `case.officer_unassigned`, `case.person_created`, `case.person_updated`, `case.person_deleted`,
+  `case.person_linked`, `case.person_unlinked`
 - evidence-service: `evidence.logged`, `evidence.custody_recorded`, `evidence.hash_mismatch`
 
 Consumers (idempotent on `event_id`):

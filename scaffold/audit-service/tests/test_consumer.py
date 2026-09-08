@@ -51,6 +51,21 @@ async def test_all_event_types_map_to_expected_entity_and_action(client, emit, c
         "CaseOfficerUnassigned",
         {"case_id": str(uuid.uuid4()), "officer_id": str(uuid.uuid4()), "role_on_case": "support"},
     )
+    # docs §9.3.2 — person master records
+    await emit("PersonCreated", {"person_id": str(uuid.uuid4())})
+    await emit(
+        "PersonUpdated",
+        {"person_id": str(uuid.uuid4()), "changed_fields": ["phone"]},
+    )
+    await emit("PersonDeleted", {"person_id": str(uuid.uuid4())})
+    await emit(
+        "PersonLinkedToCase",
+        {"case_id": str(uuid.uuid4()), "person_id": str(uuid.uuid4()), "role": "suspect"},
+    )
+    await emit(
+        "PersonUnlinkedFromCase",
+        {"case_id": str(uuid.uuid4()), "person_id": str(uuid.uuid4()), "roles": ["suspect"]},
+    )
     await emit("EvidenceLogged", {"evidence_id": str(uuid.uuid4())}, service="evidence-service")
     await emit("CustodyEventRecorded", {"custody_event_id": 7}, service="evidence-service")
     await emit(
@@ -173,7 +188,7 @@ async def test_all_event_types_map_to_expected_entity_and_action(client, emit, c
         service="integration-gateway-service",
     )
 
-    assert await consumer.process_available() == 51
+    assert await consumer.process_available() == 56
     rows = await _audit_rows()
     seen = {(r.entity_type, r.action) for r in rows}
     assert seen == {
@@ -184,6 +199,11 @@ async def test_all_event_types_map_to_expected_entity_and_action(client, emit, c
         ("court_proceeding", "create"),
         ("case_officer", "create"),
         ("case_officer", "delete"),
+        ("person", "create"),
+        ("person", "update"),
+        ("person", "delete"),
+        ("case_person", "create"),
+        ("case_person", "delete"),
         ("evidence_item", "create"),
         ("custody_event", "create"),
         ("evidence_item", "read"),   # hash-mismatch detection

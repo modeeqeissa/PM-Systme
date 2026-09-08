@@ -50,7 +50,11 @@ class Arrest(Base):
         UUID(as_uuid=True), ForeignKey("cases.id"), nullable=False
     )
     officer_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
-    suspect_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    # Real FK to persons.id since migration 0004 (docs §9.3.2 revised) — the
+    # arrested individual is a master person record, not a bare UUID.
+    suspect_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("persons.id"), nullable=False
+    )
     arrest_date: Mapped[dt.datetime] = mapped_column(
         DateTime(timezone=True), nullable=False
     )
@@ -70,6 +74,12 @@ class Statement(Base):
         UUID(as_uuid=True), ForeignKey("cases.id"), nullable=False
     )
     recorded_by: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    # Nullable FK to persons.id since migration 0004 — a statement can be tied to
+    # an identified person, or left NULL for an anonymous/unidentified source
+    # (docs §9.3.2 revised). `party_type` stays required regardless.
+    person_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("persons.id")
+    )
     party_type: Mapped[str] = mapped_column(String(20), nullable=False)
     statement_text: Mapped[str] = mapped_column(Text, nullable=False)
     recorded_at: Mapped[dt.datetime] = mapped_column(

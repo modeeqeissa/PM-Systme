@@ -10,6 +10,8 @@ import {
   validationErrors,
   type Arrest,
   type CaseOfficer,
+  type CasePerson,
+  type CasePersonRole,
   type CourtProceeding,
   type CustodyEvent,
   type EvidenceItem,
@@ -17,8 +19,15 @@ import {
   type PartyType,
   type Statement,
 } from "../lib/api";
+import { PersonPicker } from "../components/PersonPicker";
 import { currentClaims } from "../lib/auth";
 import { localInputToIso, toLocalInputValue } from "../lib/datetime";
+
+const CASE_PERSON_ROLE_LABEL: Record<CasePersonRole, string> = {
+  suspect: "Suspect",
+  victim: "Victim",
+  witness: "Witness",
+};
 
 const STATUS_LABEL: Record<string, string> = {
   open: "Open",
@@ -112,6 +121,8 @@ export function CaseDetailPage() {
           </Card>
 
           <AssignedOfficersSection caseId={query.data.id} />
+
+          <CasePersonsSection caseId={query.data.id} />
 
           <ArrestsSection caseId={query.data.id} />
 
@@ -294,6 +305,171 @@ function AssignedOfficersSection({ caseId }: { caseId: string }) {
   );
 }
 
+// --- People on this case (case_persons, docs §9.3.2) -------------------
+function CasePersonsSection({ caseId }: { caseId: string }) {
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+
+  const linksQuery = useQuery({
+    queryKey: ["case-persons", caseId],
+    queryFn: () => casesApi.persons(caseId),
+    retry: (n, err) => !(err instanceof ApiError) && n < 2,
+  });
+
+  const [personId, setPersonId] = useState<string | null>(null);
+  const [role, setRole] = useState<CasePersonRole>("suspect");
+  const [busy, setBusy] = useState(false);
+  const [problem, setProblem] = useState<Problem | null>(null);
+  const [removingKey, setRemovingKey] = useState<string | null>(null);
+
+  const fieldErr = problem?.kind === "validation" ? problem.fields : {};
+
+  if (linksQuery.error instanceof ApiError && linksQuery.error.status === 401) {
+    navigate("/login", { replace: true });
+    return null;
+  }
+
+  async function submit(e: FormEvent) {
+    e.preventDefault();
+    if (!personId) {
+      setProblem({ kind: "validation", fields: { person_id: "Select or create a person" } });
+      return;
+    }
+    setProblem(null);
+    setBusy(true);
+    try {
+      await casesApi.linkPerson(caseId, { person_id: personId, role });
+      await queryClient.invalidateQueries({ queryKey: ["case-persons", caseId] });
+      setPersonId(null);
+      setRole("suspect");
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 401) {
+        navigate("/login", { replace: true });
+        return;
+      }
+      setProblem(classify(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function unlink(link: CasePerson) {
+    setProblem(null);
+    setRemovingKey(link.id);
+    try {
+      await casesApi.unlinkPerson(caseId, link.person_id, link.role);
+      await queryClient.invalidateQueries({ queryKey: ["case-persons", caseId] });
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 401) {
+        navigate("/login", { replace: true });
+        return;
+      }
+      setProblem(classify(err));
+    } finally {
+      setRemovingKey(null);
+    }
+  }
+
+  return (
+    <Card className="mb-6">
+      <h2 className="text-lg font-semibold text-ink">People on this case</h2>
+      <p className="mb-4 text-sm text-ink-faint">
+        docs §9.3.2 — links a person master record to this case as a{" "}
+        <code>suspect</code>, <code>victim</code>, or <code>witness</code>. The
+        same person can hold different roles across cases. Linking and unlinking
+        is a case-write action.
+      </p>
+
+      {problem?.kind === "forbidden" && (
+        <div className="mb-4">
+          <Alert variant="error">
+            Your role can't change who is linked to this case. This needs the{" "}
+            <code>case.write</code> permission.
+          </Alert>
+        </div>
+      )}
+      {problem?.kind === "network" && (
+        <div className="mb-4">
+          <Alert variant="error">Couldn't reach case-service. Try again.</Alert>
+        </div>
+      )}
+      {problem?.kind === "other" && (
+        <div className="mb-4">
+          <Alert variant="error">{problem.message}</Alert>
+        </div>
+      )}
+
+      <form onSubmit={submit} className="flex flex-col gap-4">
+        <PersonPicker
+          label="Person"
+          required
+          value={personId}
+          onChange={(id) => setPersonId(id)}
+          error={fieldErr.person_id}
+          idPrefix="case-person"
+        />
+        <div className="flex flex-col gap-1">
+          <label htmlFor="case-person-role" className="text-sm font-medium text-ink-muted">
+            Role on this case
+          </label>
+          <select
+            id="case-person-role"
+            value={role}
+            onChange={(e) => setRole(e.target.value as CasePersonRole)}
+            className="rounded-md border border-hair px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-accent-command/50"
+          >
+            <option value="suspect">Suspect</option>
+            <option value="victim">Victim</option>
+            <option value="witness">Witness</option>
+          </select>
+        </div>
+        <div>
+          <Button type="submit" loading={busy}>
+            Link person
+          </Button>
+        </div>
+      </form>
+
+      <h3 className="mb-2 mt-6 text-xs font-medium uppercase tracking-wide text-ink-faint">
+        Linked people
+      </h3>
+      {linksQuery.isLoading && <Spinner label="Loading linked people…" />}
+      {linksQuery.error instanceof ApiError && linksQuery.error.status === 403 && (
+        <Alert variant="error">
+          Needs the <code>case.read</code> permission to view linked people.
+        </Alert>
+      )}
+      {linksQuery.data && linksQuery.data.length === 0 && (
+        <p className="text-sm text-ink-faint">No people linked to this case yet.</p>
+      )}
+      {linksQuery.data && linksQuery.data.length > 0 && (
+        <ul className="flex flex-col gap-3">
+          {linksQuery.data.map((link) => (
+            <li
+              key={link.id}
+              className="flex items-center justify-between border-b border-hair pb-2 text-sm last:border-0"
+            >
+              <span>
+                <span className="font-mono text-xs">{link.person_id}</span>
+                <span className="ml-2 rounded-full bg-surface-2 px-2 py-0.5 text-xs font-medium text-ink-muted">
+                  {CASE_PERSON_ROLE_LABEL[link.role]}
+                </span>
+              </span>
+              <Button
+                variant="secondary"
+                onClick={() => unlink(link)}
+                loading={removingKey === link.id}
+              >
+                Unlink
+              </Button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </Card>
+  );
+}
+
 // --- Record arrest -------------------------------------------------------
 function ArrestsSection({ caseId }: { caseId: string }) {
   const navigate = useNavigate();
@@ -306,7 +482,7 @@ function ArrestsSection({ caseId }: { caseId: string }) {
     retry: (n, err) => !(err instanceof ApiError) && n < 2,
   });
 
-  const [suspectId, setSuspectId] = useState("");
+  const [suspectId, setSuspectId] = useState<string | null>(null);
   const [arrestDate, setArrestDate] = useState(() => toLocalInputValue(new Date()));
   const [location, setLocation] = useState("");
   const [legalBasis, setLegalBasis] = useState("");
@@ -324,13 +500,17 @@ function ArrestsSection({ caseId }: { caseId: string }) {
   async function submit(e: FormEvent) {
     e.preventDefault();
     if (!claims) return;
+    if (!suspectId) {
+      setProblem({ kind: "validation", fields: { suspect_id: "Select or create the arrested person" } });
+      return;
+    }
     setProblem(null);
     setJustAdded(null);
     setBusy(true);
     try {
       const arrest = await casesApi.recordArrest(caseId, {
         officer_id: claims.sub,
-        suspect_id: suspectId.trim(),
+        suspect_id: suspectId,
         arrest_date: localInputToIso(arrestDate),
         location: location.trim() || null,
         legal_basis: legalBasis.trim() || null,
@@ -340,7 +520,7 @@ function ArrestsSection({ caseId }: { caseId: string }) {
         arrest,
         ...(prev ?? []),
       ]);
-      setSuspectId("");
+      setSuspectId(null);
       setArrestDate(toLocalInputValue(new Date()));
       setLocation("");
       setLegalBasis("");
@@ -391,13 +571,13 @@ function ArrestsSection({ caseId }: { caseId: string }) {
       )}
 
       <form onSubmit={submit} className="flex flex-col gap-4">
-        <TextInput
-          label="Suspect id"
-          value={suspectId}
-          onChange={(e) => setSuspectId(e.target.value)}
-          error={fieldErr.suspect_id}
-          placeholder="uuid"
+        <PersonPicker
+          label="Suspect"
           required
+          value={suspectId}
+          onChange={(id) => setSuspectId(id)}
+          error={fieldErr.suspect_id}
+          idPrefix="arrest-suspect"
         />
         <div className="flex flex-col gap-1">
           <label htmlFor="arrest-date" className="text-sm font-medium text-ink-muted">
@@ -491,6 +671,7 @@ function StatementsSection({ caseId }: { caseId: string }) {
   });
 
   const [partyType, setPartyType] = useState<PartyType>("witness");
+  const [personId, setPersonId] = useState<string | null>(null);
   const [statementText, setStatementText] = useState("");
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<Problem | null>(null);
@@ -512,6 +693,7 @@ function StatementsSection({ caseId }: { caseId: string }) {
     try {
       const statement = await casesApi.recordStatement(caseId, {
         recorded_by: claims.sub,
+        person_id: personId,
         party_type: partyType,
         statement_text: statementText.trim(),
       });
@@ -521,6 +703,7 @@ function StatementsSection({ caseId }: { caseId: string }) {
         ...(prev ?? []),
       ]);
       setPartyType("witness");
+      setPersonId(null);
       setStatementText("");
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) {
@@ -582,6 +765,12 @@ function StatementsSection({ caseId }: { caseId: string }) {
             <option value="victim">Victim</option>
           </select>
         </div>
+        <PersonPicker
+          label="Linked person (optional)"
+          value={personId}
+          onChange={(id) => setPersonId(id)}
+          idPrefix="statement-person"
+        />
         <div className="flex flex-col gap-1">
           <label htmlFor="statement-text" className="text-sm font-medium text-ink-muted">
             Statement

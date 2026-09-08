@@ -99,7 +99,7 @@ _db.SessionLocal = SessionLocal
 
 from app.events import OutboxRelay, topic_for  # noqa: E402
 from app.main import app  # noqa: E402
-from app.models import Case  # noqa: E402
+from app.models import Case, Person  # noqa: E402
 
 # badge -> (seeded role, granted case.* permissions)
 _E2E_USERS = {
@@ -274,7 +274,8 @@ async def _clean_tables():
     async with engine.begin() as conn:
         await conn.execute(
             text("TRUNCATE cases, incidents, case_officers, arrests, statements, "
-                 "court_proceedings, outbox_events RESTART IDENTITY CASCADE")
+                 "court_proceedings, persons, case_persons, outbox_events "
+                 "RESTART IDENTITY CASCADE")
         )
     yield
 
@@ -328,6 +329,30 @@ def read_kafka():
         return out
 
     return _read
+
+
+@pytest_asyncio.fixture
+async def make_person():
+    """Insert a person row directly (bypasses the API / its audit event)."""
+
+    async def _make(**overrides) -> Person:
+        async with SessionLocal() as session:
+            person = Person(
+                first_name=overrides.get("first_name", "Test"),
+                last_name=overrides.get("last_name", f"Person-{uuid.uuid4().hex[:8]}"),
+                date_of_birth=overrides.get("date_of_birth"),
+                national_id=overrides.get("national_id"),
+                gender=overrides.get("gender"),
+                address=overrides.get("address"),
+                phone=overrides.get("phone"),
+                notes=overrides.get("notes"),
+            )
+            session.add(person)
+            await session.commit()
+            await session.refresh(person)
+            return person
+
+    return _make
 
 
 @pytest_asyncio.fixture

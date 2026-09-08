@@ -11,6 +11,11 @@ _TOPICS = {
     "CourtProceedingRecorded": "case.court_proceeding_recorded",
     "CaseOfficerAssigned": "case.officer_assigned",
     "CaseOfficerUnassigned": "case.officer_unassigned",
+    "PersonCreated": "case.person_created",
+    "PersonUpdated": "case.person_updated",
+    "PersonDeleted": "case.person_deleted",
+    "PersonLinkedToCase": "case.person_linked",
+    "PersonUnlinkedFromCase": "case.person_unlinked",
 }
 
 ALL_TOPICS = tuple(_TOPICS.values())

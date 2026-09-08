@@ -212,6 +212,8 @@ export type PartyType = "witness" | "suspect" | "victim";
 
 export interface StatementCreate {
   recorded_by: string;
+  /** Identified person; omit for an anonymous/unidentified source. */
+  person_id?: string | null;
   party_type: PartyType;
   statement_text: string;
 }
@@ -219,7 +221,34 @@ export interface StatementCreate {
 export interface Statement extends StatementCreate {
   id: string;
   case_id: string;
+  person_id: string | null;
   recorded_at: string;
+}
+
+// --- persons (case_db master records, docs §9.3.2) --------------------
+export type CasePersonRole = "suspect" | "victim" | "witness";
+
+export interface PersonCreate {
+  first_name: string;
+  last_name: string;
+  date_of_birth?: string | null;
+  national_id?: string | null;
+  gender?: string | null;
+  address?: string | null;
+  phone?: string | null;
+  notes?: string | null;
+}
+
+export interface Person extends PersonCreate {
+  id: string;
+  created_at: string;
+}
+
+export interface CasePerson {
+  id: string;
+  case_id: string;
+  person_id: string;
+  role: CasePersonRole;
 }
 
 export interface CourtProceedingCreate {
@@ -335,6 +364,60 @@ export const cases = {
       `/api/v1/cases/${caseId}/officers/${officerId}`,
       { method: "DELETE", auth: true },
     ),
+
+  /** GET /cases/{id}/persons — persons linked to a case and their role (docs §9.3.2). */
+  persons: (caseId: string) =>
+    request<CasePerson[]>("/api/case", `/api/v1/cases/${caseId}/persons`, { auth: true }),
+
+  /** POST /cases/{id}/persons — link an existing person with a role. Idempotent
+   * on (case, person, role). Publishes `PersonLinkedToCase`. Requires `case.write`. */
+  linkPerson: (caseId: string, body: { person_id: string; role: CasePersonRole }) =>
+    request<CasePerson>("/api/case", `/api/v1/cases/${caseId}/persons`, {
+      method: "POST",
+      body: JSON.stringify(body),
+      auth: true,
+    }),
+
+  /** DELETE /cases/{id}/persons/{personId} — unlink a person. Pass `role` to
+   * remove just that role; omit to remove every link. Publishes
+   * `PersonUnlinkedFromCase`. Requires `case.write`. */
+  unlinkPerson: (caseId: string, personId: string, role?: CasePersonRole) =>
+    request<void>(
+      "/api/case",
+      `/api/v1/cases/${caseId}/persons/${personId}${role ? `?role=${role}` : ""}`,
+      { method: "DELETE", auth: true },
+    ),
+};
+
+// --- persons (case-service, docs §9.3.2) -----------------------------
+export const persons = {
+  /** GET /persons — substring name match on `q`, exact match on `national_id`.
+   * Requires `case.read`. */
+  search: (params: { q?: string; national_id?: string; limit?: number } = {}) =>
+    request<Person[]>("/api/case", `/api/v1/persons${qs(params)}`, { auth: true }),
+
+  get: (id: string) => request<Person>("/api/case", `/api/v1/persons/${id}`, { auth: true }),
+
+  /** POST /persons — create a master record. `national_id` (if given) must be
+   * unique. Requires `case.write`. Publishes `PersonCreated`. */
+  create: (body: PersonCreate) =>
+    request<Person>("/api/case", "/api/v1/persons", {
+      method: "POST",
+      body: JSON.stringify(body),
+      auth: true,
+    }),
+
+  /** PATCH /persons/{id} — partial update. Requires `case.write`. */
+  update: (id: string, body: Partial<PersonCreate>) =>
+    request<Person>("/api/case", `/api/v1/persons/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(body),
+      auth: true,
+    }),
+
+  /** DELETE /persons/{id} — blocked (409) while referenced. Requires `case.approve`. */
+  remove: (id: string) =>
+    request<void>("/api/case", `/api/v1/persons/${id}`, { method: "DELETE", auth: true }),
 };
 
 // --- evidence-service ----------------------------------------------------
