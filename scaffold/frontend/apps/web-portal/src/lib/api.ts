@@ -100,6 +100,9 @@ export interface LoginResult {
   mfa_enrolled: boolean;
   token_type: "bearer";
   expires_in: number;
+  /** FR-IAM-07: password past max age — login is not blocked, the client
+   *  must force a reset before proceeding. */
+  password_expired: boolean;
 }
 export interface MfaEnrollment {
   secret: string;
@@ -110,6 +113,7 @@ export interface TokenPair {
   refresh_token: string;
   token_type: "bearer";
   expires_in: number;
+  password_expired: boolean;
 }
 
 export const iam = {
@@ -130,6 +134,18 @@ export const iam = {
       method: "POST",
       body: JSON.stringify({ mfa_token, code }),
     }),
+
+  /** FR-IAM-07 forced reset — same endpoint as any self-service change. */
+  changePassword: (
+    userId: string,
+    body: { current_password: string; new_password: string },
+    token: string,
+  ) =>
+    requestRaw<null>("/api/iam", `/api/v1/users/${userId}/password`, {
+      method: "POST",
+      body: JSON.stringify(body),
+      headers: { Authorization: `Bearer ${token}` },
+    }).then((r) => r.status),
 };
 
 // --- case-service ------------------------------------------------------

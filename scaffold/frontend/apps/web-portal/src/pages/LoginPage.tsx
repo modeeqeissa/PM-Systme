@@ -3,9 +3,9 @@ import type { FormEvent } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { Alert, Button, Card, TextInput } from "@pmp/ui";
 import { ApiError, iam } from "../lib/api";
-import { hasValidToken, setToken } from "../lib/auth";
+import { decodeToken, hasValidToken, setToken } from "../lib/auth";
 
-type Step = "credentials" | "enroll" | "totp";
+type Step = "credentials" | "enroll" | "totp" | "expired";
 
 function credentialError(err: unknown): string {
   if (err instanceof ApiError) {
@@ -27,8 +27,13 @@ export function LoginPage() {
   const [badge, setBadge] = useState("");
   const [password, setPassword] = useState("");
   const [code, setCode] = useState("");
+  const [newPassword, setNewPassword] = useState("");
   const [enrollment, setEnrollment] = useState<{ secret: string; uri: string } | null>(null);
+  // token held only in memory during a forced FR-IAM-07 reset — not persisted
+  // until the user has a compliant password.
+  const [resetToken, setResetToken] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   // already signed in? go straight through.
@@ -66,6 +71,12 @@ export function LoginPage() {
       // fetch a fresh mfa_token, then exchange it + the TOTP code for a JWT
       const login = await iam.login(badge.trim(), password);
       const pair = await iam.verifyMfa(login.mfa_token, code.trim());
+      if (pair.password_expired) {
+        // FR-IAM-07: don't persist the token or navigate — force a reset first.
+        setResetToken(pair.access_token);
+        setStep("expired");
+        return;
+      }
       setToken(pair.access_token);
       navigate(dest, { replace: true });
     } catch (err) {
@@ -79,12 +90,48 @@ export function LoginPage() {
     }
   }
 
+  async function submitNewPassword(e: FormEvent) {
+    e.preventDefault();
+    setError(null);
+    setBusy(true);
+    try {
+      const claims = resetToken ? decodeToken(resetToken) : null;
+      if (!resetToken || !claims) throw new Error("session lost — please sign in again");
+      const status = await iam.changePassword(
+        claims.sub,
+        { current_password: password, new_password: newPassword },
+        resetToken,
+      );
+      if (status !== 204) throw new Error("password change was not accepted");
+      // the change revoked every session — send them back to a clean sign-in
+      setResetToken(null);
+      setPassword("");
+      setNewPassword("");
+      setCode("");
+      setStep("credentials");
+      setNotice("Password updated. Sign in with your new password.");
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 400) {
+        setError(err.message.replace(/^Password policy:\s*/, "New password: "));
+      } else {
+        setError(err instanceof ApiError ? err.message : (err as Error).message);
+      }
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <div className="mx-auto flex min-h-screen max-w-md flex-col justify-center px-4">
       <Card>
         <h1 className="mb-1 text-lg font-semibold text-ink">PMP Command Portal</h1>
         <p className="mb-6 text-sm text-ink-faint">Sign in with your badge number.</p>
 
+        {notice && (
+          <div className="mb-4">
+            <Alert variant="success">{notice}</Alert>
+          </div>
+        )}
         {error && (
           <div className="mb-4">
             <Alert variant="error">{error}</Alert>
@@ -156,6 +203,27 @@ export function LoginPage() {
             >
               Start over
             </button>
+          </form>
+        )}
+
+        {step === "expired" && (
+          <form onSubmit={submitNewPassword} className="flex flex-col gap-4">
+            <Alert variant="warn">
+              Your password has expired (FR-IAM-07). Set a new one to continue — it
+              must meet the policy and can't repeat a recent password.
+            </Alert>
+            <TextInput
+              label="New password"
+              type="password"
+              value={newPassword}
+              onChange={(e) => setNewPassword(e.target.value)}
+              autoComplete="new-password"
+              autoFocus
+              required
+            />
+            <Button type="submit" loading={busy}>
+              Update password
+            </Button>
           </form>
         )}
       </Card>
