@@ -291,8 +291,8 @@ async def _clean_tables():
         await conn.execute(
             text(
                 "TRUNCATE discipline_records, performance_reviews, leave_requests, "
-                "promotions, transfers, assignments, officers, units, "
-                "outbox_events RESTART IDENTITY CASCADE"
+                "promotions, transfers, assignments, hr_attendance, awards, "
+                "officers, units, outbox_events RESTART IDENTITY CASCADE"
             )
         )
     yield

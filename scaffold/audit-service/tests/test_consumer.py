@@ -141,6 +141,9 @@ async def test_all_event_types_map_to_expected_entity_and_action(client, emit, c
         {"performance_review_id": str(uuid.uuid4())},
         service="hr-service",
     )
+    await emit("HrAttendanceRecorded", {"hr_attendance_id": str(uuid.uuid4())}, service="hr-service")
+    await emit("HrAttendanceUpdated", {"hr_attendance_id": str(uuid.uuid4())}, service="hr-service")
+    await emit("AwardRecorded", {"award_id": str(uuid.uuid4())}, service="hr-service")
 
     # training-service (FR-TRAIN-01..03)
     await emit("CourseCreated", {"course_id": 1}, service="training-service")
@@ -220,7 +223,7 @@ async def test_all_event_types_map_to_expected_entity_and_action(client, emit, c
         service="integration-gateway-service",
     )
 
-    assert await consumer.process_available() == 72
+    assert await consumer.process_available() == 75
     rows = await _audit_rows()
     seen = {(r.entity_type, r.action) for r in rows}
     assert seen == {
@@ -260,6 +263,9 @@ async def test_all_event_types_map_to_expected_entity_and_action(client, emit, c
         ("performance_review", "create"),
         ("performance_review", "update"),
         ("performance_review", "delete"),
+        ("hr_attendance", "create"),
+        ("hr_attendance", "update"),
+        ("award", "create"),
         ("course", "create"),
         ("course", "update"),
         ("course", "delete"),

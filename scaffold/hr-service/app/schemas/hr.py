@@ -251,3 +251,54 @@ class PerformanceReviewUpdate(BaseModel):
         default=None, ge=0, le=decimal.Decimal("99.99"), decimal_places=2
     )
     comments: str | None = None
+
+
+# --- HR attendance (docs §9.3.6 revised) --------------------------------
+class HrAttendanceStatus(str, enum.Enum):
+    present = "present"
+    absent = "absent"
+    late = "late"
+    excused = "excused"
+
+
+class HrAttendanceCreate(BaseModel):
+    date: dt.date
+    status: HrAttendanceStatus
+    clock_in: dt.datetime | None = None
+    clock_out: dt.datetime | None = None
+
+
+class HrAttendanceUpdate(BaseModel):
+    status: HrAttendanceStatus | None = None
+    clock_in: dt.datetime | None = None
+    clock_out: dt.datetime | None = None
+
+
+class HrAttendanceOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    officer_id: uuid.UUID
+    date: dt.date
+    clock_in: dt.datetime | None = None
+    clock_out: dt.datetime | None = None
+    status: HrAttendanceStatus
+
+
+# --- Awards (positive counterpart to discipline_records) --------------
+class AwardCreate(BaseModel):
+    title: str = Field(min_length=1, max_length=150)
+    description: str | None = None
+    awarded_date: dt.date
+    awarded_by: uuid.UUID | None = None
+
+
+class AwardOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    officer_id: uuid.UUID
+    title: str
+    description: str | None = None
+    awarded_date: dt.date
+    awarded_by: uuid.UUID | None = None

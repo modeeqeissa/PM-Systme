@@ -8,6 +8,7 @@ import { AddForm } from "../../components/AddForm";
 import {
   ApiError,
   hr,
+  type HrAttendanceStatus,
   type Officer,
   type OfficerStatus,
 } from "../../lib/api";
@@ -66,6 +67,8 @@ export function OfficerProfilePage() {
             <LeaveCard officerId={officerId} />
             <PromotionsCard officerId={officerId} currentRank={query.data.rank} />
             <PerformanceCard officerId={officerId} />
+            {hasPerm("hr.attendance.read") && <AttendanceCard officerId={officerId} />}
+            {hasPerm("hr.award.read") && <AwardsCard officerId={officerId} />}
             {hasPerm("hr.discipline.read") && <DisciplineCard officerId={officerId} />}
           </>
         )}
@@ -494,6 +497,141 @@ function PerformanceCard({ officerId }: { officerId: string }) {
             <li key={r.id} className="border-b border-hair pb-2 last:border-0">
               <span className="font-medium">{r.period}</span> — score {r.score}
               {r.comments && <div className="text-ink-muted">{r.comments}</div>}
+            </li>
+          ))}
+        </ul>
+      )}
+    </CardShell>
+  );
+}
+
+const ATT_STATUS_LABEL: Record<HrAttendanceStatus, string> = {
+  present: "Present",
+  absent: "Absent",
+  late: "Late",
+  excused: "Excused",
+};
+
+function AttendanceCard({ officerId }: { officerId: string }) {
+  const qc = useQueryClient();
+  const key = ["hr-attendance", officerId];
+  const q = useList(key, () => hr.attendance.forOfficer(officerId));
+  const [form, setForm] = useState({ date: "", status: "present" as HrAttendanceStatus });
+  const canWrite = hasPerm("hr.attendance.write");
+
+  return (
+    <CardShell title="Attendance" fr="docs §9.3.6 — one daily record per officer (present / absent / late / excused).">
+      {canWrite && (
+        <AddForm
+          title="Record a day"
+          openLabel="Record day"
+          submitLabel="Record"
+          service="hr-service"
+          forbiddenHint="Needs hr.attendance.write."
+          successText={() => "Attendance recorded."}
+          onSubmit={async () => {
+            await hr.attendance.record(officerId, { date: form.date, status: form.status });
+            setForm({ date: "", status: "present" });
+            await qc.invalidateQueries({ queryKey: key });
+          }}
+        >
+          {(fe) => (
+            <>
+              <DateField id="att-date" label="Date" value={form.date} onChange={(v) => setForm((f) => ({ ...f, date: v }))} error={fe.date} />
+              <div className="flex flex-col gap-1">
+                <label htmlFor="att-status" className="text-sm font-medium text-ink-muted">Status</label>
+                <select
+                  id="att-status"
+                  value={form.status}
+                  onChange={(e) => setForm((f) => ({ ...f, status: e.target.value as HrAttendanceStatus }))}
+                  className="rounded-md border border-hair px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-accent-command/50"
+                >
+                  <option value="present">Present</option>
+                  <option value="late">Late</option>
+                  <option value="absent">Absent</option>
+                  <option value="excused">Excused</option>
+                </select>
+              </div>
+            </>
+          )}
+        </AddForm>
+      )}
+      <ListState q={q} noun="attendance" />
+      {q.data && q.data.length > 0 && (
+        <ul className="flex flex-col gap-2 text-sm">
+          {q.data.map((row) => (
+            <li key={row.id} className="flex items-center justify-between border-b border-hair pb-2 last:border-0">
+              <span className="text-ink-faint">{row.date}</span>
+              <span className="flex items-center gap-2">
+                <span className="rounded-full bg-surface-2 px-2 py-0.5 text-xs font-medium text-ink-muted">
+                  {ATT_STATUS_LABEL[row.status]}
+                </span>
+                {canWrite && row.status !== "absent" && (
+                  <button
+                    className="text-xs text-ink-faint underline"
+                    onClick={async () => {
+                      await hr.attendance.update(row.id, { status: "absent" });
+                      await qc.invalidateQueries({ queryKey: key });
+                    }}
+                  >
+                    mark absent
+                  </button>
+                )}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </CardShell>
+  );
+}
+
+function AwardsCard({ officerId }: { officerId: string }) {
+  const qc = useQueryClient();
+  const key = ["hr-awards", officerId];
+  const q = useList(key, () => hr.awards.forOfficer(officerId));
+  const [form, setForm] = useState({ title: "", description: "", awarded_date: "", awarded_by: "" });
+  const canWrite = hasPerm("hr.award.write");
+
+  return (
+    <CardShell title="Awards & commendations" fr="docs §9.3.6 — the positive counterpart to discipline records.">
+      {canWrite && (
+        <AddForm
+          title="Record award"
+          openLabel="Record award"
+          submitLabel="Record"
+          service="hr-service"
+          forbiddenHint="Needs hr.award.write."
+          successText={() => "Award recorded."}
+          onSubmit={async () => {
+            await hr.awards.record(officerId, {
+              title: form.title.trim(),
+              description: form.description.trim() || null,
+              awarded_date: form.awarded_date,
+              awarded_by: form.awarded_by.trim() || null,
+            });
+            setForm({ title: "", description: "", awarded_date: "", awarded_by: "" });
+            await qc.invalidateQueries({ queryKey: key });
+          }}
+        >
+          {(fe) => (
+            <>
+              <TextInput label="Title" value={form.title} onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))} error={fe.title} placeholder="e.g. Commendation for Bravery" required />
+              <TextInput label="Description" value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} error={fe.description} placeholder="optional" />
+              <DateField id="awd-date" label="Awarded date" value={form.awarded_date} onChange={(v) => setForm((f) => ({ ...f, awarded_date: v }))} error={fe.awarded_date} />
+              <TextInput label="Awarded by (officer id)" value={form.awarded_by} onChange={(e) => setForm((f) => ({ ...f, awarded_by: e.target.value }))} error={fe.awarded_by} placeholder="optional uuid" />
+            </>
+          )}
+        </AddForm>
+      )}
+      <ListState q={q} noun="awards" />
+      {q.data && q.data.length > 0 && (
+        <ul className="flex flex-col gap-2 text-sm">
+          {q.data.map((a) => (
+            <li key={a.id} className="border-b border-hair pb-2 last:border-0">
+              <span className="font-medium">{a.title}</span>{" "}
+              <span className="text-ink-faint">{a.awarded_date}</span>
+              {a.description && <div className="text-ink-muted">{a.description}</div>}
             </li>
           ))}
         </ul>

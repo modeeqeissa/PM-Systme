@@ -17,6 +17,11 @@ const listLeave = vi.fn();
 const listPromotions = vi.fn();
 const listPerformance = vi.fn();
 const listDiscipline = vi.fn();
+const listAttendance = vi.fn();
+const recordAttendance = vi.fn();
+const updateAttendance = vi.fn();
+const listAwards = vi.fn();
+const recordAward = vi.fn();
 
 vi.mock("../../lib/api", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../../lib/api")>();
@@ -31,6 +36,15 @@ vi.mock("../../lib/api", async (importOriginal) => {
       promotions: { list: (...a: unknown[]) => listPromotions(...a) },
       performance: { list: (...a: unknown[]) => listPerformance(...a) },
       discipline: { list: (...a: unknown[]) => listDiscipline(...a) },
+      attendance: {
+        forOfficer: (...a: unknown[]) => listAttendance(...a),
+        record: (...a: unknown[]) => recordAttendance(...a),
+        update: (...a: unknown[]) => updateAttendance(...a),
+      },
+      awards: {
+        forOfficer: (...a: unknown[]) => listAwards(...a),
+        record: (...a: unknown[]) => recordAward(...a),
+      },
     },
   };
 });
@@ -66,7 +80,11 @@ function renderPage(permissions: string[]) {
 }
 
 beforeEach(() => {
-  [getOfficer, updateOfficer, listAssignments, createAssignment, listTransfers, listLeave, listPromotions, listPerformance, listDiscipline].forEach((m) => m.mockReset());
+  [
+    getOfficer, updateOfficer, listAssignments, createAssignment, listTransfers, listLeave,
+    listPromotions, listPerformance, listDiscipline, listAttendance, recordAttendance,
+    updateAttendance, listAwards, recordAward,
+  ].forEach((m) => m.mockReset());
   getOfficer.mockResolvedValue(officer());
   listAssignments.mockResolvedValue([]);
   listTransfers.mockResolvedValue([]);
@@ -74,6 +92,8 @@ beforeEach(() => {
   listPromotions.mockResolvedValue([]);
   listPerformance.mockResolvedValue([]);
   listDiscipline.mockResolvedValue([]);
+  listAttendance.mockResolvedValue([]);
+  listAwards.mockResolvedValue([]);
 });
 
 describe("OfficerProfilePage", () => {
@@ -131,5 +151,61 @@ describe("OfficerProfilePage", () => {
     await user.click(screen.getByRole("button", { name: "Record" }));
     expect(createAssignment).toHaveBeenCalledWith("0ff-1", { unit_id: "unit-x", start_date: "2026-02-01" });
     expect(await screen.findByText("Assignment recorded.")).toBeInTheDocument();
+  });
+
+  it("hides Attendance and Awards cards without their read permissions", async () => {
+    renderPage(["hr.officer.read"]);
+    await screen.findByRole("heading", { name: "OFF-100" });
+    expect(screen.queryByRole("heading", { name: "Attendance" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Awards & commendations" })).not.toBeInTheDocument();
+  });
+
+  it("records a day of attendance and refetches", async () => {
+    recordAttendance.mockResolvedValue({
+      id: "at1", officer_id: "0ff-1", date: "2026-09-01", clock_in: null, clock_out: null, status: "late",
+    });
+    const user = userEvent.setup();
+    renderPage(["hr.officer.read", "hr.attendance.read", "hr.attendance.write"]);
+    await screen.findByRole("heading", { name: "Attendance" });
+
+    await user.click(screen.getByRole("button", { name: "Record day" }));
+    await user.type(screen.getByLabelText("Date"), "2026-09-01");
+    await user.selectOptions(screen.getByLabelText("Status"), "late");
+    listAttendance.mockResolvedValue([
+      { id: "at1", officer_id: "0ff-1", date: "2026-09-01", clock_in: null, clock_out: null, status: "late" },
+    ]);
+    await user.click(screen.getByRole("button", { name: "Record" }));
+
+    expect(recordAttendance).toHaveBeenCalledWith("0ff-1", { date: "2026-09-01", status: "late" });
+    expect(await screen.findByText("Attendance recorded.")).toBeInTheDocument();
+    // the row rendered (date + a "mark absent" action for a non-absent row)
+    expect(await screen.findByText("2026-09-01")).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "mark absent" })).toBeInTheDocument();
+  });
+
+  it("records an award (optional fields sent as null) and shows it", async () => {
+    recordAward.mockResolvedValue({
+      id: "aw1", officer_id: "0ff-1", title: "Commendation for Bravery", description: null,
+      awarded_date: "2026-08-01", awarded_by: null,
+    });
+    const user = userEvent.setup();
+    renderPage(["hr.officer.read", "hr.award.read", "hr.award.write"]);
+    await screen.findByRole("heading", { name: "Awards & commendations" });
+
+    await user.click(screen.getByRole("button", { name: "Record award" }));
+    await user.type(screen.getByLabelText("Title"), "Commendation for Bravery");
+    await user.type(screen.getByLabelText("Awarded date"), "2026-08-01");
+    listAwards.mockResolvedValue([
+      { id: "aw1", officer_id: "0ff-1", title: "Commendation for Bravery", description: null, awarded_date: "2026-08-01", awarded_by: null },
+    ]);
+    await user.click(screen.getByRole("button", { name: "Record" }));
+
+    expect(recordAward).toHaveBeenCalledWith("0ff-1", {
+      title: "Commendation for Bravery",
+      description: null,
+      awarded_date: "2026-08-01",
+      awarded_by: null,
+    });
+    expect(await screen.findByText("Commendation for Bravery")).toBeInTheDocument();
   });
 });

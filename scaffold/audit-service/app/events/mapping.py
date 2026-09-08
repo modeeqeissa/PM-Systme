@@ -59,6 +59,10 @@ EVENT_MAP: dict[str, tuple[str, str, str]] = {
     "PerformanceReviewRecorded": ("performance_review", "create", "performance_review_id"),
     "PerformanceReviewUpdated": ("performance_review", "update", "performance_review_id"),
     "PerformanceReviewDeleted": ("performance_review", "delete", "performance_review_id"),
+    # docs §9.3.6 revised — daily attendance + awards
+    "HrAttendanceRecorded": ("hr_attendance", "create", "hr_attendance_id"),
+    "HrAttendanceUpdated": ("hr_attendance", "update", "hr_attendance_id"),
+    "AwardRecorded": ("award", "create", "award_id"),
     # training-service (FR-TRAIN-01..03)
     "CourseCreated": ("course", "create", "course_id"),
     "CourseUpdated": ("course", "update", "course_id"),

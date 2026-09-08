@@ -28,6 +28,9 @@ _TOPICS = {
     "PerformanceReviewRecorded": "hr.performance_review_recorded",
     "PerformanceReviewUpdated": "hr.performance_review_updated",
     "PerformanceReviewDeleted": "hr.performance_review_deleted",
+    "HrAttendanceRecorded": "hr.attendance_recorded",
+    "HrAttendanceUpdated": "hr.attendance_updated",
+    "AwardRecorded": "hr.award_recorded",
 }
 
 ALL_TOPICS = tuple(_TOPICS.values())

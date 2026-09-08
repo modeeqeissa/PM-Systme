@@ -523,6 +523,110 @@ paths:
         "403": { description: Caller lacks hr.performance.write }
         "404": { description: No performance review with that id }
 
+  /officers/{officer_id}/attendance:
+    get:
+      summary: List an officer's daily attendance (docs §9.3.6)
+      description: Requires `hr.attendance.read`. Optional `from`/`to` date bounds (inclusive).
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { in: path, name: officer_id, required: true, schema: { type: string, format: uuid } }
+        - { in: query, name: from, schema: { type: string, format: date } }
+        - { in: query, name: to, schema: { type: string, format: date } }
+      responses:
+        "200":
+          description: Attendance rows, newest first
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/HrAttendance" } }
+        "401": { description: Missing or invalid access token }
+        "403": { description: Caller lacks hr.attendance.read }
+        "404": { description: No officer with that id }
+    post:
+      summary: Record a day's attendance for an officer
+      description: >
+        Requires `hr.attendance.write`. One row per officer per day (409 on a
+        duplicate date). Publishes an `HrAttendanceRecorded` domain event.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { in: path, name: officer_id, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/HrAttendanceCreate" }
+      responses:
+        "201": { description: Attendance recorded, content: { application/json: { schema: { $ref: "#/components/schemas/HrAttendance" } } } }
+        "401": { description: Missing or invalid access token }
+        "403": { description: Caller lacks hr.attendance.write }
+        "404": { description: No officer with that id }
+        "409": { description: That officer already has an attendance row for that date }
+
+  /attendance/{attendance_id}:
+    patch:
+      summary: Update an attendance row (status / clock times)
+      description: Requires `hr.attendance.write`. Publishes an `HrAttendanceUpdated` domain event.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { in: path, name: attendance_id, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/HrAttendanceUpdate" }
+      responses:
+        "200": { description: Updated, content: { application/json: { schema: { $ref: "#/components/schemas/HrAttendance" } } } }
+        "401": { description: Missing or invalid access token }
+        "403": { description: Caller lacks hr.attendance.write }
+        "404": { description: No attendance row with that id }
+
+  /officers/{officer_id}/awards:
+    get:
+      summary: List an officer's awards / commendations (docs §9.3.6)
+      description: Requires `hr.award.read`.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { in: path, name: officer_id, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: Awards, newest first
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/Award" } }
+        "401": { description: Missing or invalid access token }
+        "403": { description: Caller lacks hr.award.read }
+        "404": { description: No officer with that id }
+    post:
+      summary: Record an award / commendation for an officer
+      description: >
+        Requires `hr.award.write`. `awarded_by` (optional) must reference an
+        existing officer. Publishes an `AwardRecorded` domain event.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { in: path, name: officer_id, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AwardCreate" }
+      responses:
+        "201": { description: Award recorded, content: { application/json: { schema: { $ref: "#/components/schemas/Award" } } } }
+        "401": { description: Missing or invalid access token }
+        "403": { description: Caller lacks hr.award.write }
+        "404": { description: No officer with that id, or awarded_by does not exist }
+
+  /awards/{award_id}:
+    get:
+      summary: Retrieve one award
+      description: Requires `hr.award.read`.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { in: path, name: award_id, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/Award" } } } }
+        "401": { description: Missing or invalid access token }
+        "403": { description: Caller lacks hr.award.read }
+        "404": { description: No award with that id }
+
 components:
   securitySchemes:
     bearerAuth:
@@ -709,3 +813,41 @@ components:
         period: { type: string, nullable: true }
         score: { type: number, format: float, minimum: 0, maximum: 99.99, nullable: true }
         comments: { type: string, nullable: true }
+
+    HrAttendanceCreate:
+      type: object
+      required: [date, status]
+      properties:
+        date: { type: string, format: date }
+        status: { type: string, enum: [present, absent, late, excused] }
+        clock_in: { type: string, format: date-time, nullable: true }
+        clock_out: { type: string, format: date-time, nullable: true }
+    HrAttendanceUpdate:
+      type: object
+      properties:
+        status: { type: string, enum: [present, absent, late, excused], nullable: true }
+        clock_in: { type: string, format: date-time, nullable: true }
+        clock_out: { type: string, format: date-time, nullable: true }
+    HrAttendance:
+      allOf:
+        - $ref: "#/components/schemas/HrAttendanceCreate"
+        - type: object
+          properties:
+            id: { type: string, format: uuid }
+            officer_id: { type: string, format: uuid }
+
+    AwardCreate:
+      type: object
+      required: [title, awarded_date]
+      properties:
+        title: { type: string, minLength: 1, maxLength: 150 }
+        description: { type: string, nullable: true }
+        awarded_date: { type: string, format: date }
+        awarded_by: { type: string, format: uuid, nullable: true, description: "Approving/awarding officer" }
+    Award:
+      allOf:
+        - $ref: "#/components/schemas/AwardCreate"
+        - type: object
+          properties:
+            id: { type: string, format: uuid }
+            officer_id: { type: string, format: uuid }

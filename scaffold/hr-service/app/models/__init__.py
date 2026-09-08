@@ -3,7 +3,9 @@ app.events.models (migration 0002), imported separately where needed."""
 from app.models.base import Base
 from app.models.hr import (
     Assignment,
+    Award,
     DisciplineRecord,
+    HrAttendance,
     LeaveRequest,
     Officer,
     PerformanceReview,
@@ -22,4 +24,6 @@ __all__ = [
     "LeaveRequest",
     "DisciplineRecord",
     "PerformanceReview",
+    "HrAttendance",
+    "Award",
 ]

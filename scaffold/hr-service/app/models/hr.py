@@ -182,3 +182,43 @@ class PerformanceReview(Base):
     score: Mapped[float] = mapped_column(Numeric(4, 2), nullable=False)
     comments: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[dt.datetime] = _created_at()
+
+
+class HrAttendance(Base):
+    """hr_attendance — one row per officer per day (docs §9.3.6 revised)."""
+
+    __tablename__ = "hr_attendance"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('present','absent','late','excused')",
+            name="ck_hr_attendance_status",
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = _pk()
+    officer_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("officers.id"), nullable=False
+    )
+    date: Mapped[dt.date] = mapped_column(Date, nullable=False)
+    clock_in: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
+    clock_out: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
+    status: Mapped[str] = mapped_column(String(20), nullable=False)
+
+
+class Award(Base):
+    """awards — commendations/recognition, the positive counterpart to
+    discipline_records (docs §9.3.6 revised)."""
+
+    __tablename__ = "awards"
+
+    id: Mapped[uuid.UUID] = _pk()
+    officer_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("officers.id"), nullable=False
+    )
+    title: Mapped[str] = mapped_column(String(150), nullable=False)
+    description: Mapped[str | None] = mapped_column(Text)
+    awarded_date: Mapped[dt.date] = mapped_column(Date, nullable=False)
+    # logical FK -> officers.id (approving/awarding officer)
+    awarded_by: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("officers.id")
+    )

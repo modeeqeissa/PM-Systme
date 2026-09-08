@@ -17,7 +17,7 @@ matching the established pattern.
 | evidence-service | 8003 | evidence_db | 0002 | **built** | 4.3 / 9.3.3 |
 | community-service | 8004 | community_db | 0004 | **built** | 4.4 / 9.3.4 |
 | training-service | 8005 | training_db | 0003 | **built** | 4.5 / 9.3.5 |
-| hr-service | 8006 | hr_db | 0001 | stub (schema only) | 4.6 / 9.3.6 |
+| hr-service | 8006 | hr_db | 0007 | **built** | 4.6 / 9.3.6 |
 | dashboard-service | 8007 | dashboard_db | 0001 | **built** (CQRS read models) | 4.7 / 9.3.7 |
 | notification-service | 8008 | notification_db | 0001 | stub (schema only) | 4.8 / 9.3.8 |
 | integration-gateway-service | 8009 | integration_db | 0001 | stub (schema only) | 4.9 / 9.3.9 |

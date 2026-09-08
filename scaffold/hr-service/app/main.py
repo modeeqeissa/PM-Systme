@@ -16,7 +16,9 @@ from app.events import OutboxRelay
 from app.events.config import relay_enabled
 from app.routers import (
     assignments,
+    awards,
     discipline,
+    hr_attendance,
     leave,
     officers,
     performance,
@@ -62,6 +64,10 @@ def create_app() -> FastAPI:
     app.include_router(discipline.router, prefix=API_PREFIX)
     app.include_router(performance.by_officer_router, prefix=API_PREFIX)
     app.include_router(performance.router, prefix=API_PREFIX)
+    app.include_router(hr_attendance.by_officer_router, prefix=API_PREFIX)
+    app.include_router(hr_attendance.router, prefix=API_PREFIX)
+    app.include_router(awards.by_officer_router, prefix=API_PREFIX)
+    app.include_router(awards.router, prefix=API_PREFIX)
 
     @app.get("/health", tags=["ops"], include_in_schema=False)
     async def health() -> dict[str, str]:

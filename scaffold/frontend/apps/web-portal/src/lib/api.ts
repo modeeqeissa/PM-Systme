@@ -639,6 +639,27 @@ export interface PerformanceReview {
   created_at: string;
 }
 
+// --- HR attendance + awards (docs §9.3.6 revised) ------------------
+export type HrAttendanceStatus = "present" | "absent" | "late" | "excused";
+
+export interface HrAttendanceRow {
+  id: string;
+  officer_id: string;
+  date: string;
+  clock_in: string | null;
+  clock_out: string | null;
+  status: HrAttendanceStatus;
+}
+
+export interface Award {
+  id: string;
+  officer_id: string;
+  title: string;
+  description: string | null;
+  awarded_date: string;
+  awarded_by: string | null;
+}
+
 export const hr = {
   units: {
     list: (stationId?: string) =>
@@ -703,6 +724,26 @@ export const hr = {
       officerId: string,
       body: { reviewer_id: string; period: string; score: number; comments?: string | null },
     ) => request<PerformanceReview>("/api/hr", `/api/v1/officers/${officerId}/performance-reviews`, json(body)),
+  },
+  attendance: {
+    forOfficer: (officerId: string, params: { from?: string; to?: string } = {}) =>
+      request<HrAttendanceRow[]>("/api/hr", `/api/v1/officers/${officerId}/attendance${qs(params)}`, { auth: true }),
+    record: (
+      officerId: string,
+      body: { date: string; status: HrAttendanceStatus; clock_in?: string | null; clock_out?: string | null },
+    ) => request<HrAttendanceRow>("/api/hr", `/api/v1/officers/${officerId}/attendance`, json(body)),
+    update: (
+      attendanceId: string,
+      body: { status?: HrAttendanceStatus; clock_in?: string | null; clock_out?: string | null },
+    ) => request<HrAttendanceRow>("/api/hr", `/api/v1/attendance/${attendanceId}`, patch(body)),
+  },
+  awards: {
+    forOfficer: (officerId: string) =>
+      request<Award[]>("/api/hr", `/api/v1/officers/${officerId}/awards`, { auth: true }),
+    record: (
+      officerId: string,
+      body: { title: string; description?: string | null; awarded_date: string; awarded_by?: string | null },
+    ) => request<Award>("/api/hr", `/api/v1/officers/${officerId}/awards`, json(body)),
   },
 };
 
