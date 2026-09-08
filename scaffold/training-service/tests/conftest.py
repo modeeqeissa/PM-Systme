@@ -103,7 +103,7 @@ _db.SessionLocal = SessionLocal
 
 from app.events import OutboxRelay, topic_for  # noqa: E402
 from app.main import app  # noqa: E402
-from app.models import Certification, Course  # noqa: E402
+from app.models import Assessment, Certification, Course, Session  # noqa: E402
 from app.services.recompute_task import RecomputeTask  # noqa: E402
 
 # badge -> seeded role. "Training Officer" holds training.cert.{read,write}
@@ -269,8 +269,9 @@ async def _clean_tables():
     async with engine.begin() as conn:
         await conn.execute(
             text(
-                "TRUNCATE officer_certifications, certifications, courses, "
-                "outbox_events RESTART IDENTITY CASCADE"
+                "TRUNCATE officer_certifications, certifications, "
+                "assessment_results, assessments, attendance, sessions, "
+                "materials, courses, outbox_events RESTART IDENTITY CASCADE"
             )
         )
     yield
@@ -359,6 +360,47 @@ async def make_certification(make_course):
             await session.commit()
             await session.refresh(cert)
             return cert
+
+    return _make
+
+
+@pytest_asyncio.fixture
+async def make_session(make_course):
+    async def _make(**overrides) -> Session:
+        course = overrides.get("course") or await make_course()
+        async with SessionLocal() as session:
+            row = Session(
+                course_id=course.id,
+                scheduled_at=overrides.get(
+                    "scheduled_at",
+                    dt.datetime(2026, 10, 1, 9, 0, tzinfo=dt.timezone.utc),
+                ),
+                location=overrides.get("location", "Training Room B"),
+                instructor_officer_id=overrides.get("instructor_officer_id"),
+                capacity=overrides.get("capacity"),
+            )
+            session.add(row)
+            await session.commit()
+            await session.refresh(row)
+            return row
+
+    return _make
+
+
+@pytest_asyncio.fixture
+async def make_assessment(make_course):
+    async def _make(**overrides) -> Assessment:
+        course = overrides.get("course") or await make_course()
+        async with SessionLocal() as session:
+            row = Assessment(
+                course_id=course.id,
+                title=overrides.get("title", "Final exam"),
+                passing_score=overrides.get("passing_score", 70),
+            )
+            session.add(row)
+            await session.commit()
+            await session.refresh(row)
+            return row
 
     return _make
 

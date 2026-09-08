@@ -223,6 +223,271 @@ paths:
         "401": { description: Missing or invalid access token }
         "403": { description: Caller lacks training.cert.write }
 
+  /courses/{course_id}/materials:
+    get:
+      summary: List a course's materials (FR-TRAIN-01 / docs §9.3.5)
+      description: Requires `training.cert.read`.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { in: path, name: course_id, required: true, schema: { type: integer } }
+      responses:
+        "200":
+          description: Materials
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/Material" } }
+        "401": { description: Missing or invalid access token }
+        "403": { description: Caller lacks training.cert.read }
+        "404": { description: No course with that id }
+    post:
+      summary: Upload a course material (multipart/form-data)
+      description: >
+        Requires `training.cert.write`. The file bytes are stored under an
+        opaque `file_ref` (object-storage pattern). Publishes a `MaterialAdded`
+        domain event.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { in: path, name: course_id, required: true, schema: { type: integer } }
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [title, file]
+              properties:
+                title: { type: string, maxLength: 200 }
+                file: { type: string, format: binary }
+      responses:
+        "201": { description: Material added, content: { application/json: { schema: { $ref: "#/components/schemas/Material" } } } }
+        "401": { description: Missing or invalid access token }
+        "403": { description: Caller lacks training.cert.write }
+        "404": { description: No course with that id }
+
+  /materials/{material_id}:
+    get:
+      summary: Get a material's metadata
+      description: Requires `training.cert.read`.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { in: path, name: material_id, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200": { description: Material, content: { application/json: { schema: { $ref: "#/components/schemas/Material" } } } }
+        "401": { description: Missing or invalid access token }
+        "403": { description: Caller lacks training.cert.read }
+        "404": { description: No material with that id }
+    delete:
+      summary: Delete a material
+      description: Requires `training.cert.write`. Publishes a `MaterialRemoved` domain event.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { in: path, name: material_id, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "204": { description: Material deleted }
+        "401": { description: Missing or invalid access token }
+        "403": { description: Caller lacks training.cert.write }
+        "404": { description: No material with that id }
+
+  /sessions:
+    get:
+      summary: List scheduled sessions (docs §9.3.5)
+      description: Requires `training.cert.read`. Optionally filtered by `course_id`.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { in: query, name: course_id, schema: { type: integer } }
+      responses:
+        "200":
+          description: Sessions, soonest first
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/Session" } }
+        "401": { description: Missing or invalid access token }
+        "403": { description: Caller lacks training.cert.read }
+    post:
+      summary: Schedule a session (a concrete instance of a course)
+      description: Requires `training.cert.write`. Publishes a `SessionScheduled` domain event.
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SessionCreate" }
+      responses:
+        "201": { description: Session scheduled, content: { application/json: { schema: { $ref: "#/components/schemas/Session" } } } }
+        "401": { description: Missing or invalid access token }
+        "403": { description: Caller lacks training.cert.write }
+        "404": { description: course_id does not exist }
+
+  /sessions/{session_id}:
+    get:
+      summary: Get a session
+      description: Requires `training.cert.read`.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { in: path, name: session_id, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200": { description: Session, content: { application/json: { schema: { $ref: "#/components/schemas/Session" } } } }
+        "401": { description: Missing or invalid access token }
+        "403": { description: Caller lacks training.cert.read }
+        "404": { description: No session with that id }
+    patch:
+      summary: Update a scheduled session
+      description: >
+        Requires `training.cert.write`. `course_id` is not editable (schedule a
+        new session for a different course). Publishes a `SessionUpdated` event.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { in: path, name: session_id, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SessionUpdate" }
+      responses:
+        "200": { description: Updated, content: { application/json: { schema: { $ref: "#/components/schemas/Session" } } } }
+        "401": { description: Missing or invalid access token }
+        "403": { description: Caller lacks training.cert.write }
+        "404": { description: No session with that id }
+
+  /sessions/{session_id}/attendance:
+    get:
+      summary: List a session's attendance (docs §9.3.5)
+      description: Requires `training.cert.read`.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { in: path, name: session_id, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: Attendance rows
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/Attendance" } }
+        "401": { description: Missing or invalid access token }
+        "403": { description: Caller lacks training.cert.read }
+        "404": { description: No session with that id }
+    post:
+      summary: Register an officer on a session's attendance
+      description: >
+        Requires `training.cert.write`. One row per officer per session (409 on
+        a duplicate). Publishes an `AttendanceRecorded` domain event.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { in: path, name: session_id, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AttendanceCreate" }
+      responses:
+        "201": { description: Attendance recorded, content: { application/json: { schema: { $ref: "#/components/schemas/Attendance" } } } }
+        "401": { description: Missing or invalid access token }
+        "403": { description: Caller lacks training.cert.write }
+        "404": { description: No session with that id }
+        "409": { description: That officer is already on this session's attendance }
+
+  /attendance/{attendance_id}:
+    patch:
+      summary: Update an attendance row's status (registered / attended / absent)
+      description: Requires `training.cert.write`. Publishes an `AttendanceStatusChanged` domain event.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { in: path, name: attendance_id, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AttendanceStatusUpdate" }
+      responses:
+        "200": { description: Updated, content: { application/json: { schema: { $ref: "#/components/schemas/Attendance" } } } }
+        "401": { description: Missing or invalid access token }
+        "403": { description: Caller lacks training.cert.write }
+        "404": { description: No attendance record with that id }
+
+  /courses/{course_id}/assessments:
+    get:
+      summary: List a course's assessments (docs §9.3.5)
+      description: Requires `training.cert.read`.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { in: path, name: course_id, required: true, schema: { type: integer } }
+      responses:
+        "200":
+          description: Assessments
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/Assessment" } }
+        "401": { description: Missing or invalid access token }
+        "403": { description: Caller lacks training.cert.read }
+        "404": { description: No course with that id }
+    post:
+      summary: Create an assessment for a course
+      description: Requires `training.cert.write`. Publishes an `AssessmentCreated` domain event.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { in: path, name: course_id, required: true, schema: { type: integer } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AssessmentCreate" }
+      responses:
+        "201": { description: Assessment created, content: { application/json: { schema: { $ref: "#/components/schemas/Assessment" } } } }
+        "401": { description: Missing or invalid access token }
+        "403": { description: Caller lacks training.cert.write }
+        "404": { description: No course with that id }
+
+  /assessments/{assessment_id}:
+    get:
+      summary: Get an assessment
+      description: Requires `training.cert.read`.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { in: path, name: assessment_id, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200": { description: Assessment, content: { application/json: { schema: { $ref: "#/components/schemas/Assessment" } } } }
+        "401": { description: Missing or invalid access token }
+        "403": { description: Caller lacks training.cert.read }
+        "404": { description: No assessment with that id }
+
+  /assessments/{assessment_id}/results:
+    get:
+      summary: List an assessment's results (docs §9.3.5)
+      description: Requires `training.cert.read`.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { in: path, name: assessment_id, required: true, schema: { type: string, format: uuid } }
+      responses:
+        "200":
+          description: Results, newest first
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/AssessmentResult" } }
+        "401": { description: Missing or invalid access token }
+        "403": { description: Caller lacks training.cert.read }
+        "404": { description: No assessment with that id }
+    post:
+      summary: Record a graded result for an assessment
+      description: >
+        Requires `training.cert.write`. `passed` is derived server-side
+        (`score >= passing_score`) at grading time and stored — a later change
+        to the assessment's `passing_score` never rewrites it. Recording a
+        pass does **not** auto-issue a certification (that stays an explicit
+        `POST /officer-certifications` action). Publishes an
+        `AssessmentResultRecorded` domain event.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { in: path, name: assessment_id, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AssessmentResultCreate" }
+      responses:
+        "201": { description: Result recorded, content: { application/json: { schema: { $ref: "#/components/schemas/AssessmentResult" } } } }
+        "401": { description: Missing or invalid access token }
+        "403": { description: Caller lacks training.cert.write }
+        "404": { description: No assessment with that id }
+
 components:
   securitySchemes:
     bearerAuth:
@@ -279,6 +544,86 @@ components:
             issued_date: { type: string, format: date }
             expires_date: { type: string, format: date, description: "Computed server-side: issued_date + course.validity_months." }
             status: { type: string, enum: [active, expiring_soon, expired] }
+
+    Material:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        course_id: { type: integer }
+        title: { type: string }
+        file_ref: { type: string, description: "Opaque object-storage key" }
+
+    SessionCreate:
+      type: object
+      required: [course_id, scheduled_at]
+      properties:
+        course_id: { type: integer }
+        scheduled_at: { type: string, format: date-time }
+        location: { type: string, nullable: true, maxLength: 200 }
+        instructor_officer_id: { type: string, format: uuid, nullable: true }
+        capacity: { type: integer, minimum: 1, nullable: true }
+    SessionUpdate:
+      type: object
+      properties:
+        scheduled_at: { type: string, format: date-time, nullable: true }
+        location: { type: string, nullable: true, maxLength: 200 }
+        instructor_officer_id: { type: string, format: uuid, nullable: true }
+        capacity: { type: integer, minimum: 1, nullable: true }
+    Session:
+      allOf:
+        - $ref: "#/components/schemas/SessionCreate"
+        - type: object
+          properties:
+            id: { type: string, format: uuid }
+
+    AttendanceCreate:
+      type: object
+      required: [officer_id]
+      properties:
+        officer_id: { type: string, format: uuid }
+        status: { type: string, enum: [registered, attended, absent], default: registered }
+    AttendanceStatusUpdate:
+      type: object
+      required: [status]
+      properties:
+        status: { type: string, enum: [registered, attended, absent] }
+    Attendance:
+      allOf:
+        - $ref: "#/components/schemas/AttendanceCreate"
+        - type: object
+          properties:
+            id: { type: string, format: uuid }
+            session_id: { type: string, format: uuid }
+
+    AssessmentCreate:
+      type: object
+      required: [title, passing_score]
+      properties:
+        title: { type: string, minLength: 1, maxLength: 200 }
+        passing_score: { type: number, minimum: 0, maximum: 100 }
+    Assessment:
+      allOf:
+        - $ref: "#/components/schemas/AssessmentCreate"
+        - type: object
+          properties:
+            id: { type: string, format: uuid }
+            course_id: { type: integer }
+
+    AssessmentResultCreate:
+      type: object
+      required: [officer_id, score]
+      properties:
+        officer_id: { type: string, format: uuid }
+        score: { type: number, minimum: 0, maximum: 100 }
+    AssessmentResult:
+      allOf:
+        - $ref: "#/components/schemas/AssessmentResultCreate"
+        - type: object
+          properties:
+            id: { type: string, format: uuid }
+            assessment_id: { type: string, format: uuid }
+            taken_at: { type: string, format: date-time }
+            passed: { type: boolean, description: "Derived from score vs passing_score at grading time." }
 
     RecomputeResult:
       type: object

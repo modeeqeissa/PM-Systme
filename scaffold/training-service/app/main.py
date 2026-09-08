@@ -16,7 +16,14 @@ from fastapi import FastAPI
 from app import config, db
 from app.events import OutboxRelay
 from app.events.config import relay_enabled
-from app.routers import certifications, courses, officer_certifications
+from app.routers import (
+    assessments,
+    certifications,
+    courses,
+    materials,
+    officer_certifications,
+    sessions,
+)
 from app.services.recompute_task import RecomputeTask
 
 API_PREFIX = "/api/v1"
@@ -53,6 +60,12 @@ def create_app() -> FastAPI:
     app.include_router(courses.router, prefix=API_PREFIX)
     app.include_router(certifications.router, prefix=API_PREFIX)
     app.include_router(officer_certifications.router, prefix=API_PREFIX)
+    app.include_router(materials.by_course_router, prefix=API_PREFIX)
+    app.include_router(materials.router, prefix=API_PREFIX)
+    app.include_router(sessions.router, prefix=API_PREFIX)
+    app.include_router(sessions.attendance_router, prefix=API_PREFIX)
+    app.include_router(assessments.by_course_router, prefix=API_PREFIX)
+    app.include_router(assessments.router, prefix=API_PREFIX)
 
     @app.get("/health", tags=["ops"], include_in_schema=False)
     async def health() -> dict[str, str]:

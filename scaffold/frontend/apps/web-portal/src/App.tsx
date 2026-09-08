@@ -9,6 +9,7 @@ import { OfficerProfilePage } from "./pages/hr/OfficerProfilePage";
 import { TransferApprovalsPage } from "./pages/hr/TransferApprovalsPage";
 import { LeaveApprovalsPage } from "./pages/hr/LeaveApprovalsPage";
 import { CourseCatalogPage } from "./pages/training/CourseCatalogPage";
+import { CourseDetailPage } from "./pages/training/CourseDetailPage";
 import { IssueCertificationPage } from "./pages/training/IssueCertificationPage";
 import { CompliancePage } from "./pages/training/CompliancePage";
 import { MeetingsPage } from "./pages/community/MeetingsPage";
@@ -82,6 +83,16 @@ export function App() {
           <Protected>
             <RequirePermission anyOf={["training.cert.read"]}>
               <CourseCatalogPage />
+            </RequirePermission>
+          </Protected>
+        }
+      />
+      <Route
+        path="/training/courses/:courseId"
+        element={
+          <Protected>
+            <RequirePermission anyOf={["training.cert.read"]}>
+              <CourseDetailPage />
             </RequirePermission>
           </Protected>
         }

@@ -158,6 +158,20 @@ async def test_all_event_types_map_to_expected_entity_and_action(client, emit, c
         {"officer_certification_id": str(uuid.uuid4())},
         service="training-service",
     )
+    await emit("MaterialAdded", {"material_id": str(uuid.uuid4())}, service="training-service")
+    await emit("MaterialRemoved", {"material_id": str(uuid.uuid4())}, service="training-service")
+    await emit("SessionScheduled", {"session_id": str(uuid.uuid4())}, service="training-service")
+    await emit("SessionUpdated", {"session_id": str(uuid.uuid4())}, service="training-service")
+    await emit("AttendanceRecorded", {"attendance_id": str(uuid.uuid4())}, service="training-service")
+    await emit(
+        "AttendanceStatusChanged", {"attendance_id": str(uuid.uuid4())}, service="training-service"
+    )
+    await emit("AssessmentCreated", {"assessment_id": str(uuid.uuid4())}, service="training-service")
+    await emit(
+        "AssessmentResultRecorded",
+        {"assessment_result_id": str(uuid.uuid4())},
+        service="training-service",
+    )
 
     # community-service (FR-COMM-01..04)
     await emit("MeetingLogged", {"meeting_id": str(uuid.uuid4())}, service="community-service")
@@ -206,7 +220,7 @@ async def test_all_event_types_map_to_expected_entity_and_action(client, emit, c
         service="integration-gateway-service",
     )
 
-    assert await consumer.process_available() == 64
+    assert await consumer.process_available() == 72
     rows = await _audit_rows()
     seen = {(r.entity_type, r.action) for r in rows}
     assert seen == {
@@ -253,6 +267,14 @@ async def test_all_event_types_map_to_expected_entity_and_action(client, emit, c
         ("certification", "delete"),
         ("officer_certification", "create"),
         ("officer_certification", "update"),
+        ("material", "create"),
+        ("material", "delete"),
+        ("training_session", "create"),
+        ("training_session", "update"),
+        ("attendance", "create"),
+        ("attendance", "update"),
+        ("assessment", "create"),
+        ("assessment_result", "create"),
         ("meeting", "create"),
         ("concern", "create"),
         ("concern", "update"),

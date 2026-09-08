@@ -19,6 +19,14 @@ _TOPICS = {
     "CertificationDeleted": "training.certification_deleted",
     "OfficerCertificationIssued": "training.officer_certification_issued",
     "OfficerCertificationStatusChanged": "training.officer_certification_status_changed",
+    "MaterialAdded": "training.material_added",
+    "MaterialRemoved": "training.material_removed",
+    "SessionScheduled": "training.session_scheduled",
+    "SessionUpdated": "training.session_updated",
+    "AttendanceRecorded": "training.attendance_recorded",
+    "AttendanceStatusChanged": "training.attendance_status_changed",
+    "AssessmentCreated": "training.assessment_created",
+    "AssessmentResultRecorded": "training.assessment_result_recorded",
 }
 
 ALL_TOPICS = tuple(_TOPICS.values())

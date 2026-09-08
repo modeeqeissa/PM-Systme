@@ -42,6 +42,18 @@ def jwks_cache_ttl_seconds() -> int:
     return int(os.getenv("TRAINING_JWKS_CACHE_TTL", "300"))
 
 
+# --- Course materials store (FR-TRAIN-01 / docs §9.3.5) -----------------
+# Dev: a local directory of blobs keyed by an opaque file_ref, the same shape
+# as evidence-service's vault (app/services/vault.py). Production: object
+# storage behind the same store()/exists()/delete() interface. Materials are
+# training documents, not chain-of-custody evidence, so no encryption here.
+def materials_dir() -> str:
+    return os.getenv(
+        "TRAINING_MATERIALS_DIR",
+        os.path.join(os.path.dirname(os.path.dirname(__file__)), ".materials-store-dev"),
+    )
+
+
 # --- Expiry recompute (FR-TRAIN-03) ----------------------------------------
 def expiry_lead_days() -> int:
     """A cert within this many days of expires_date becomes 'expiring_soon'."""

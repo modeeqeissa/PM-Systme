@@ -732,6 +732,51 @@ export interface RecomputeResult {
   updated: number;
 }
 
+// --- LMS additions (docs §9.3.5) -----------------------------------
+export type AttendanceStatus = "registered" | "attended" | "absent";
+
+export interface Material {
+  id: string;
+  course_id: number;
+  title: string;
+  file_ref: string;
+}
+export interface TrainingSession {
+  id: string;
+  course_id: number;
+  scheduled_at: string;
+  location: string | null;
+  instructor_officer_id: string | null;
+  capacity: number | null;
+}
+export interface SessionCreate {
+  course_id: number;
+  scheduled_at: string;
+  location?: string | null;
+  instructor_officer_id?: string | null;
+  capacity?: number | null;
+}
+export interface AttendanceRow {
+  id: string;
+  session_id: string;
+  officer_id: string;
+  status: AttendanceStatus;
+}
+export interface Assessment {
+  id: string;
+  course_id: number;
+  title: string;
+  passing_score: number | string;
+}
+export interface AssessmentResult {
+  id: string;
+  assessment_id: string;
+  officer_id: string;
+  score: number | string;
+  taken_at: string;
+  passed: boolean;
+}
+
 export const training = {
   courses: {
     list: () => request<Course[]>("/api/training", "/api/v1/courses", { auth: true }),
@@ -757,6 +802,42 @@ export const training = {
       request<OfficerCertification>("/api/training", "/api/v1/officer-certifications", json(body)),
     recompute: () =>
       request<RecomputeResult>("/api/training", "/api/v1/officer-certifications/recompute-status", json({})),
+  },
+  materials: {
+    forCourse: (courseId: number) =>
+      request<Material[]>("/api/training", `/api/v1/courses/${courseId}/materials`, { auth: true }),
+    upload: (courseId: number, form: FormData) =>
+      request<Material>("/api/training", `/api/v1/courses/${courseId}/materials`, {
+        method: "POST",
+        body: form,
+        auth: true,
+      }),
+    remove: (id: string) =>
+      request<void>("/api/training", `/api/v1/materials/${id}`, { method: "DELETE", auth: true }),
+  },
+  sessions: {
+    list: (courseId?: number) =>
+      request<TrainingSession[]>("/api/training", `/api/v1/sessions${qs({ course_id: courseId })}`, { auth: true }),
+    create: (body: SessionCreate) =>
+      request<TrainingSession>("/api/training", "/api/v1/sessions", json(body)),
+    update: (id: string, body: Partial<Omit<SessionCreate, "course_id">>) =>
+      request<TrainingSession>("/api/training", `/api/v1/sessions/${id}`, patch(body)),
+    attendance: (sessionId: string) =>
+      request<AttendanceRow[]>("/api/training", `/api/v1/sessions/${sessionId}/attendance`, { auth: true }),
+    register: (sessionId: string, body: { officer_id: string; status?: AttendanceStatus }) =>
+      request<AttendanceRow>("/api/training", `/api/v1/sessions/${sessionId}/attendance`, json(body)),
+    setAttendanceStatus: (attendanceId: string, status: AttendanceStatus) =>
+      request<AttendanceRow>("/api/training", `/api/v1/attendance/${attendanceId}`, patch({ status })),
+  },
+  assessments: {
+    forCourse: (courseId: number) =>
+      request<Assessment[]>("/api/training", `/api/v1/courses/${courseId}/assessments`, { auth: true }),
+    create: (courseId: number, body: { title: string; passing_score: number }) =>
+      request<Assessment>("/api/training", `/api/v1/courses/${courseId}/assessments`, json(body)),
+    results: (assessmentId: string) =>
+      request<AssessmentResult[]>("/api/training", `/api/v1/assessments/${assessmentId}/results`, { auth: true }),
+    recordResult: (assessmentId: string, body: { officer_id: string; score: number }) =>
+      request<AssessmentResult>("/api/training", `/api/v1/assessments/${assessmentId}/results`, json(body)),
   },
 };
 

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import type { FormEvent } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Alert, Button, Card, Spinner, TextInput } from "@pmp/ui";
 import { NavBar } from "../../components/NavBar";
@@ -203,6 +203,12 @@ function CourseCard({
             valid {course.validity_months} months
             {course.mandatory && " · mandatory"}
           </p>
+          <Link
+            to={`/training/courses/${course.id}`}
+            className="mt-1 inline-block text-xs text-ink-faint underline"
+          >
+            Materials, sessions &amp; assessments →
+          </Link>
         </div>
         {canWrite && (
           <div className="flex gap-2">

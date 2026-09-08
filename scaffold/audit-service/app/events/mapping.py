@@ -69,6 +69,16 @@ EVENT_MAP: dict[str, tuple[str, str, str]] = {
     "OfficerCertificationStatusChanged": (
         "officer_certification", "update", "officer_certification_id",
     ),
+    # docs §9.3.5 revised — LMS: materials, scheduled sessions, attendance,
+    # assessments + graded results
+    "MaterialAdded": ("material", "create", "material_id"),
+    "MaterialRemoved": ("material", "delete", "material_id"),
+    "SessionScheduled": ("training_session", "create", "session_id"),
+    "SessionUpdated": ("training_session", "update", "session_id"),
+    "AttendanceRecorded": ("attendance", "create", "attendance_id"),
+    "AttendanceStatusChanged": ("attendance", "update", "attendance_id"),
+    "AssessmentCreated": ("assessment", "create", "assessment_id"),
+    "AssessmentResultRecorded": ("assessment_result", "create", "assessment_result_id"),
     # community-service (FR-COMM-01..04)
     "MeetingLogged": ("meeting", "create", "meeting_id"),
     "ConcernLogged": ("concern", "create", "concern_id"),
