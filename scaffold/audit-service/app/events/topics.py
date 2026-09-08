@@ -31,6 +31,7 @@ _BASE_TOPICS = (
     "role.created",
     "role.permissions_changed",
     "account.locked_out",
+    "iam.settings_updated",
     # hr-service (FR-HR-01..07)
     "hr.officer_created",
     "hr.officer_updated",
@@ -85,6 +86,7 @@ _BASE_TOPICS = (
     # integration-gateway-service (FR-INT-01..05)
     "integration.config_updated",
     "integration.external_system_call_logged",
+    "integration.settings_updated",
 )
 
 

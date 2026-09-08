@@ -7,12 +7,12 @@ from sqlalchemy import delete, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app import config
 from app.models import PasswordHistory, Role, User
 from app.schemas import UserCreate, UserUpdate
 from app.security import passwords
 from app.services import audit_events
 from app.services import auth as auth_service
+from app.services import settings
 from app.services.rbac import get_user
 
 
@@ -157,15 +157,14 @@ async def change_password(
         )
 
     # FR-IAM-07: no reuse of the last N passwords (current + history).
-    if config.PASSWORD_HISTORY_COUNT > 0:
-        recent = await _recent_password_hashes(
-            session, user, config.PASSWORD_HISTORY_COUNT
-        )
+    history_count = settings.get("password_history_count")
+    if history_count > 0:
+        recent = await _recent_password_hashes(session, user, history_count)
         if passwords.is_reused(new_password, recent):
             raise HTTPException(
                 status.HTTP_400_BAD_REQUEST,
                 f"Password policy: must not reuse any of the last "
-                f"{config.PASSWORD_HISTORY_COUNT} passwords",
+                f"{history_count} passwords",
             )
 
     # keep the outgoing hash in history, then rotate.
@@ -175,7 +174,7 @@ async def change_password(
     user.password_hash = passwords.hash_password(new_password)
     user.password_changed_at = dt.datetime.now(dt.timezone.utc)
     await session.flush()
-    await _trim_password_history(session, user.id, config.PASSWORD_HISTORY_COUNT)
+    await _trim_password_history(session, user.id, history_count)
     # FR-IAM-02: password change revokes every active session.
     await auth_service.revoke_all_sessions(session, user.id)
     # FR-IAM-06: audit the change (admin reset vs. self-service).

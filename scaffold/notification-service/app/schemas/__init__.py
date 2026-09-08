@@ -5,6 +5,7 @@ from app.schemas.notification import (
     NotificationPreferenceUpsert,
     NotificationStatus,
 )
+from app.schemas.settings import NotificationSettingsOut, NotificationSettingsPatch
 
 __all__ = [
     "NotificationChannel",
@@ -12,4 +13,6 @@ __all__ = [
     "NotificationOut",
     "NotificationPreferenceOut",
     "NotificationPreferenceUpsert",
+    "NotificationSettingsPatch",
+    "NotificationSettingsOut",
 ]

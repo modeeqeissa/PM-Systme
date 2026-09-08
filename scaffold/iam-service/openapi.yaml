@@ -269,6 +269,35 @@ paths:
         "401": { description: Missing or invalid access token }
         "403": { description: Caller lacks iam.role.read }
 
+  /iam-settings:
+    get:
+      tags: [settings]
+      summary: Effective password policy + which keys are overridden (FR-IAM-07)
+      description: Requires `iam.settings.read`.
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/IamSettingsOut" } } } }
+        "401": { description: Missing or invalid access token }
+        "403": { description: Caller lacks iam.settings.read }
+    patch:
+      tags: [settings]
+      summary: Override one or more password-policy settings (FR-IAM-07)
+      description: >
+        Requires `iam.settings.write`. Writes `iam_settings` rows; the change
+        takes effect immediately (the in-process policy cache is reloaded).
+        Publishes an `IamSettingsUpdated` domain event.
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/IamSettingsPatch" }
+      responses:
+        "200": { description: Updated effective policy, content: { application/json: { schema: { $ref: "#/components/schemas/IamSettingsOut" } } } }
+        "400": { description: Unknown key or invalid value }
+        "401": { description: Missing or invalid access token }
+        "403": { description: Caller lacks iam.settings.write }
+
 components:
   securitySchemes:
     bearerAuth:
@@ -448,5 +477,27 @@ components:
       required: [codes]
       properties:
         codes:
+          type: array
+          items: { type: string }
+
+    IamSettingsPatch:
+      type: object
+      additionalProperties: false
+      properties:
+        password_min_length: { type: integer, minimum: 1 }
+        password_require_lower: { type: boolean }
+        password_require_upper: { type: boolean }
+        password_require_digit: { type: boolean }
+        password_require_symbol: { type: boolean }
+        password_history_count: { type: integer, minimum: 0 }
+        password_max_age_days: { type: integer, minimum: 0 }
+    IamSettingsOut:
+      type: object
+      required: [values, overridden]
+      properties:
+        values:
+          type: object
+          additionalProperties: { oneOf: [{ type: integer }, { type: boolean }] }
+        overridden:
           type: array
           items: { type: string }

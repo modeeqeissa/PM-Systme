@@ -123,6 +123,34 @@ paths:
         "404": { description: Unknown system_name }
         "409": { description: This system's integration is disabled (kill switch) }
 
+  /integration-settings:
+    get:
+      summary: Effective external-system-log retention window + overridden keys (Phase 5)
+      description: Requires `integration.settings.read` (held by "ICT Admin").
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/IntegrationSettingsOut" } } } }
+        "401": { description: Missing or invalid access token }
+        "403": { description: Caller lacks integration.settings.read }
+    patch:
+      summary: Override the external-system-log retention window (Phase 5)
+      description: >
+        Requires `integration.settings.write`. Writes `integration_settings`
+        rows; the change takes effect on the retention worker's next pass (the
+        in-process cache is reloaded immediately). Publishes an
+        `IntegrationSettingsUpdated` domain event.
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/IntegrationSettingsPatch" }
+      responses:
+        "200": { description: Updated effective settings, content: { application/json: { schema: { $ref: "#/components/schemas/IntegrationSettingsOut" } } } }
+        "400": { description: Unknown key or invalid value }
+        "401": { description: Missing or invalid access token }
+        "403": { description: Caller lacks integration.settings.write }
+
 components:
   securitySchemes:
     bearerAuth:
@@ -163,3 +191,19 @@ components:
         correlation_id: { type: string, format: uuid }
         message: { type: string }
         request_echo: { type: object }
+
+    IntegrationSettingsPatch:
+      type: object
+      additionalProperties: false
+      properties:
+        log_retention_days: { type: integer, minimum: 1 }
+    IntegrationSettingsOut:
+      type: object
+      required: [values, overridden]
+      properties:
+        values:
+          type: object
+          additionalProperties: { type: integer }
+        overridden:
+          type: array
+          items: { type: string }

@@ -91,9 +91,14 @@ async def _clean_tables():
     async with engine.begin() as conn:
         # keep the seeded roles (id<=6) + permissions; drop test-created data
         await conn.execute(
-            text("TRUNCATE users, sessions, user_roles, outbox_events CASCADE")
+            text("TRUNCATE users, sessions, user_roles, outbox_events, iam_settings CASCADE")
         )
         await conn.execute(text("DELETE FROM roles WHERE id > 6"))
+    # the password-policy cache is process-global; reset it between tests so a
+    # PATCH /iam-settings in one test can't leak into the next.
+    from app.services import settings as _settings
+
+    _settings._cache.clear()
     yield
 
 

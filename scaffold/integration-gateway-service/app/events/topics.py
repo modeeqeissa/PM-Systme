@@ -11,6 +11,7 @@ from app.events.config import topic_prefix
 _TOPICS = {
     "IntegrationConfigUpdated": "integration.config_updated",
     "ExternalSystemCallLogged": "integration.external_system_call_logged",
+    "IntegrationSettingsUpdated": "integration.settings_updated",
 }
 
 ALL_TOPICS = tuple(_TOPICS.values())

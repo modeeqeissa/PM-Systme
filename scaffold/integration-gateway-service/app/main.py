@@ -16,6 +16,8 @@ from app import config, db
 from app.events import OutboxRelay
 from app.events.config import relay_enabled
 from app.routers import adapters, external_system_logs, integration_configs
+from app.routers import settings as settings_router
+from app.services import settings as settings_service
 from app.services.correlation import CorrelationIdMiddleware
 from app.services.retention import RetentionWorker
 
@@ -24,6 +26,14 @@ API_PREFIX = "/api/v1"
 
 @contextlib.asynccontextmanager
 async def lifespan(app: FastAPI):
+    # Load the admin retention override from integration_settings into the
+    # in-process cache the retention worker reads from.
+    try:
+        async with db.SessionLocal() as session:
+            await settings_service.refresh(session)
+    except Exception:  # pragma: no cover - DB not up yet in some test paths
+        pass
+
     relay: OutboxRelay | None = None
     retention: RetentionWorker | None = None
     if relay_enabled():
@@ -55,6 +65,7 @@ def create_app() -> FastAPI:
     app.include_router(integration_configs.router, prefix=API_PREFIX)
     app.include_router(external_system_logs.router, prefix=API_PREFIX)
     app.include_router(adapters.router, prefix=API_PREFIX)
+    app.include_router(settings_router.router, prefix=API_PREFIX)
 
     @app.get("/health", tags=["ops"], include_in_schema=False)
     async def health() -> dict[str, str]:

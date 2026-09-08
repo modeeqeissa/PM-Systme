@@ -179,3 +179,25 @@ def account_locked_out(
             "failed_login_count": failed_login_count,
         },
     )
+
+
+def iam_settings_updated(
+    session: AsyncSession, *, actor: User, changed: dict, effective: dict
+) -> None:
+    """FR-IAM-07 — an admin changed the password policy (iam_settings). The
+    payload records both the specific keys changed and the full effective
+    policy after the change."""
+    actor_id, actor_role = _actor(actor)
+    enqueue(
+        session,
+        event_type="IamSettingsUpdated",
+        aggregate_type="iam_settings",
+        aggregate_id=actor.id,  # composite/keyless table — key on the acting admin
+        actor_id=actor_id,
+        actor_role=actor_role,
+        payload={
+            "actor_id": actor_id,
+            "changed": {k: str(v) for k, v in changed.items()},
+            "effective": {k: str(v) for k, v in effective.items()},
+        },
+    )

@@ -82,6 +82,34 @@ paths:
         "200": { description: Saved, content: { application/json: { schema: { $ref: "#/components/schemas/NotificationPreference" } } } }
         "401": { description: Missing or invalid access token }
 
+  /notification-settings:
+    get:
+      summary: Effective retention window + which keys are overridden (Phase 5)
+      description: Requires `notification.settings.read` (held by "ICT Admin").
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/NotificationSettingsOut" } } } }
+        "401": { description: Missing or invalid access token }
+        "403": { description: Caller lacks notification.settings.read }
+    patch:
+      summary: Override the notification retention window (Phase 5)
+      description: >
+        Requires `notification.settings.write`. Writes `notification_settings`
+        rows; the change takes effect on the retention worker's next pass (the
+        in-process cache is reloaded immediately). notification_db has no
+        outbox — no domain/audit event is emitted.
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/NotificationSettingsPatch" }
+      responses:
+        "200": { description: Updated effective settings, content: { application/json: { schema: { $ref: "#/components/schemas/NotificationSettingsOut" } } } }
+        "400": { description: Unknown key or invalid value }
+        "401": { description: Missing or invalid access token }
+        "403": { description: Caller lacks notification.settings.write }
+
 components:
   securitySchemes:
     bearerAuth:
@@ -107,3 +135,19 @@ components:
       properties:
         channel: { type: string, enum: [email, sms, push, in_app] }
         enabled: { type: boolean }
+
+    NotificationSettingsPatch:
+      type: object
+      additionalProperties: false
+      properties:
+        retention_days: { type: integer, minimum: 1 }
+    NotificationSettingsOut:
+      type: object
+      required: [values, overridden]
+      properties:
+        values:
+          type: object
+          additionalProperties: { type: integer }
+        overridden:
+          type: array
+          items: { type: string }

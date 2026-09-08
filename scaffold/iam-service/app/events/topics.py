@@ -14,6 +14,7 @@ _TOPICS = {
     "RoleCreated": "role.created",
     "RolePermissionsChanged": "role.permissions_changed",
     "AccountLockedOut": "account.locked_out",
+    "IamSettingsUpdated": "iam.settings_updated",
 }
 
 ALL_TOPICS = tuple(_TOPICS.values())

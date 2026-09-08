@@ -98,6 +98,17 @@ async def test_all_event_types_map_to_expected_entity_and_action(client, emit, c
         {"user_id": str(uuid.uuid4()), "failed_login_count": 5},
         service="iam-service", actor_role="system",
     )
+    # Phase 5 — admin-editable per-service settings (keyed on the acting admin)
+    await emit(
+        "IamSettingsUpdated",
+        {"actor_id": str(uuid.uuid4()), "changed": {"password_min_length": "8"}},
+        service="iam-service",
+    )
+    await emit(
+        "IntegrationSettingsUpdated",
+        {"actor_id": str(uuid.uuid4()), "changed": {"log_retention_days": "90"}},
+        service="integration-gateway-service",
+    )
 
     # hr-service (FR-HR-01..07)
     await emit("OfficerCreated", {"officer_id": str(uuid.uuid4())}, service="hr-service")
@@ -223,7 +234,7 @@ async def test_all_event_types_map_to_expected_entity_and_action(client, emit, c
         service="integration-gateway-service",
     )
 
-    assert await consumer.process_available() == 75
+    assert await consumer.process_available() == 77
     rows = await _audit_rows()
     seen = {(r.entity_type, r.action) for r in rows}
     assert seen == {
@@ -247,6 +258,8 @@ async def test_all_event_types_map_to_expected_entity_and_action(client, emit, c
         ("user", "update"),          # UserUpdated + UserRoleReassigned + UserPasswordChanged + AccountLockedOut
         ("role", "create"),          # RoleCreated
         ("role", "update"),          # RolePermissionsChanged
+        ("iam_settings", "update"),          # IamSettingsUpdated (Phase 5)
+        ("integration_settings", "update"),  # IntegrationSettingsUpdated (Phase 5)
         ("officer", "create"),
         ("officer", "update"),
         ("unit", "create"),

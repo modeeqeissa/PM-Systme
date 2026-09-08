@@ -20,6 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app import config
 from app.models import Notification
+from app.services import settings
 
 log = logging.getLogger("notification-service.retention-worker")
 
@@ -38,7 +39,8 @@ class RetentionWorker:
         status='failed' rows after a year, everything else after the
         configured operational window. Returns the row count removed."""
         now = dt.datetime.now(dt.timezone.utc)
-        routine_cutoff = now - dt.timedelta(days=config.retention_days())
+        routine_days = settings.get("retention_days")
+        routine_cutoff = now - dt.timedelta(days=routine_days)
         failed_cutoff = now - dt.timedelta(days=_FAILED_RETENTION_DAYS)
         async with self._sessionmaker() as session:
             result = await session.execute(
@@ -57,7 +59,7 @@ class RetentionWorker:
                 log.info(
                     "retention: purged %d notification(s) "
                     "(routine window %dd, failed-delivery window %dd)",
-                    removed, config.retention_days(), _FAILED_RETENTION_DAYS,
+                    removed, routine_days, _FAILED_RETENTION_DAYS,
                 )
             return removed
 

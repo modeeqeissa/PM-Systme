@@ -5,6 +5,7 @@ from app.schemas.integration import (
     IntegrationConfigUpdate,
     LogDirection,
 )
+from app.schemas.settings import IntegrationSettingsOut, IntegrationSettingsPatch
 
 __all__ = [
     "LogDirection",
@@ -12,4 +13,6 @@ __all__ = [
     "IntegrationConfigUpdate",
     "ExternalSystemLogOut",
     "AdapterCallResponse",
+    "IntegrationSettingsPatch",
+    "IntegrationSettingsOut",
 ]

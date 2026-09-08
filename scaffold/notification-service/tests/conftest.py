@@ -104,7 +104,13 @@ from app.services.delivery import DeliveryWorker  # noqa: E402
 
 # Any authenticated user can read their own notifications — no permission
 # claim is checked — so a single role with unrelated permissions is enough.
-_E2E_USERS = {"E2E-USER-1": "Auditor", "E2E-USER-2": "Auditor"}
+# E2E-ADMIN carries "ICT Admin" for the notification.settings.{read,write}
+# codes (iam migration 0011) exercised by test_settings.py.
+_E2E_USERS = {
+    "E2E-USER-1": "Auditor",
+    "E2E-USER-2": "Auditor",
+    "E2E-ADMIN": "ICT Admin",
+}
 _E2E_PASSWORD = "E2e!TestPassw0rd"
 _totp_secrets: dict[str, str] = {}
 _user_ids: dict[str, str] = {}
@@ -269,6 +275,11 @@ def token_user2(iam_server) -> str:
     return iam_access_token("E2E-USER-2")
 
 
+@pytest.fixture(scope="session")
+def token_admin(iam_server) -> str:
+    return iam_access_token("E2E-ADMIN")
+
+
 # --------------------------------------------------------------------------- #
 # per-test fixtures
 # --------------------------------------------------------------------------- #
@@ -287,6 +298,11 @@ def auth_user2(token_user2) -> dict:
 
 
 @pytest.fixture
+def auth_admin(token_admin) -> dict:
+    return bearer(token_admin)
+
+
+@pytest.fixture
 def user1_id(token_user1) -> str:
     return _user_ids["E2E-USER-1"]
 
@@ -302,9 +318,14 @@ async def _clean_tables():
         await conn.execute(
             text(
                 "TRUNCATE notifications, notification_preferences, officer_user_map, "
-                "consumed_events RESTART IDENTITY CASCADE"
+                "consumed_events, notification_settings RESTART IDENTITY CASCADE"
             )
         )
+    # the retention-settings cache is process-global; reset it between tests so
+    # a PATCH /notification-settings in one test can't leak into the next.
+    from app.services import settings as _settings
+
+    _settings._cache.clear()
     yield
 
 

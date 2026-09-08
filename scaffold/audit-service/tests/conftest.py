@@ -116,6 +116,8 @@ _BASE_TOPIC = {
     "RoleCreated": "role.created",
     "RolePermissionsChanged": "role.permissions_changed",
     "AccountLockedOut": "account.locked_out",
+    "IamSettingsUpdated": "iam.settings_updated",
+    "IntegrationSettingsUpdated": "integration.settings_updated",
     "OfficerCreated": "hr.officer_created",
     "OfficerUpdated": "hr.officer_updated",
     "OfficerSupervisorChanged": "hr.officer_supervisor_changed",

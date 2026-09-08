@@ -39,6 +39,10 @@ EVENT_MAP: dict[str, tuple[str, str, str]] = {
     "RoleCreated": ("role", "create", "role_id"),
     "RolePermissionsChanged": ("role", "update", "role_id"),
     "AccountLockedOut": ("user", "update", "user_id"),
+    # Phase 5 — admin-editable per-service settings. Keyed on the acting admin's
+    # id (keyless config tables); the changed keys ride along in metadata.
+    "IamSettingsUpdated": ("iam_settings", "update", "actor_id"),
+    "IntegrationSettingsUpdated": ("integration_settings", "update", "actor_id"),
     # hr-service (FR-HR-01..07)
     "OfficerCreated": ("officer", "create", "officer_id"),
     "OfficerUpdated": ("officer", "update", "officer_id"),

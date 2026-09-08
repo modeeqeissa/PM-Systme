@@ -14,6 +14,7 @@ from app.schemas.rbac import (
     RoleCreate,
     RoleIdList,
 )
+from app.schemas.settings import IamSettingsOut, IamSettingsPatch
 from app.schemas.user import (
     CurrentUser,
     PasswordChange,
@@ -23,6 +24,8 @@ from app.schemas.user import (
 )
 
 __all__ = [
+    "IamSettingsPatch",
+    "IamSettingsOut",
     "LoginRequest",
     "MfaChallenge",
     "MfaEnrollment",

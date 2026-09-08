@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app import config
 from app.models import ExternalSystemLog
+from app.services import settings
 
 log = logging.getLogger("integration-gateway-service.retention-worker")
 
@@ -27,9 +28,8 @@ class RetentionWorker:
     async def run_once(self) -> int:
         """Delete every external-system log older than the retention window.
         Returns the row count removed."""
-        cutoff = dt.datetime.now(dt.timezone.utc) - dt.timedelta(
-            days=config.log_retention_days()
-        )
+        retention_days = settings.get("log_retention_days")
+        cutoff = dt.datetime.now(dt.timezone.utc) - dt.timedelta(days=retention_days)
         async with self._sessionmaker() as session:
             result = await session.execute(
                 delete(ExternalSystemLog).where(ExternalSystemLog.created_at < cutoff)
@@ -39,7 +39,7 @@ class RetentionWorker:
             if removed:
                 log.info(
                     "retention: purged %d external_system_log row(s) older than %d days",
-                    removed, config.log_retention_days(),
+                    removed, retention_days,
                 )
             return removed
 

@@ -239,10 +239,18 @@ def auth_none(token_none) -> dict:
 async def _clean_tables():
     async with engine.begin() as conn:
         await conn.execute(
-            text("TRUNCATE external_system_logs, outbox_events RESTART IDENTITY CASCADE")
+            text(
+                "TRUNCATE external_system_logs, outbox_events, integration_settings "
+                "RESTART IDENTITY CASCADE"
+            )
         )
         # restore the four seeded configs to enabled=true between tests
         await conn.execute(text("UPDATE integration_configs SET enabled = true"))
+    # the retention-settings cache is process-global; reset it between tests so
+    # a PATCH /integration-settings in one test can't leak into the next.
+    from app.services import settings as _settings
+
+    _settings._cache.clear()
     yield
 
 

@@ -1,6 +1,8 @@
 """Argon2id password hashing + policy checks (FR-IAM-07, docs Section 9.3.1).
 
-Policy has four parts, all ICT-configurable via env (see app.config):
+Policy has four parts, all ICT-configurable at runtime (the `IAM_PASSWORD_*`
+env vars are the seed/default; live values come from `app.services.settings`,
+backed by the admin-editable `iam_settings` table):
   * minimum length + per-rule complexity toggles  -> policy_errors()
   * no reuse of the last N passwords               -> is_reused()
   * expiry after a configurable age               -> is_expired()
@@ -11,7 +13,7 @@ import re
 from argon2 import PasswordHasher
 from argon2.exceptions import InvalidHashError, VerifyMismatchError
 
-from app import config
+from app.services import settings
 
 _hasher = PasswordHasher()  # argon2id defaults
 
@@ -38,15 +40,16 @@ def policy_errors(raw: str) -> list[str]:
     """Length + complexity violations; empty list means the password passes.
     Each complexity rule is individually toggleable (IAM_PASSWORD_REQUIRE_*)."""
     errors: list[str] = []
-    if len(raw) < config.PASSWORD_MIN_LENGTH:
-        errors.append(f"must be at least {config.PASSWORD_MIN_LENGTH} characters")
-    if config.PASSWORD_REQUIRE_LOWER and not re.search(r"[a-z]", raw):
+    min_length = settings.get("password_min_length")
+    if len(raw) < min_length:
+        errors.append(f"must be at least {min_length} characters")
+    if settings.get("password_require_lower") and not re.search(r"[a-z]", raw):
         errors.append("must contain a lowercase letter")
-    if config.PASSWORD_REQUIRE_UPPER and not re.search(r"[A-Z]", raw):
+    if settings.get("password_require_upper") and not re.search(r"[A-Z]", raw):
         errors.append("must contain an uppercase letter")
-    if config.PASSWORD_REQUIRE_DIGIT and not re.search(r"\d", raw):
+    if settings.get("password_require_digit") and not re.search(r"\d", raw):
         errors.append("must contain a digit")
-    if config.PASSWORD_REQUIRE_SYMBOL and not re.search(r"[^A-Za-z0-9]", raw):
+    if settings.get("password_require_symbol") and not re.search(r"[^A-Za-z0-9]", raw):
         errors.append("must contain a symbol")
     return errors
 
@@ -59,11 +62,13 @@ def is_reused(raw: str, recent_hashes: list[str]) -> bool:
 
 
 def is_expired(password_changed_at: dt.datetime | None) -> bool:
-    """True once the password is older than IAM_PASSWORD_MAX_AGE_DAYS.
-    Always False when max age is 0 (expiry disabled) or the timestamp is unknown."""
-    if config.PASSWORD_MAX_AGE_DAYS <= 0 or password_changed_at is None:
+    """True once the password is older than the configured max age (setting
+    `password_max_age_days`, seeded from IAM_PASSWORD_MAX_AGE_DAYS). Always
+    False when max age is 0 (expiry disabled) or the timestamp is unknown."""
+    max_age = settings.get("password_max_age_days")
+    if max_age <= 0 or password_changed_at is None:
         return False
     now = dt.datetime.now(dt.timezone.utc)
     if password_changed_at.tzinfo is None:
         password_changed_at = password_changed_at.replace(tzinfo=dt.timezone.utc)
-    return (now - password_changed_at) > dt.timedelta(days=config.PASSWORD_MAX_AGE_DAYS)
+    return (now - password_changed_at) > dt.timedelta(days=max_age)

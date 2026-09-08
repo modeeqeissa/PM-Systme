@@ -14,13 +14,22 @@ from fastapi import FastAPI
 from app import db
 from app.events import OutboxRelay
 from app.events.config import relay_enabled
-from app.routers import auth, roles, users
+from app.routers import auth, roles, settings as settings_router, users
+from app.services import settings as settings_service
 
 API_PREFIX = "/api/v1"
 
 
 @contextlib.asynccontextmanager
 async def lifespan(app: FastAPI):
+    # Load the password-policy overrides from iam_settings into the in-process
+    # cache the (sync) policy checks read from.
+    try:
+        async with db.SessionLocal() as session:
+            await settings_service.refresh(session)
+    except Exception:  # pragma: no cover - DB not up yet in some test paths
+        pass
+
     relay: OutboxRelay | None = None
     if relay_enabled():
         relay = OutboxRelay(db.SessionLocal)
@@ -44,6 +53,7 @@ def create_app() -> FastAPI:
     app.include_router(auth.router, prefix=API_PREFIX)
     app.include_router(users.router, prefix=API_PREFIX)
     app.include_router(roles.router, prefix=API_PREFIX)
+    app.include_router(settings_router.router, prefix=API_PREFIX)
 
     @app.get("/health", tags=["ops"], include_in_schema=False)
     async def health() -> dict[str, str]:

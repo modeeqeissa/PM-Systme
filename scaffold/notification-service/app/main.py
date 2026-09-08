@@ -15,6 +15,8 @@ from fastapi import FastAPI
 from app import config, db
 from app.events import NotificationConsumer
 from app.routers import notifications, preferences
+from app.routers import settings as settings_router
+from app.services import settings as settings_service
 from app.services.delivery import DeliveryWorker
 from app.services.retention import RetentionWorker
 
@@ -23,6 +25,14 @@ API_PREFIX = "/api/v1"
 
 @contextlib.asynccontextmanager
 async def lifespan(app: FastAPI):
+    # Load the admin retention override from notification_settings into the
+    # in-process cache the retention worker reads from.
+    try:
+        async with db.SessionLocal() as session:
+            await settings_service.refresh(session)
+    except Exception:  # pragma: no cover - DB not up yet in some test paths
+        pass
+
     consumer: NotificationConsumer | None = None
     delivery: DeliveryWorker | None = None
     retention: RetentionWorker | None = None
@@ -57,6 +67,7 @@ def create_app() -> FastAPI:
 
     app.include_router(notifications.router, prefix=API_PREFIX)
     app.include_router(preferences.router, prefix=API_PREFIX)
+    app.include_router(settings_router.router, prefix=API_PREFIX)
 
     @app.get("/health", tags=["ops"], include_in_schema=False)
     async def health() -> dict[str, str]:

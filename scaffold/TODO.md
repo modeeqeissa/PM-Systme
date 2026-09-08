@@ -344,3 +344,40 @@ years) that documents the retention **floor** so it can't be silently
 shortened. Only `notification_db.notifications` (90d) and
 `integration_db.external_system_logs` (180d) have real scheduled purge
 jobs (`app/services/retention.py` in each), per docs §9.6.
+
+**Phase 5 — admin-editable per-service settings (2026-09-08):** the
+operational knobs that were env-only are now runtime-editable by "ICT Admin"
+(docs §2.3 platform administration), each behind its own service:
+- **iam-service** `iam_settings` (migration 0011) + `GET`/`PATCH
+  /iam-settings` — the full FR-IAM-07 password policy (min length, the four
+  complexity toggles, history depth, max age). `IAM_PASSWORD_*` env vars are
+  now the seed/default; a row overrides one at runtime. `app.security.
+  passwords` reads a process-global cache (`app.services.settings`) reloaded
+  on startup and after every PATCH — the same shape as the JWKS cache.
+  Emits `IamSettingsUpdated` (`iam.settings_updated`) → audit
+  `iam_settings`/`update`.
+- **notification-service** `notification_settings` (migration 0007) +
+  `GET`/`PATCH /notification-settings` — the retention window
+  (`retention_days`, seeded from `NOTIFICATION_RETENTION_DAYS`). The
+  retention worker reads the effective value each pass. No event:
+  notification_db has no outbox and isn't in rule 3's audit scope (same call
+  as `PUT /notification-preferences`, TD-006).
+- **integration-gateway-service** `integration_settings` (migration 0004) +
+  `GET`/`PATCH /integration-settings` — the `external_system_logs` retention
+  window (`log_retention_days`, seeded from
+  `INTEGRATION_GATEWAY_LOG_RETENTION_DAYS`). Emits `IntegrationSettings
+  Updated` (`integration.settings_updated`) → audit
+  `integration_settings`/`update` (this service already has outbox wiring,
+  FR-INT-05).
+- Six permission codes — `{iam,notification,integration}.settings.{read,
+  write}` — seeded and granted to "ICT Admin" by **iam migration 0011**
+  (one migration, all three services' codes). Deliberately NOT a single
+  coarse `settings.write`, and deliberately NO `audit.settings.*`: the
+  audit-service retention floor and the "keep indefinitely" domains above
+  stay env-only compliance values, not operational knobs. The
+  delivery-*failure* (365d) and audit floors are likewise left out of the
+  editable set.
+- audit-service maps both new event types (77 event types now). Tests:
+  iam `test_settings.py` (7), notification `test_settings.py` (8),
+  integration `test_settings.py` (8), audit consumer all-event-types
+  updated.

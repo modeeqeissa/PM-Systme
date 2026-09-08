@@ -7,6 +7,7 @@ from app.models.notification import (
     NotificationTemplate,
     OfficerUserMap,
 )
+from app.models.settings import NotificationSetting
 
 __all__ = [
     "Base",
@@ -15,4 +16,5 @@ __all__ = [
     "NotificationPreference",
     "OfficerUserMap",
     "ConsumedEvent",
+    "NotificationSetting",
 ]
