@@ -296,6 +296,7 @@ components:
         mfa_enrolled: { type: boolean, description: false -> the user must call /auth/mfa/enroll first }
         token_type: { type: string, enum: [bearer] }
         expires_in: { type: integer, description: mfa_token lifetime in seconds }
+        password_expired: { type: boolean, description: 'FR-IAM-07 — password past max age; client must force a reset. Login is not blocked.' }
 
     MfaEnrollment:
       type: object
@@ -326,6 +327,7 @@ components:
         refresh_token: { type: string }
         token_type: { type: string, enum: [bearer] }
         expires_in: { type: integer, description: access-token lifetime in seconds (<= 900) }
+        password_expired: { type: boolean, description: 'FR-IAM-07 — mirrors the pw_expired access-token claim.' }
 
     Jwks:
       type: object
@@ -393,6 +395,7 @@ components:
         full_name: { type: string }
         station_id: { type: string, format: uuid }
         status: { type: string, enum: [active, suspended, deactivated] }
+        password_expired: { type: boolean, description: 'FR-IAM-07 — true when the current password is past IAM_PASSWORD_MAX_AGE_DAYS.' }
         roles:
           type: array
           items: { type: string }

@@ -64,9 +64,13 @@ class CurrentUser(BaseModel):
     status: Status
     roles: list[str] = Field(default_factory=list)
     permissions: list[str] = Field(default_factory=list)
+    # FR-IAM-07: true when the current password is past IAM_PASSWORD_MAX_AGE_DAYS.
+    password_expired: bool = False
 
     @classmethod
     def from_model(cls, user) -> "CurrentUser":
+        from app.security import passwords
+
         perms: set[str] = set()
         for role in user.roles:
             perms.update(p.code for p in role.permissions)
@@ -79,6 +83,9 @@ class CurrentUser(BaseModel):
             status=user.status,
             roles=sorted(r.name for r in user.roles),
             permissions=sorted(perms),
+            password_expired=passwords.is_expired(
+                getattr(user, "password_changed_at", None)
+            ),
         )
 
 

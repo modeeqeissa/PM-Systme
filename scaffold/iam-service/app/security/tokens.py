@@ -27,7 +27,7 @@ def hash_token(raw: str) -> str:
 # --- JWTs ---------------------------------------------------------------
 def issue_access_token(
     *, user_id: uuid.UUID, badge_number: str, station_id: uuid.UUID,
-    roles: list[str], permissions: list[str],
+    roles: list[str], permissions: list[str], password_expired: bool = False,
 ) -> tuple[str, int]:
     ttl = config.ACCESS_TOKEN_TTL_SECONDS
     now = _now()
@@ -43,6 +43,10 @@ def issue_access_token(
         "exp": now + dt.timedelta(seconds=ttl),
         "jti": str(uuid.uuid4()),
     }
+    if password_expired:
+        # FR-IAM-07: clients route the user to a forced password change; the
+        # token still works so the self-service reset endpoint is reachable.
+        payload["pw_expired"] = True
     token = jwt.encode(
         payload, keys.private_key_pem(), algorithm=config.JWT_ALG,
         headers={"kid": config.JWT_KID},

@@ -36,6 +36,10 @@ class User(Base):
     failed_login_count: Mapped[int] = mapped_column(
         SmallInteger, nullable=False, server_default="0"
     )
+    # FR-IAM-07: when the current password was set — expiry is measured from here.
+    password_changed_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
     created_at: Mapped[dt.datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )

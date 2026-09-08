@@ -26,12 +26,14 @@ def _now() -> dt.datetime:
 async def _issue_pair(
     session: AsyncSession, user: User, device_info: str | None
 ) -> TokenPair:
+    password_expired = passwords.is_expired(user.password_changed_at)
     access_token, ttl = tokens.issue_access_token(
         user_id=user.id,
         badge_number=user.badge_number,
         station_id=user.station_id,
         roles=role_names(user),
         permissions=effective_permissions(user),
+        password_expired=password_expired,
     )
     raw_refresh = tokens.new_opaque_token()
     session.add(
@@ -43,7 +45,12 @@ async def _issue_pair(
         )
     )
     await session.flush()
-    return TokenPair(access_token=access_token, refresh_token=raw_refresh, expires_in=ttl)
+    return TokenPair(
+        access_token=access_token,
+        refresh_token=raw_refresh,
+        expires_in=ttl,
+        password_expired=password_expired,
+    )
 
 
 async def login(
@@ -85,8 +92,14 @@ async def login(
     await session.flush()
 
     mfa_token, ttl = tokens.issue_mfa_token(user_id=user.id)
+    # FR-IAM-07: an expired password does NOT block login — the user still
+    # completes MFA and gets a token so the self-service reset is reachable;
+    # the flag tells the client to force the change before anything else.
     return MfaChallenge(
-        mfa_token=mfa_token, mfa_enrolled=user.mfa_enrolled, expires_in=ttl
+        mfa_token=mfa_token,
+        mfa_enrolled=user.mfa_enrolled,
+        expires_in=ttl,
+        password_expired=passwords.is_expired(user.password_changed_at),
     )
 
 

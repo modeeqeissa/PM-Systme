@@ -49,5 +49,24 @@ MFA_ENC_KEY = os.getenv("IAM_MFA_ENC_KEY")  # urlsafe-base64 32-byte Fernet key
 MFA_ISSUER_LABEL = os.getenv("IAM_MFA_ISSUER_LABEL", "PMP")
 
 # --- Account / password policy (FR-IAM-05, FR-IAM-07) --------------------
+# Every value here is ICT-configurable via env — nothing about the policy is
+# hardcoded. Complexity rules each toggle independently; history count of 0 and
+# max-age of 0 disable those checks.
 MAX_FAILED_LOGINS = int(os.getenv("IAM_MAX_FAILED_LOGINS", "5"))
 PASSWORD_MIN_LENGTH = int(os.getenv("IAM_PASSWORD_MIN_LENGTH", "12"))
+
+
+def _flag(name: str, default: str = "1") -> bool:
+    return os.getenv(name, default) not in ("0", "false", "False", "")
+
+
+PASSWORD_REQUIRE_LOWER = _flag("IAM_PASSWORD_REQUIRE_LOWER")
+PASSWORD_REQUIRE_UPPER = _flag("IAM_PASSWORD_REQUIRE_UPPER")
+PASSWORD_REQUIRE_DIGIT = _flag("IAM_PASSWORD_REQUIRE_DIGIT")
+PASSWORD_REQUIRE_SYMBOL = _flag("IAM_PASSWORD_REQUIRE_SYMBOL")
+
+# Reject a new password that matches any of the last N (0 = no history check).
+PASSWORD_HISTORY_COUNT = int(os.getenv("IAM_PASSWORD_HISTORY_COUNT", "5"))
+
+# Force a reset once a password is older than this many days (0 = never expire).
+PASSWORD_MAX_AGE_DAYS = int(os.getenv("IAM_PASSWORD_MAX_AGE_DAYS", "0"))

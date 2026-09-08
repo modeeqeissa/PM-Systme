@@ -1,12 +1,14 @@
 """User account management (FR-IAM-06) and password change (FR-IAM-07)."""
+import datetime as dt
 import uuid
 
 from fastapi import HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import Role, User
+from app import config
+from app.models import PasswordHistory, Role, User
 from app.schemas import UserCreate, UserUpdate
 from app.security import passwords
 from app.services import audit_events
@@ -154,11 +156,64 @@ async def change_password(
             status.HTTP_400_BAD_REQUEST, "Password policy: " + "; ".join(errors)
         )
 
+    # FR-IAM-07: no reuse of the last N passwords (current + history).
+    if config.PASSWORD_HISTORY_COUNT > 0:
+        recent = await _recent_password_hashes(
+            session, user, config.PASSWORD_HISTORY_COUNT
+        )
+        if passwords.is_reused(new_password, recent):
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                f"Password policy: must not reuse any of the last "
+                f"{config.PASSWORD_HISTORY_COUNT} passwords",
+            )
+
+    # keep the outgoing hash in history, then rotate.
+    session.add(
+        PasswordHistory(user_id=user.id, password_hash=user.password_hash)
+    )
     user.password_hash = passwords.hash_password(new_password)
+    user.password_changed_at = dt.datetime.now(dt.timezone.utc)
     await session.flush()
+    await _trim_password_history(session, user.id, config.PASSWORD_HISTORY_COUNT)
     # FR-IAM-02: password change revokes every active session.
     await auth_service.revoke_all_sessions(session, user.id)
     # FR-IAM-06: audit the change (admin reset vs. self-service).
     audit_events.user_password_changed(
         session, actor=caller, user=user, by_admin=not is_self
     )
+
+
+async def _recent_password_hashes(
+    session: AsyncSession, user: User, keep: int
+) -> list[str]:
+    """The current password hash plus the most recent history hashes, capped at
+    `keep` total — the set a new password must not collide with."""
+    rows = (
+        await session.scalars(
+            select(PasswordHistory.password_hash)
+            .where(PasswordHistory.user_id == user.id)
+            .order_by(PasswordHistory.changed_at.desc(), PasswordHistory.id.desc())
+            .limit(max(keep - 1, 0))
+        )
+    ).all()
+    return [user.password_hash, *rows]
+
+
+async def _trim_password_history(
+    session: AsyncSession, user_id: uuid.UUID, keep: int
+) -> None:
+    """Delete history rows beyond the most recent `keep - 1` (the current
+    password lives on users.password_hash, so history only needs keep-1)."""
+    survivors = (
+        await session.scalars(
+            select(PasswordHistory.id)
+            .where(PasswordHistory.user_id == user_id)
+            .order_by(PasswordHistory.changed_at.desc(), PasswordHistory.id.desc())
+            .limit(max(keep - 1, 0))
+        )
+    ).all()
+    stmt = delete(PasswordHistory).where(PasswordHistory.user_id == user_id)
+    if survivors:
+        stmt = stmt.where(PasswordHistory.id.notin_(survivors))
+    await session.execute(stmt)

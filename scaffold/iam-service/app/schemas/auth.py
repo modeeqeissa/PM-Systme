@@ -13,6 +13,9 @@ class MfaChallenge(BaseModel):
     mfa_enrolled: bool
     token_type: Literal["bearer"] = "bearer"
     expires_in: int
+    # FR-IAM-07: password past IAM_PASSWORD_MAX_AGE_DAYS — client must force a
+    # reset after MFA. Login is not blocked.
+    password_expired: bool = False
 
 
 class MfaEnrollment(BaseModel):
@@ -35,6 +38,8 @@ class TokenPair(BaseModel):
     refresh_token: str
     token_type: Literal["bearer"] = "bearer"
     expires_in: int
+    # FR-IAM-07: mirrors the `pw_expired` claim in the access token.
+    password_expired: bool = False
 
 
 class Jwks(BaseModel):
